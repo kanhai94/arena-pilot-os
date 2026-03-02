@@ -5,12 +5,14 @@ import { getRedisStatus } from './config/redis.js';
 import { logger } from './config/logger.js';
 import { ensureSuperAdminBootstrap } from './bootstrap/superAdmin.bootstrap.js';
 import { registerNotificationEventHandlers } from './modules/notifications/notification.events.js';
+import { billingService } from './modules/billing/billing.container.js';
 
 const startServer = async () => {
   try {
     await connectDatabase();
 
     await ensureSuperAdminBootstrap();
+    await billingService.ensureDefaultPlans();
 
     const redisStatus = await getRedisStatus();
     if (redisStatus !== 'up') {

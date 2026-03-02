@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { ROLES } from '../../constants/roles.js';
@@ -10,7 +11,7 @@ import { createNotificationController } from './notification.controller.js';
 const notificationRouter = Router();
 const controller = createNotificationController(notificationService);
 
-notificationRouter.use(authMiddleware, tenantMiddleware, subscriptionGuard());
+notificationRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());
 
 notificationRouter.post(
   '/fee-reminder/trigger',

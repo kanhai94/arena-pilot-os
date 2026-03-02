@@ -4,9 +4,15 @@ import { AppError } from '../../errors/appError.js';
 const normalizeName = (value) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 const normalizePhone = (value) => value.replace(/\D/g, '');
 
-export const createStudentService = (repository) => {
+export const createStudentService = (repository, dependencies = {}) => {
+  const { billingService } = dependencies;
+
   return {
     async createStudent(tenantId, userId, payload) {
+      if (billingService?.checkPlanLimit) {
+        await billingService.checkPlanLimit(tenantId, 'student', { throwOnLimitReached: true });
+      }
+
       const normalizedName = normalizeName(payload.name);
       const normalizedParentPhone = normalizePhone(payload.parentPhone);
 

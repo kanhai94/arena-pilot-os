@@ -13,6 +13,8 @@ import { attendanceRouter } from './modules/attendance/attendance.routes.js';
 import { feeRouter } from './modules/fees/fee.routes.js';
 import { notificationRouter } from './modules/notifications/notification.routes.js';
 import { teamRouter } from './modules/team/team.routes.js';
+import { subscriptionRouter } from './modules/subscription/subscription.routes.js';
+import { adminRouter } from './modules/admin/admin.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -69,6 +71,8 @@ export const createApp = () => {
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/billing', billingRouter);
+  app.use('/api/v1/subscription', subscriptionRouter);
+  app.use('/api/v1/admin', adminRouter);
   app.use('/api/v1/students', studentRouter);
   app.use('/api/v1/batches', batchRouter);
   app.use('/api/v1/attendance', attendanceRouter);

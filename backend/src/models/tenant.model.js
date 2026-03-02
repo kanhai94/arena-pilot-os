@@ -18,6 +18,22 @@ const tenantSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    academySize: {
+      type: Number,
+      default: null,
+      min: 1
+    },
+    requestedPlanName: {
+      type: String,
+      enum: ['Starter', 'Growth', 'Pro'],
+      default: 'Starter'
+    },
+    tenantStatus: {
+      type: String,
+      enum: ['active', 'blocked', 'suspended'],
+      default: 'active',
+      index: true
+    },
     email: {
       type: String,
       required: true,
@@ -37,6 +53,53 @@ const tenantSchema = new mongoose.Schema(
       ref: 'Plan',
       default: null,
       index: true
+    },
+    customPriceOverride: {
+      type: Number,
+      default: null,
+      min: 0
+    },
+    billingEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: null
+    },
+    razorpayCustomerId: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    lastPaymentDate: {
+      type: Date,
+      default: null
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['paid', 'pending', 'failed'],
+      default: 'pending',
+      index: true
+    },
+    planName: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    studentLimit: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (value) => value === null || (Number.isInteger(value) && value >= 1),
+        message: 'studentLimit must be null (unlimited) or an integer >= 1'
+      }
+    },
+    planStartDate: {
+      type: Date,
+      default: null
+    },
+    planEndDate: {
+      type: Date,
+      default: null
     }
   },
   {

@@ -175,3 +175,7 @@ export const apiPostWithAuth = async <T>(path: string, body: unknown, accessToke
 export const apiPutWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
   return request<T>(path, 'PUT', body, accessToken, { withAuth: true });
 };
+
+export const apiPatchWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
+  return request<T>(path, 'PATCH', body, accessToken, { withAuth: true });
+};

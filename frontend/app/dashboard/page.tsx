@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiGetWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
+import { apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
 
 type UserSession = {
   id: string;
@@ -171,6 +171,48 @@ type AttendanceByDateResponse = {
   };
 };
 
+type PlatformControlItem = 'tenants' | 'plans-pricing' | 'tenant-control' | 'billing-payments' | 'integrations';
+
+type PlatformTenant = {
+  id?: string;
+  academyName: string;
+  ownerName: string;
+  planName: string;
+  billingEmail?: string | null;
+  studentCount: number;
+  subscriptionStatus: string;
+  nextPaymentDate?: string | null;
+  tenantStatus?: 'active' | 'blocked' | 'suspended' | string;
+  paymentStatus?: 'paid' | 'pending' | 'failed' | string;
+  customPriceOverride?: number | null;
+};
+
+type AdminTenantsResponse = {
+  items: PlatformTenant[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+type PlatformPlan = {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  studentLimit: number | null;
+  status: 'active' | 'inactive';
+  features?: string[];
+};
+
+type AdminRazorpaySettings = {
+  configured: boolean;
+  isActive: boolean;
+  keyIdMasked: string | null;
+  updatedAt: string | null;
+};
+
 const leftMenu = [
   'Pulse Board',
   'Academy Pro',
@@ -183,8 +225,8 @@ const leftMenu = [
 type MenuItem = (typeof leftMenu)[number];
 
 type AcademyProItem = 'plans' | 'classes' | 'class-schedule' | 'clients' | 'renewals' | 'coach' | 'attendance';
-type TabId = 'pulse' | 'studio' | 'automations' | 'academy-pro';
-const headerTabs: TabId[] = ['studio', 'automations', 'academy-pro'];
+type TabId = 'pulse' | 'studio' | 'automations' | 'academy-pro' | 'platform-control';
+const baseHeaderTabs: Array<Exclude<TabId, 'platform-control'>> = ['studio', 'automations', 'academy-pro'];
 
 const menuToTab: Record<MenuItem, TabId> = {
   'Pulse Board': 'pulse',
@@ -214,14 +256,16 @@ const tabDefaultMenu: Record<TabId, MenuItem> = {
   pulse: 'Pulse Board',
   'academy-pro': 'Academy Pro',
   studio: 'Student Roster',
-  automations: 'Alert Center'
+  automations: 'Alert Center',
+  'platform-control': 'Pulse Board'
 };
 
 const tabLabels: Record<TabId, string> = {
   pulse: 'Pulse',
   studio: 'Student Roster',
   automations: 'Automations',
-  'academy-pro': 'Academy Pro'
+  'academy-pro': 'Academy Pro',
+  'platform-control': 'Platform Control'
 };
 
 const academyProNav: Array<{ id: AcademyProItem; label: string }> = [
@@ -232,6 +276,14 @@ const academyProNav: Array<{ id: AcademyProItem; label: string }> = [
   { id: 'attendance', label: 'Attendance' },
   { id: 'renewals', label: 'Renewals' },
   { id: 'coach', label: 'Coach' }
+];
+
+const platformControlNav: Array<{ id: PlatformControlItem; label: string }> = [
+  { id: 'tenants', label: 'Tenants' },
+  { id: 'plans-pricing', label: 'Plans & Pricing' },
+  { id: 'tenant-control', label: 'Tenant Control' },
+  { id: 'billing-payments', label: 'Billing & Payments' },
+  { id: 'integrations', label: 'Integrations' }
 ];
 const weekDayOptions = [
   { value: 'mon', label: 'Mon' },
@@ -294,6 +346,8 @@ export default function DashboardPage() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('Pulse Board');
   const [academyProExpanded, setAcademyProExpanded] = useState(false);
   const [activeAcademyPro, setActiveAcademyPro] = useState<AcademyProItem>('plans');
+  const [platformControlExpanded, setPlatformControlExpanded] = useState(false);
+  const [activePlatformControl, setActivePlatformControl] = useState<PlatformControlItem>('tenants');
   const [showPlanComposer, setShowPlanComposer] = useState(false);
   const [showClassComposer, setShowClassComposer] = useState(false);
   const [showCoachComposer, setShowCoachComposer] = useState(false);
@@ -402,6 +456,42 @@ export default function DashboardPage() {
 
   const [broadcastText, setBroadcastText] = useState('Reminder: Recovery drills start 30 minutes early tomorrow.');
   const [debugOutput, setDebugOutput] = useState('');
+  const [adminTenantPlanFilter, setAdminTenantPlanFilter] = useState('all');
+  const [adminTenantStatusFilter, setAdminTenantStatusFilter] = useState('all');
+  const [platformTenants, setPlatformTenants] = useState<PlatformTenant[]>([]);
+  const [platformTenantLoading, setPlatformTenantLoading] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [platformPriceOverride, setPlatformPriceOverride] = useState('');
+  const [showPlatformTenantComposer, setShowPlatformTenantComposer] = useState(false);
+  const [editingTenantId, setEditingTenantId] = useState('');
+  const [tenantAcademyName, setTenantAcademyName] = useState('');
+  const [tenantOwnerName, setTenantOwnerName] = useState('');
+  const [tenantPlanName, setTenantPlanName] = useState('Starter');
+  const [tenantBillingEmail, setTenantBillingEmail] = useState('');
+  const [tenantSubscriptionStatus, setTenantSubscriptionStatus] = useState('trial');
+  const [tenantStatusValue, setTenantStatusValue] = useState<'active' | 'blocked' | 'suspended'>('active');
+  const [tenantPaymentStatus, setTenantPaymentStatus] = useState<'paid' | 'pending' | 'failed'>('pending');
+  const [tenantNextPaymentDate, setTenantNextPaymentDate] = useState('');
+  const [tenantOverridePrice, setTenantOverridePrice] = useState('');
+  const [platformPlans, setPlatformPlans] = useState<PlatformPlan[]>([
+    { id: 'starter', name: 'Starter', priceMonthly: 0, studentLimit: 10, status: 'active' },
+    { id: 'growth', name: 'Growth', priceMonthly: 1999, studentLimit: 50, status: 'active' },
+    { id: 'pro', name: 'Pro', priceMonthly: 4999, studentLimit: null, status: 'active' }
+  ]);
+  const [showPlatformPlanComposer, setShowPlatformPlanComposer] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState('');
+  const [newPlatformPlanName, setNewPlatformPlanName] = useState('');
+  const [newPlatformPlanPrice, setNewPlatformPlanPrice] = useState('');
+  const [newPlatformPlanLimit, setNewPlatformPlanLimit] = useState('');
+  const [newPlatformPlanFeatures, setNewPlatformPlanFeatures] = useState('');
+  const [integrationRazorpayKeyId, setIntegrationRazorpayKeyId] = useState('');
+  const [integrationRazorpaySecret, setIntegrationRazorpaySecret] = useState('');
+  const [integrationWhatsappKey, setIntegrationWhatsappKey] = useState('');
+  const [integrationSmtpHost, setIntegrationSmtpHost] = useState('');
+  const [integrationSmtpPort, setIntegrationSmtpPort] = useState('587');
+  const [integrationSmtpUser, setIntegrationSmtpUser] = useState('');
+  const [integrationSmtpPass, setIntegrationSmtpPass] = useState('');
+  const [integrationSmtpFrom, setIntegrationSmtpFrom] = useState('');
 
   const safeFetch = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try {
@@ -409,6 +499,46 @@ export default function DashboardPage() {
     } catch {
       return fallback;
     }
+  };
+
+  const isSuperAdmin = user?.role === 'SuperAdmin';
+  const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
+
+  const loadPlatformTenants = async (accessToken: string) => {
+    if (!isSuperAdmin) return;
+    setPlatformTenantLoading(true);
+
+    const params = new URLSearchParams();
+    params.set('page', '1');
+    params.set('limit', '200');
+    if (adminTenantPlanFilter !== 'all') params.set('plan', adminTenantPlanFilter);
+    if (adminTenantStatusFilter !== 'all') params.set('status', adminTenantStatusFilter);
+
+    const response = await safeFetch(
+      () => apiGetWithAuth<AdminTenantsResponse>(`/admin/tenants?${params.toString()}`, accessToken),
+      { items: [], pagination: { page: 1, limit: 200, total: 0, totalPages: 1 } }
+    );
+
+    const normalized = response.items.map((row) => ({
+      ...row,
+      id: row.id || `${row.academyName}-${row.ownerName}`.replace(/\s+/g, '-').toLowerCase(),
+      tenantStatus: row.tenantStatus || 'active',
+      paymentStatus: row.paymentStatus || 'pending',
+      nextPaymentDate: row.nextPaymentDate || null
+    }));
+
+    setPlatformTenants(normalized);
+    setPlatformTenantLoading(false);
+  };
+
+  const loadRazorpaySettings = async (accessToken: string) => {
+    if (!isSuperAdmin) return;
+    const data = await safeFetch<AdminRazorpaySettings | null>(
+      () => apiGetWithAuth<AdminRazorpaySettings>('/admin/settings/razorpay', accessToken),
+      null
+    );
+    if (!data) return;
+    setIntegrationRazorpayKeyId(data.keyIdMasked || '');
   };
 
   const loadDashboardData = async (accessToken: string, currentUser?: UserSession | null) => {
@@ -524,6 +654,16 @@ export default function DashboardPage() {
     const section = new URLSearchParams(window.location.search).get('section');
     if (!section) return;
 
+    if (section.startsWith('platform-control-')) {
+      const sub = section.replace('platform-control-', '') as PlatformControlItem;
+      if (platformControlNav.some((item) => item.id === sub)) {
+        setActivePlatformControl(sub);
+      }
+      setPlatformControlExpanded(true);
+      setActiveTab('platform-control');
+      return;
+    }
+
     if (section.startsWith('academy-pro-')) {
       const sub = section.replace('academy-pro-', '') as AcademyProItem;
       if (academyProNav.some((item) => item.id === sub)) {
@@ -542,10 +682,32 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    if (typeof window === 'undefined') return;
+
+    const section = new URLSearchParams(window.location.search).get('section') || '';
+    const isPlatformSection = section.startsWith('platform-control-');
+
+    if (isPlatformSection && user.role !== 'SuperAdmin') {
+      setActiveTab('studio');
+      setActiveMenu('Student Roster');
+      setPlatformControlExpanded(false);
+      router.replace('/dashboard?section=student-roster');
+    }
+  }, [router, user]);
+
+  useEffect(() => {
     if (!token) return;
     loadDashboardData(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchFilterStatus]);
+
+  useEffect(() => {
+    if (!token || !isSuperAdmin) return;
+    loadPlatformTenants(token);
+    loadRazorpaySettings(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isSuperAdmin, adminTenantPlanFilter, adminTenantStatusFilter]);
 
   useEffect(() => {
     if (!token) return;
@@ -913,6 +1075,36 @@ export default function DashboardPage() {
     };
   }, [growthPulseSeries]);
 
+  const platformPlanPriceByName = useMemo(() => {
+    return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
+  }, [platformPlans]);
+
+  const billingRows = useMemo(() => {
+    return platformTenants.map((tenant) => {
+      const estimated = platformPlanPriceByName.get(tenant.planName?.toLowerCase() || '') ?? 0;
+      const amount = tenant.customPriceOverride ?? estimated;
+      return {
+        id: tenant.id || tenant.academyName,
+        tenant: tenant.academyName,
+        amount,
+        status: tenant.paymentStatus || 'pending',
+        date: tenant.nextPaymentDate || '-'
+      };
+    });
+  }, [platformTenants, platformPlanPriceByName]);
+
+  const monthlyRevenue = useMemo(() => {
+    return billingRows.reduce((sum, row) => sum + (row.status === 'paid' ? row.amount : 0), 0);
+  }, [billingRows]);
+
+  const activeSubscriptions = useMemo(() => {
+    return platformTenants.filter((tenant) => ['active', 'trial'].includes((tenant.subscriptionStatus || '').toLowerCase())).length;
+  }, [platformTenants]);
+
+  const failedPaymentsCount = useMemo(() => {
+    return billingRows.filter((row) => String(row.status).toLowerCase() === 'failed').length;
+  }, [billingRows]);
+
   const runAction = async (action: () => Promise<unknown>, successMessage: string): Promise<boolean> => {
     if (!token) return false;
 
@@ -966,6 +1158,14 @@ export default function DashboardPage() {
   };
 
   const handleTabClick = (tab: TabId) => {
+    if (tab === 'platform-control') {
+      if (!isSuperAdmin) return;
+      setPlatformControlExpanded(true);
+      setActiveTab('platform-control');
+      router.replace(`/dashboard?section=platform-control-${activePlatformControl}`);
+      return;
+    }
+
     if (tab === 'academy-pro') {
       setAcademyProExpanded(true);
       setActiveMenu('Academy Pro');
@@ -1007,6 +1207,299 @@ export default function DashboardPage() {
       setActiveTab('academy-pro');
       router.replace(`/dashboard?section=academy-pro-${activeAcademyPro}`);
     }
+  };
+
+  const handlePlatformControlToggle = () => {
+    if (!isSuperAdmin) return;
+    const nextExpanded = !platformControlExpanded;
+    setPlatformControlExpanded(nextExpanded);
+    if (nextExpanded) {
+      setActiveTab('platform-control');
+      router.replace(`/dashboard?section=platform-control-${activePlatformControl}`);
+    }
+  };
+
+  const handlePlatformControlNavClick = (item: PlatformControlItem) => {
+    if (!isSuperAdmin) return;
+    setActivePlatformControl(item);
+    setPlatformControlExpanded(true);
+    setActiveTab('platform-control');
+    setShowPlanComposer(false);
+    setShowClassComposer(false);
+    setShowClientComposer(false);
+    setShowCoachComposer(false);
+    setActiveAttendanceBatch(null);
+    router.replace(`/dashboard?section=platform-control-${item}`);
+  };
+
+  const openPlatformTenantComposerForCreate = () => {
+    setActivePlatformControl('tenants');
+    setActiveTab('platform-control');
+    setPlatformControlExpanded(true);
+    router.replace('/dashboard?section=platform-control-tenants');
+    setEditingTenantId('');
+    setTenantAcademyName('');
+    setTenantOwnerName('');
+    setTenantPlanName('Starter');
+    setTenantBillingEmail('');
+    setTenantSubscriptionStatus('trial');
+    setTenantStatusValue('active');
+    setTenantPaymentStatus('pending');
+    setTenantNextPaymentDate('');
+    setTenantOverridePrice('');
+    setShowPlatformTenantComposer(true);
+  };
+
+  const openPlatformTenantComposerForEdit = (tenant: PlatformTenant) => {
+    setEditingTenantId(tenant.id || '');
+    setTenantAcademyName(tenant.academyName || '');
+    setTenantOwnerName(tenant.ownerName || '');
+    setTenantPlanName(tenant.planName || 'Starter');
+    setTenantBillingEmail(tenant.billingEmail || '');
+    setTenantSubscriptionStatus(tenant.subscriptionStatus || 'active');
+    setTenantStatusValue((tenant.tenantStatus as 'active' | 'blocked' | 'suspended') || 'active');
+    setTenantPaymentStatus((tenant.paymentStatus as 'paid' | 'pending' | 'failed') || 'pending');
+    setTenantNextPaymentDate(tenant.nextPaymentDate ? String(tenant.nextPaymentDate).slice(0, 10) : '');
+    setTenantOverridePrice(tenant.customPriceOverride === null || tenant.customPriceOverride === undefined ? '' : String(tenant.customPriceOverride));
+    setShowPlatformTenantComposer(true);
+  };
+
+  const savePlatformTenant = () => {
+    if (!tenantAcademyName.trim() || !tenantOwnerName.trim()) return;
+
+    const payload = {
+      academyName: tenantAcademyName.trim(),
+      ownerName: tenantOwnerName.trim(),
+      planName: tenantPlanName,
+      billingEmail: tenantBillingEmail.trim() || null,
+      subscriptionStatus: tenantSubscriptionStatus,
+      tenantStatus: tenantStatusValue,
+      paymentStatus: tenantPaymentStatus,
+      nextPaymentDate: tenantNextPaymentDate || null,
+      customPriceOverride: tenantOverridePrice.trim() ? Number(tenantOverridePrice) : null
+    };
+
+    const request = editingTenantId
+      ? () => apiPatchWithAuth(`/admin/tenant/${editingTenantId}`, payload, token)
+      : () => apiPostWithAuth('/admin/tenant', payload, token);
+
+    runAction(request, editingTenantId ? 'Tenant updated' : 'Tenant created').then((ok) => {
+      if (ok) {
+        setShowPlatformTenantComposer(false);
+        if (token) loadPlatformTenants(token);
+      }
+    });
+  };
+
+  const runTenantStatusAction = (tenantId: string, status: 'active' | 'blocked' | 'suspended') => {
+    runAction(
+      () => apiPatchWithAuth(`/admin/tenant/${tenantId}/status`, { tenantStatus: status }, token),
+      `Tenant marked ${status}`
+    ).then((ok) => {
+      if (ok && token) {
+        loadPlatformTenants(token);
+      }
+    });
+  };
+
+  const runTenantResetAccess = (tenantId: string) => {
+    runAction(
+      () => apiPostWithAuth(`/admin/tenant/${tenantId}/reset-access`, {}, token),
+      'Tenant access reset'
+    ).then((ok) => {
+      if (ok && token) {
+        loadPlatformTenants(token);
+      }
+    });
+  };
+
+  const savePriceOverride = () => {
+    if (!selectedTenantId || !platformPriceOverride.trim()) return;
+    runAction(
+      () =>
+        apiPatchWithAuth(
+          `/admin/tenant/${selectedTenantId}/price-override`,
+          { customPriceOverride: Number(platformPriceOverride) },
+          token
+        ),
+      'Price override updated'
+    ).then((ok) => {
+      if (ok) {
+        setPlatformPriceOverride('');
+        if (token) loadPlatformTenants(token);
+      }
+    });
+  };
+
+  const createPlatformPlan = () => {
+    if (!newPlatformPlanName.trim() || !newPlatformPlanPrice.trim()) return;
+    runAction(
+      () =>
+        apiPostWithAuth(
+          '/billing/plans',
+          {
+            name: newPlatformPlanName.trim(),
+            priceMonthly: Number(newPlatformPlanPrice),
+            studentLimit: newPlatformPlanLimit.trim() ? Number(newPlatformPlanLimit) : null,
+            features: newPlatformPlanFeatures
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+            status: 'active'
+          },
+          token
+        ),
+      'Plan created'
+    ).then((ok) => {
+      if (ok) {
+        setPlatformPlans((prev) => [
+          ...prev,
+          {
+            id: `${newPlatformPlanName.trim().toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+            name: newPlatformPlanName.trim(),
+            priceMonthly: Number(newPlatformPlanPrice),
+            studentLimit: newPlatformPlanLimit.trim() ? Number(newPlatformPlanLimit) : null,
+            status: 'active',
+            features: newPlatformPlanFeatures
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          }
+        ]);
+        setNewPlatformPlanName('');
+        setNewPlatformPlanPrice('');
+        setNewPlatformPlanLimit('');
+        setNewPlatformPlanFeatures('');
+        setShowPlatformPlanComposer(false);
+        setEditingPlanId('');
+      }
+    });
+  };
+
+  const openPlatformPlanComposerForCreate = () => {
+    setActivePlatformControl('plans-pricing');
+    setActiveTab('platform-control');
+    setPlatformControlExpanded(true);
+    router.replace('/dashboard?section=platform-control-plans-pricing');
+    setEditingPlanId('');
+    setNewPlatformPlanName('');
+    setNewPlatformPlanPrice('');
+    setNewPlatformPlanLimit('');
+    setNewPlatformPlanFeatures('');
+    setShowPlatformPlanComposer(true);
+  };
+
+  const openPlatformPlanComposerForEdit = (plan: PlatformPlan) => {
+    setActivePlatformControl('plans-pricing');
+    setActiveTab('platform-control');
+    setPlatformControlExpanded(true);
+    router.replace('/dashboard?section=platform-control-plans-pricing');
+    setEditingPlanId(plan.id);
+    setNewPlatformPlanName(plan.name);
+    setNewPlatformPlanPrice(String(plan.priceMonthly));
+    setNewPlatformPlanLimit(plan.studentLimit === null ? '' : String(plan.studentLimit));
+    setNewPlatformPlanFeatures((plan.features || []).join(', '));
+    setShowPlatformPlanComposer(true);
+  };
+
+  const savePlatformPlan = () => {
+    if (!newPlatformPlanName.trim() || !newPlatformPlanPrice.trim()) return;
+    if (editingPlanId) {
+      runAction(
+        () =>
+          apiPatchWithAuth(
+            `/admin/plans/${editingPlanId}`,
+            {
+              name: newPlatformPlanName.trim(),
+              priceMonthly: Number(newPlatformPlanPrice),
+              studentLimit: newPlatformPlanLimit.trim() ? Number(newPlatformPlanLimit) : null,
+              features: newPlatformPlanFeatures
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            },
+            token
+          ),
+        'Plan updated'
+      ).then((ok) => {
+        if (ok) {
+          setPlatformPlans((prev) =>
+            prev.map((plan) =>
+              plan.id === editingPlanId
+                ? {
+                    ...plan,
+                    name: newPlatformPlanName.trim(),
+                    priceMonthly: Number(newPlatformPlanPrice),
+                    studentLimit: newPlatformPlanLimit.trim() ? Number(newPlatformPlanLimit) : null,
+                    features: newPlatformPlanFeatures
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean)
+                  }
+                : plan
+            )
+          );
+          setShowPlatformPlanComposer(false);
+          setEditingPlanId('');
+        }
+      });
+      return;
+    }
+
+    createPlatformPlan();
+  };
+
+  const updatePlanStatus = (planId: string, status: 'active' | 'inactive') => {
+    runAction(() => apiPatchWithAuth(`/admin/plans/${planId}`, { status }, token), `Plan marked ${status}`).then((ok) => {
+      if (ok) {
+        setPlatformPlans((prev) => prev.map((plan) => (plan.id === planId ? { ...plan, status } : plan)));
+      }
+    });
+  };
+
+  const updatePlanPrice = (planId: string, nextPrice: number, studentLimit: number | null) => {
+    runAction(
+      () => apiPatchWithAuth(`/admin/plans/${planId}`, { priceMonthly: nextPrice, studentLimit }, token),
+      'Plan updated'
+    ).then((ok) => {
+      if (ok) {
+        setPlatformPlans((prev) =>
+          prev.map((plan) => (plan.id === planId ? { ...plan, priceMonthly: nextPrice, studentLimit } : plan))
+        );
+      }
+    });
+  };
+
+  const saveIntegrationSettings = () => {
+    runAction(
+      async () => {
+        await apiPutWithAuth(
+          '/admin/settings/razorpay',
+          {
+            keyId: integrationRazorpayKeyId.trim(),
+            keySecret: integrationRazorpaySecret.trim(),
+            isActive: true
+          },
+          token
+        );
+
+        await apiPutWithAuth(
+          '/admin/settings/integrations',
+          {
+            whatsappProviderKey: integrationWhatsappKey.trim(),
+            smtp: {
+              host: integrationSmtpHost.trim(),
+              port: Number(integrationSmtpPort),
+              user: integrationSmtpUser.trim(),
+              pass: integrationSmtpPass.trim(),
+              from: integrationSmtpFrom.trim()
+            }
+          },
+          token
+        );
+      },
+      'Integration settings saved'
+    );
   };
 
   const openPlanComposer = () => {
@@ -1559,6 +2052,63 @@ export default function DashboardPage() {
             })}
           </div>
 
+          {isSuperAdmin ? (
+            <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/70 p-1.5">
+              <button
+                onClick={handlePlatformControlToggle}
+                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm font-medium ${
+                  activeTab === 'platform-control' ? 'bg-indigo-600 text-white' : 'text-indigo-900 hover:bg-white'
+                }`}
+              >
+                <span>Platform Control</span>
+                <span
+                  className={`inline-block text-base leading-none transition-transform duration-200 ${
+                    platformControlExpanded ? 'rotate-90' : ''
+                  }`}
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+              </button>
+              {platformControlExpanded ? (
+                <div className="mt-1 space-y-1 pl-2">
+                  {platformControlNav.map((item) => (
+                    <div key={item.id} className="flex items-center gap-1">
+                      <button
+                        onClick={() => handlePlatformControlNavClick(item.id)}
+                        className={`flex-1 rounded-lg px-2.5 py-1.5 text-left text-sm ${
+                          activeTab === 'platform-control' && activePlatformControl === item.id
+                            ? 'bg-white text-indigo-700'
+                            : 'text-indigo-900/80 hover:bg-white'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                      {item.id === 'tenants' ? (
+                        <button
+                          onClick={openPlatformTenantComposerForCreate}
+                          className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
+                          aria-label="Add new tenant"
+                        >
+                          +
+                        </button>
+                      ) : null}
+                      {item.id === 'plans-pricing' ? (
+                        <button
+                          onClick={openPlatformPlanComposerForCreate}
+                          className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
+                          aria-label="Add new platform plan"
+                        >
+                          +
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Operator</p>
             <p className="mt-2 text-sm font-bold text-slate-900">{user?.fullName || '...'}</p>
@@ -1579,7 +2129,7 @@ export default function DashboardPage() {
                   Monitor schedule flow, fee pressure and communication events from one board.
                 </p>
                 <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  Active: {activeMenu}
+                  Active: {activeTab === 'platform-control' ? 'Platform Control' : activeMenu}
                 </p>
               </div>
 
@@ -3238,6 +3788,617 @@ export default function DashboardPage() {
                 </pre>
                 {toast ? <p className="mt-3 text-xs font-semibold text-indigo-700">{toast}</p> : null}
               </article>
+            </div>
+          ) : null}
+
+          {!loading && activeTab === 'platform-control' && isSuperAdmin ? (
+            <div className="space-y-4">
+              {activePlatformControl === 'tenants' ? (
+                <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-900">Tenants</h3>
+                      <p className="text-sm text-slate-600">SuperAdmin visibility across all academies and status controls.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={adminTenantPlanFilter}
+                        onChange={(e) => setAdminTenantPlanFilter(e.target.value)}
+                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      >
+                        <option value="all">All Plans</option>
+                        <option value="Starter">Starter</option>
+                        <option value="Growth">Growth</option>
+                        <option value="Pro">Pro</option>
+                      </select>
+                      <select
+                        value={adminTenantStatusFilter}
+                        onChange={(e) => setAdminTenantStatusFilter(e.target.value)}
+                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      >
+                        <option value="all">All Subscription Status</option>
+                        <option value="trial">trial</option>
+                        <option value="active">active</option>
+                        <option value="expired">expired</option>
+                        <option value="cancelled">cancelled</option>
+                      </select>
+                      <button
+                        onClick={openPlatformTenantComposerForCreate}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl font-semibold leading-none text-white hover:bg-indigo-500"
+                        aria-label="Add tenant"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {showPlatformTenantComposer ? (
+                    <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="text-lg font-bold text-slate-900">
+                          {editingTenantId ? 'Edit Tenant' : 'Add Tenant'}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPlatformTenantComposer(false);
+                            setEditingTenantId('');
+                          }}
+                          className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <input
+                          value={tenantAcademyName}
+                          onChange={(e) => setTenantAcademyName(e.target.value)}
+                          placeholder="Academy name"
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                        <input
+                          value={tenantOwnerName}
+                          onChange={(e) => setTenantOwnerName(e.target.value)}
+                          placeholder="Owner name"
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                        <select
+                          value={tenantPlanName}
+                          onChange={(e) => setTenantPlanName(e.target.value)}
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        >
+                          <option value="Starter">Starter</option>
+                          <option value="Growth">Growth</option>
+                          <option value="Pro">Pro</option>
+                        </select>
+                        <input
+                          value={tenantBillingEmail}
+                          onChange={(e) => setTenantBillingEmail(e.target.value)}
+                          placeholder="Billing email"
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                        <select
+                          value={tenantSubscriptionStatus}
+                          onChange={(e) => setTenantSubscriptionStatus(e.target.value)}
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        >
+                          <option value="trial">trial</option>
+                          <option value="active">active</option>
+                          <option value="expired">expired</option>
+                          <option value="cancelled">cancelled</option>
+                          <option value="suspended">suspended</option>
+                        </select>
+                        <select
+                          value={tenantStatusValue}
+                          onChange={(e) => setTenantStatusValue(e.target.value as 'active' | 'blocked' | 'suspended')}
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        >
+                          <option value="active">active</option>
+                          <option value="blocked">blocked</option>
+                          <option value="suspended">suspended</option>
+                        </select>
+                        <select
+                          value={tenantPaymentStatus}
+                          onChange={(e) => setTenantPaymentStatus(e.target.value as 'paid' | 'pending' | 'failed')}
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        >
+                          <option value="paid">paid</option>
+                          <option value="pending">pending</option>
+                          <option value="failed">failed</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={tenantNextPaymentDate}
+                          onChange={(e) => setTenantNextPaymentDate(e.target.value)}
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                        <input
+                          type="number"
+                          value={tenantOverridePrice}
+                          onChange={(e) => setTenantOverridePrice(e.target.value)}
+                          placeholder="Custom price override (optional)"
+                          className="rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                      </div>
+                      <button
+                        onClick={savePlatformTenant}
+                        disabled={actionLoading || !tenantAcademyName.trim() || !tenantOwnerName.trim()}
+                        className="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                      >
+                        {editingTenantId ? 'Update Tenant' : 'Create Tenant'}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200 text-slate-600">
+                          <th className="px-3 py-3 font-semibold">Academy Name</th>
+                          <th className="px-3 py-3 font-semibold">Owner</th>
+                          <th className="px-3 py-3 font-semibold">Plan</th>
+                          <th className="px-3 py-3 font-semibold">Students</th>
+                          <th className="px-3 py-3 font-semibold">Subscription</th>
+                          <th className="px-3 py-3 font-semibold">Next Payment</th>
+                          <th className="px-3 py-3 font-semibold">Tenant Status</th>
+                          <th className="px-3 py-3 font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {platformTenantLoading ? (
+                          <tr>
+                            <td colSpan={8} className="px-3 py-5 text-center text-slate-500">
+                              Loading tenants...
+                            </td>
+                          </tr>
+                        ) : null}
+                        {!platformTenantLoading && platformTenants.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-3 py-5 text-center text-slate-500">
+                              No tenants available.
+                            </td>
+                          </tr>
+                        ) : null}
+                        {!platformTenantLoading
+                          ? platformTenants.map((tenant) => (
+                              <tr key={tenant.id || tenant.academyName} className="border-b border-slate-100 hover:bg-slate-50/70">
+                                <td className="px-3 py-3 font-semibold text-slate-900">{tenant.academyName}</td>
+                                <td className="px-3 py-3 text-slate-700">{tenant.ownerName}</td>
+                                <td className="px-3 py-3 text-slate-700">{tenant.planName || '-'}</td>
+                                <td className="px-3 py-3 text-slate-700">{tenant.studentCount}</td>
+                                <td className="px-3 py-3 text-slate-700">{tenant.subscriptionStatus || '-'}</td>
+                                <td className="px-3 py-3 text-slate-700">{tenant.nextPaymentDate ? fmtDate(tenant.nextPaymentDate) : '-'}</td>
+                                <td className="px-3 py-3">
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                                    {tenant.tenantStatus || 'active'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-1">
+                                    <button
+                                      onClick={() => setDebugOutput(JSON.stringify(tenant, null, 2))}
+                                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                      View
+                                    </button>
+                                    <button
+                                      onClick={() => openPlatformTenantComposerForEdit(tenant)}
+                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'blocked')}
+                                      className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                    >
+                                      Block
+                                    </button>
+                                    <button
+                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'active')}
+                                      className="rounded-lg border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                    >
+                                      Activate
+                                    </button>
+                                    <button
+                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'suspended')}
+                                      className="rounded-lg border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                                    >
+                                      Suspend
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              ) : null}
+
+              {activePlatformControl === 'plans-pricing' ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Total Plans</p>
+                      <p className="mt-1 text-3xl font-extrabold text-indigo-900">{platformPlans.length}</p>
+                    </article>
+                    <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Active Plans</p>
+                      <p className="mt-1 text-3xl font-extrabold text-emerald-800">
+                        {platformPlans.filter((plan) => plan.status === 'active').length}
+                      </p>
+                    </article>
+                    <article className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-sky-700">Starter Price</p>
+                      <p className="mt-1 text-3xl font-extrabold text-sky-800">
+                        {formatCurrency(platformPlans.find((plan) => plan.name.toLowerCase() === 'starter')?.priceMonthly || 0)}
+                      </p>
+                    </article>
+                    <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-violet-700">Highest Plan</p>
+                      <p className="mt-1 text-xl font-extrabold text-violet-900">
+                        {platformPlans.reduce((max, row) => (row.priceMonthly > max.priceMonthly ? row : max), platformPlans[0])?.name || '-'}
+                      </p>
+                    </article>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-12">
+                    <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-8">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-2xl font-bold text-slate-900">Plans & Pricing</h3>
+                          <p className="mt-1 text-sm text-slate-600">Manage platform plans with full-width pricing matrix.</p>
+                        </div>
+                        <button
+                          onClick={openPlatformPlanComposerForCreate}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl font-semibold leading-none text-white hover:bg-indigo-500"
+                          aria-label="Add plan"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                        <table className="min-w-full text-left text-sm">
+                          <thead className="bg-slate-50">
+                            <tr className="border-b border-slate-200 text-slate-600">
+                              <th className="px-3 py-3 font-semibold">Plan</th>
+                              <th className="px-3 py-3 font-semibold">Monthly Price</th>
+                              <th className="px-3 py-3 font-semibold">Student Limit</th>
+                              <th className="px-3 py-3 font-semibold">Status</th>
+                              <th className="px-3 py-3 font-semibold">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {platformPlans.map((plan) => (
+                              <tr key={plan.id} className="border-b border-slate-100">
+                                <td className="px-3 py-3 font-semibold text-slate-900">{plan.name}</td>
+                                <td className="px-3 py-3 text-slate-700">{formatCurrency(plan.priceMonthly)}</td>
+                                <td className="px-3 py-3 text-slate-700">{plan.studentLimit === null ? 'Unlimited' : plan.studentLimit}</td>
+                                <td className="px-3 py-3">
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                                    {plan.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-1">
+                                    <button
+                                      onClick={() => updatePlanPrice(plan.id, plan.priceMonthly, plan.studentLimit)}
+                                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                      Update Price
+                                    </button>
+                                    <button
+                                      onClick={() => openPlatformPlanComposerForEdit(plan)}
+                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => updatePlanStatus(plan.id, plan.status === 'active' ? 'inactive' : 'active')}
+                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                    >
+                                      {plan.status === 'active' ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </article>
+
+                    <div className="space-y-4 xl:col-span-4">
+                      <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h4 className="text-lg font-bold text-slate-900">{editingPlanId ? 'Edit Plan' : 'Create Plan'}</h4>
+                          {showPlatformPlanComposer ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowPlatformPlanComposer(false);
+                                setEditingPlanId('');
+                              }}
+                              className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                            >
+                              Close
+                            </button>
+                          ) : (
+                            <button
+                              onClick={openPlatformPlanComposerForCreate}
+                              className="rounded-lg border border-indigo-300 px-2.5 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                            >
+                              Open
+                            </button>
+                          )}
+                        </div>
+                        {showPlatformPlanComposer ? (
+                          <>
+                            <div className="grid gap-2">
+                              <input
+                                value={newPlatformPlanName}
+                                onChange={(e) => setNewPlatformPlanName(e.target.value)}
+                                placeholder="Plan name"
+                                className="rounded-xl border border-slate-300 px-3 py-2"
+                              />
+                              <input
+                                value={newPlatformPlanPrice}
+                                onChange={(e) => setNewPlatformPlanPrice(e.target.value)}
+                                placeholder="Monthly price (INR)"
+                                type="number"
+                                className="rounded-xl border border-slate-300 px-3 py-2"
+                              />
+                              <input
+                                value={newPlatformPlanLimit}
+                                onChange={(e) => setNewPlatformPlanLimit(e.target.value)}
+                                placeholder="Student limit (blank for unlimited)"
+                                type="number"
+                                className="rounded-xl border border-slate-300 px-3 py-2"
+                              />
+                              <input
+                                value={newPlatformPlanFeatures}
+                                onChange={(e) => setNewPlatformPlanFeatures(e.target.value)}
+                                placeholder="Features (comma separated)"
+                                className="rounded-xl border border-slate-300 px-3 py-2"
+                              />
+                            </div>
+                            <button
+                              onClick={savePlatformPlan}
+                              disabled={actionLoading || !newPlatformPlanName.trim() || !newPlatformPlanPrice.trim()}
+                              className="mt-3 w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                            >
+                              {editingPlanId ? 'Update plan' : 'Create plan'}
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-sm text-slate-600">Click Open or `+` to launch plan composer.</p>
+                        )}
+                      </article>
+
+                      <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                        <h4 className="text-lg font-bold text-slate-900">Price Override</h4>
+                        <p className="mt-1 text-sm text-slate-600">Set tenant-specific override over default pricing.</p>
+                        <div className="mt-3 grid gap-2">
+                          <select
+                            value={selectedTenantId}
+                            onChange={(e) => setSelectedTenantId(e.target.value)}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          >
+                            <option value="">Select tenant</option>
+                            {platformTenants.map((tenant) => (
+                              <option key={tenant.id || tenant.academyName} value={tenant.id || ''}>
+                                {tenant.academyName}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={platformPriceOverride}
+                            onChange={(e) => setPlatformPriceOverride(e.target.value)}
+                            placeholder="Override amount (INR)"
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          />
+                          <button
+                            onClick={savePriceOverride}
+                            disabled={actionLoading || !selectedTenantId || !platformPriceOverride.trim()}
+                            className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                          >
+                            Save override
+                          </button>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {activePlatformControl === 'tenant-control' ? (
+                <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-xl font-bold text-slate-900">Tenant Control</h3>
+                  <p className="mt-1 text-sm text-slate-600">Centralized lifecycle controls for activate, block, suspend, and reset access.</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {platformTenants.map((tenant) => (
+                      <div key={`${tenant.id || tenant.academyName}-control`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="font-semibold text-slate-900">{tenant.academyName}</p>
+                        <p className="text-xs text-slate-600">
+                          Plan: {tenant.planName || '-'} | Students: {tenant.studentCount}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600">Status: {tenant.tenantStatus || 'active'}</p>
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          <button
+                            onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'active')}
+                            className="rounded-lg border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                          >
+                            Activate
+                          </button>
+                          <button
+                            onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'blocked')}
+                            className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                          >
+                            Block
+                          </button>
+                          <button
+                            onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'suspended')}
+                            className="rounded-lg border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            onClick={() => tenant.id && runTenantResetAccess(tenant.id)}
+                            className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-white"
+                          >
+                            Reset Access
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {activePlatformControl === 'billing-payments' ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Monthly Revenue</p>
+                      <p className="mt-1 text-3xl font-extrabold text-emerald-800">{formatCurrency(monthlyRevenue)}</p>
+                    </article>
+                    <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Active Subscriptions</p>
+                      <p className="mt-1 text-3xl font-extrabold text-indigo-800">{activeSubscriptions}</p>
+                    </article>
+                    <article className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-rose-700">Failed Payments</p>
+                      <p className="mt-1 text-3xl font-extrabold text-rose-800">{failedPaymentsCount}</p>
+                    </article>
+                  </div>
+
+                  <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <h3 className="text-lg font-bold text-slate-900">Billing & Payments</h3>
+                    <p className="mt-1 text-sm text-slate-600">Razorpay payment ledger view across platform tenants.</p>
+                    <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="bg-slate-50">
+                          <tr className="border-b border-slate-200 text-slate-600">
+                            <th className="px-3 py-3 font-semibold">Tenant</th>
+                            <th className="px-3 py-3 font-semibold">Amount</th>
+                            <th className="px-3 py-3 font-semibold">Status</th>
+                            <th className="px-3 py-3 font-semibold">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billingRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-3 py-5 text-center text-slate-500">
+                                No payment records available.
+                              </td>
+                            </tr>
+                          ) : null}
+                          {billingRows.map((row) => (
+                            <tr key={row.id} className="border-b border-slate-100">
+                              <td className="px-3 py-3 text-slate-800">{row.tenant}</td>
+                              <td className="px-3 py-3 text-slate-800">{formatCurrency(row.amount)}</td>
+                              <td className="px-3 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${String(row.status).toLowerCase() === 'paid' ? 'bg-emerald-100 text-emerald-700' : String(row.status).toLowerCase() === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-slate-700">{row.date === '-' ? '-' : fmtDate(row.date)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                </div>
+              ) : null}
+
+              {activePlatformControl === 'integrations' ? (
+                <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-xl font-bold text-slate-900">Integrations</h3>
+                  <p className="mt-1 text-sm text-slate-600">Platform-level config managed only by SuperAdmin.</p>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="text-sm font-semibold text-slate-900">Razorpay</h4>
+                      <div className="mt-2 grid gap-2">
+                        <input
+                          value={integrationRazorpayKeyId}
+                          onChange={(e) => setIntegrationRazorpayKeyId(e.target.value)}
+                          placeholder="Razorpay Key ID"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                        <input
+                          value={integrationRazorpaySecret}
+                          onChange={(e) => setIntegrationRazorpaySecret(e.target.value)}
+                          placeholder="Razorpay Secret"
+                          type="password"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="text-sm font-semibold text-slate-900">WhatsApp Provider</h4>
+                      <div className="mt-2 grid gap-2">
+                        <input
+                          value={integrationWhatsappKey}
+                          onChange={(e) => setIntegrationWhatsappKey(e.target.value)}
+                          placeholder="Provider API key"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 xl:col-span-2">
+                      <h4 className="text-sm font-semibold text-slate-900">Email SMTP</h4>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        <input
+                          value={integrationSmtpHost}
+                          onChange={(e) => setIntegrationSmtpHost(e.target.value)}
+                          placeholder="SMTP host"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                        <input
+                          value={integrationSmtpPort}
+                          onChange={(e) => setIntegrationSmtpPort(e.target.value)}
+                          placeholder="SMTP port"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                        <input
+                          value={integrationSmtpUser}
+                          onChange={(e) => setIntegrationSmtpUser(e.target.value)}
+                          placeholder="SMTP user"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                        <input
+                          value={integrationSmtpPass}
+                          onChange={(e) => setIntegrationSmtpPass(e.target.value)}
+                          placeholder="SMTP password"
+                          type="password"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                        <input
+                          value={integrationSmtpFrom}
+                          onChange={(e) => setIntegrationSmtpFrom(e.target.value)}
+                          placeholder="From email"
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={saveIntegrationSettings}
+                    disabled={actionLoading || !integrationRazorpayKeyId.trim() || !integrationRazorpaySecret.trim()}
+                    className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                  >
+                    Save Integrations
+                  </button>
+                </article>
+              ) : null}
             </div>
           ) : null}
 

@@ -1,6 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import { apiSuccess } from '../../utils/apiResponse.js';
 import {
+  createRegistrationOrderSchema,
   loginSchema,
   parseOrThrow,
   refreshTokenSchema,
@@ -12,6 +13,16 @@ import {
 
 export const createAuthController = (authService) => {
   return {
+    createRegistrationOrder: async (req, res, next) => {
+      try {
+        const payload = parseOrThrow(createRegistrationOrderSchema, req.body);
+        const data = await authService.createRegistrationOrder(payload);
+        return apiSuccess(res, data, StatusCodes.CREATED);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     requestSignupOtp: async (req, res, next) => {
       try {
         const payload = parseOrThrow(requestOtpSchema, req.body);

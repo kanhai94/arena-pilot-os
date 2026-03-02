@@ -46,6 +46,7 @@ export const ensureSuperAdminBootstrap = async () => {
   }
 
   const superAdminTenantCode = `${env.ACADEMY_CODE_PREFIX.toLowerCase()}-00`;
+  const now = new Date();
   let tenant = await Tenant.findOne({
     $or: [{ email }, { academyCode: superAdminTenantCode }]
   }).lean();
@@ -55,9 +56,15 @@ export const ensureSuperAdminBootstrap = async () => {
       name: 'Platform Admin Tenant',
       academyCode: superAdminTenantCode,
       ownerName: fullName,
+      academySize: null,
+      requestedPlanName: 'Pro',
       email,
       subscriptionStatus: 'active',
-      currentPlanId: null
+      currentPlanId: null,
+      planName: 'Pro',
+      studentLimit: null,
+      planStartDate: now,
+      planEndDate: addYearsUTC(now, 10)
     });
   } else {
     await Tenant.updateOne(
@@ -66,14 +73,17 @@ export const ensureSuperAdminBootstrap = async () => {
         $set: {
           academyCode: superAdminTenantCode,
           email,
-          ownerName: fullName
+          ownerName: fullName,
+          academySize: null,
+          requestedPlanName: 'Pro',
+          planName: 'Pro',
+          studentLimit: null
         }
       }
     );
     tenant = await Tenant.findById(tenant._id).lean();
   }
 
-  const now = new Date();
   const existingSubscription = await Subscription.findOne({ tenantId: tenant._id, status: { $in: ['trial', 'active'] } })
     .sort({ createdAt: -1 })
     .lean();
@@ -88,6 +98,17 @@ export const ensureSuperAdminBootstrap = async () => {
       autoRenew: false
     });
   }
+
+  await Tenant.updateOne(
+    { _id: tenant._id },
+    {
+      $set: {
+        subscriptionStatus: 'active',
+        planStartDate: now,
+        planEndDate: addYearsUTC(now, 10)
+      }
+    }
+  );
 
   const passwordHash = await hashPassword(password);
 

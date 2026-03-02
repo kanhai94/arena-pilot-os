@@ -38,6 +38,8 @@ export const errorHandler = (err, req, res, next) => {
   const statusCode = known?.statusCode || err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
   const message = known?.message || err.message || 'Internal Server Error';
   const details = known?.details || err.details || null;
+  const errorCode = err.errorCode || details?.errorCode || details?.code || null;
+  const upgradeRequired = err.upgradeRequired === true || details?.upgradeRequired === true;
 
   req.log?.error({ err, statusCode }, 'Unhandled error');
 
@@ -45,6 +47,8 @@ export const errorHandler = (err, req, res, next) => {
     success: false,
     message,
     requestId: req.id || null,
+    ...(errorCode ? { errorCode } : {}),
+    ...(upgradeRequired ? { upgradeRequired: true } : {}),
     ...(details ? { details } : {}),
     ...(process.env.NODE_ENV === 'development' ? { stack: err.stack } : {})
   });

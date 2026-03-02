@@ -7,7 +7,17 @@ export const createPlanSchema = z
   .object({
     name: z.string().min(2).max(50),
     priceMonthly: z.coerce.number().min(0),
-    studentLimit: z.coerce.number().int().min(1).max(100000),
+    studentLimit: z
+      .preprocess(
+        (value) => {
+          if (value === undefined || value === null || value === '') {
+            return null;
+          }
+          return value;
+        },
+        z.union([z.coerce.number().int().min(1).max(100000), z.null()])
+      )
+      .default(null),
     features: z.array(z.string().min(1).max(100)).max(100).default([]),
     status: z.enum(['active', 'inactive']).optional()
   })

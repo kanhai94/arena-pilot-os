@@ -3,11 +3,36 @@ import { User } from '../../models/user.model.js';
 import { RefreshToken } from '../../models/refreshToken.model.js';
 import { AuthOtp } from '../../models/authOtp.model.js';
 import { Counter } from '../../models/counter.model.js';
+import { RegistrationPayment } from '../../models/registrationPayment.model.js';
 import { env } from '../../config/env.js';
 
 export const authRepository = {
   createTenant(payload) {
     return Tenant.create(payload);
+  },
+
+  createRegistrationPayment(payload) {
+    return RegistrationPayment.create(payload);
+  },
+
+  findRegistrationPaymentByOrderId(razorpayOrderId) {
+    return RegistrationPayment.findOne({ razorpayOrderId }).lean();
+  },
+
+  findRegistrationPaymentByOrderAndPayment(razorpayOrderId, razorpayPaymentId) {
+    return RegistrationPayment.findOne({ razorpayOrderId, razorpayPaymentId }).lean();
+  },
+
+  updateRegistrationPaymentByOrderId(razorpayOrderId, payload) {
+    return RegistrationPayment.findOneAndUpdate({ razorpayOrderId }, { $set: payload }, { new: true, lean: true });
+  },
+
+  markRegistrationPaymentConsumed(razorpayOrderId, tenantId) {
+    return RegistrationPayment.findOneAndUpdate(
+      { razorpayOrderId },
+      { $set: { consumedAt: new Date(), tenantId } },
+      { new: true, lean: true }
+    );
   },
 
   async getNextAcademySequence() {

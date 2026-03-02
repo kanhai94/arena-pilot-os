@@ -4,6 +4,7 @@ import { createAuthService } from './auth.service.js';
 import { authRepository } from './auth.repository.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
 
@@ -12,6 +13,7 @@ const authRouter = Router();
 const authService = createAuthService(authRepository);
 const authController = createAuthController(authService);
 
+authRouter.post('/create-registration-order', authController.createRegistrationOrder);
 authRouter.post('/request-signup-otp', authController.requestSignupOtp);
 authRouter.post('/verify-signup-otp', authController.verifySignupOtp);
 authRouter.post('/request-forgot-password-otp', authController.requestForgotPasswordOtp);
@@ -22,7 +24,7 @@ authRouter.post('/login', authController.login);
 authRouter.post('/refresh-token', authController.refreshToken);
 authRouter.post('/logout', authController.logout);
 
-authRouter.get('/me', authMiddleware, tenantMiddleware, authController.getMe);
+authRouter.get('/me', authMiddleware, tenantMiddleware, tenantAccessGuard, authController.getMe);
 authRouter.get(
   '/registration-stats',
   authMiddleware,
@@ -34,6 +36,7 @@ authRouter.get(
   '/protected-example',
   authMiddleware,
   tenantMiddleware,
+  tenantAccessGuard,
   roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
   authController.protectedTenantEcho
 );

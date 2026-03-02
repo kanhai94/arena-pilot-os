@@ -16,8 +16,11 @@ const planSchema = new mongoose.Schema(
     },
     studentLimit: {
       type: Number,
-      required: true,
-      min: 1
+      default: null,
+      validate: {
+        validator: (value) => value === null || (Number.isInteger(value) && value >= 1),
+        message: 'studentLimit must be null (unlimited) or an integer >= 1'
+      }
     },
     features: {
       type: [String],
