@@ -1,0 +1,61 @@
+import { z } from 'zod';
+import { AppError } from '../errors/appError.js';
+
+const objectIdRegex = /^[a-f0-9]{24}$/i;
+
+export const createFeePlanSchema = z
+  .object({
+    name: z.string().min(2).max(80),
+    amount: z.coerce.number().positive(),
+    durationMonths: z.coerce.number().int().min(1).max(60),
+    description: z.string().max(300).optional()
+  })
+  .strict();
+
+export const assignFeePlanSchema = z
+  .object({
+    studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
+    feePlanId: z.string().regex(objectIdRegex, 'Invalid feePlanId'),
+    startDate: z.string().datetime({ offset: true }).or(z.string().date())
+  })
+  .strict();
+
+export const studentFeeStatusQuerySchema = z.object({
+  studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
+  asOfDate: z.string().datetime({ offset: true }).or(z.string().date()).optional()
+});
+
+export const recordPaymentSchema = z
+  .object({
+    studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
+    amountPaid: z.coerce.number().positive(),
+    paymentDate: z.string().datetime({ offset: true }).or(z.string().date()),
+    paymentMode: z.enum(['cash', 'online', 'upi']),
+    referenceNote: z.string().max(300).optional()
+  })
+  .strict();
+
+export const paymentHistoryQuerySchema = z.object({
+  studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+
+export const pendingFeesListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  search: z.string().trim().max(120).optional(),
+  asOfDate: z.string().datetime({ offset: true }).or(z.string().date()).optional()
+});
+
+export const parseOrThrow = (schema, payload) => {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message
+    }));
+    throw new AppError('Validation failed', 400, details);
+  }
+  return parsed.data;
+};
