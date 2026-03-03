@@ -31,6 +31,11 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .default('false'),
+  EMAIL_FROM_NAME: z.string().default('ArenaPilot OS'),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_API_URL: z.string().url().default('https://api.brevo.com/v3/smtp/email'),
+  OTP_SUBJECT_SIGNUP: z.string().default('Verify your Sports Academy account'),
+  OTP_SUBJECT_FORGOT: z.string().default('Reset your Sports Academy account password'),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   SUPER_ADMIN_NAME: z.string().default('Super Admin'),
