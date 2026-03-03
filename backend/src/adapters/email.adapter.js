@@ -7,6 +7,20 @@ let transporter = null;
 
 const hasEmailConfig = Boolean(env.EMAIL_USER && env.EMAIL_PASS && env.EMAIL_FROM);
 const hasBrevoApiConfig = Boolean(env.BREVO_API_KEY && env.EMAIL_FROM);
+const SMTP_TIMEOUT_MS = 10000;
+const BREVO_TIMEOUT_MS = 10000;
+
+const withTimeout = (promise, timeoutMs, timeoutMessage) => {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+};
 
 const getTransporter = () => {
   if (!hasEmailConfig) {
@@ -20,6 +34,10 @@ const getTransporter = () => {
       secure: env.EMAIL_SECURE,
       requireTLS: !env.EMAIL_SECURE,
       family: 4,
+      connectionTimeout: SMTP_TIMEOUT_MS,
+      greetingTimeout: SMTP_TIMEOUT_MS,
+      socketTimeout: SMTP_TIMEOUT_MS,
+      dnsTimeout: 5000,
       auth: {
         user: env.EMAIL_USER,
         pass: env.EMAIL_PASS.replace(/\s+/g, '')
@@ -36,7 +54,7 @@ const sendViaBrevoApi = async ({ to, subject, actionText, otpCode, expiryMinutes
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
 
   try {
     const response = await fetch(env.BREVO_API_URL, {
@@ -96,7 +114,7 @@ export const sendOtpEmail = async ({ to, otpCode, purpose, expiryMinutes }) => {
 
   if (mailer) {
     try {
-      await mailer.sendMail({
+      const sendMailPromise = mailer.sendMail({
         from: env.EMAIL_FROM,
         to,
         subject,
@@ -111,6 +129,8 @@ export const sendOtpEmail = async ({ to, otpCode, purpose, expiryMinutes }) => {
           </div>
         `
       });
+
+      await withTimeout(sendMailPromise, SMTP_TIMEOUT_MS, `SMTP send timeout after ${SMTP_TIMEOUT_MS}ms`);
       return { sent: true };
     } catch (smtpError) {
       logger.error({ err: smtpError, to, purpose }, 'SMTP email delivery failed; attempting Brevo API fallback');
