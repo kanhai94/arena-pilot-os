@@ -25,6 +25,12 @@ const envSchema = z.object({
   EMAIL_USER: z.string().email().optional(),
   EMAIL_PASS: z.string().min(1).optional(),
   EMAIL_FROM: z.string().email().optional(),
+  EMAIL_HOST: z.string().default('smtp.gmail.com'),
+  EMAIL_PORT: z.coerce.number().int().positive().default(587),
+  EMAIL_SECURE: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .default('false'),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   SUPER_ADMIN_NAME: z.string().default('Super Admin'),

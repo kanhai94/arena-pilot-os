@@ -13,7 +13,11 @@ const getTransporter = () => {
 
   if (!transporter) {
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: env.EMAIL_HOST,
+      port: env.EMAIL_PORT,
+      secure: env.EMAIL_SECURE,
+      requireTLS: !env.EMAIL_SECURE,
+      family: 4,
       auth: {
         user: env.EMAIL_USER,
         pass: env.EMAIL_PASS.replace(/\s+/g, '')
