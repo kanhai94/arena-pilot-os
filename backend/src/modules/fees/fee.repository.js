@@ -16,6 +16,10 @@ export const feeRepository = {
     return FeePlan.findOne({ _id: feePlanId, tenantId }).lean();
   },
 
+  updateFeePlanById(tenantId, feePlanId, updatePayload) {
+    return FeePlan.findOneAndUpdate({ _id: feePlanId, tenantId }, { $set: updatePayload }, { new: true, lean: true });
+  },
+
   findStudentById(tenantId, studentId) {
     return Student.findOne({ _id: studentId, tenantId, status: 'active' }).lean();
   },

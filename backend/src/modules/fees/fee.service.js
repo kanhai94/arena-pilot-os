@@ -64,6 +64,26 @@ export const createFeeService = (repository) => {
       return repository.getFeePlans(tenantId);
     },
 
+    async updateFeePlan(tenantId, planId, payload) {
+      try {
+        const nextPayload = {
+          ...payload,
+          ...(payload.description === '' ? { description: null } : {})
+        };
+
+        const updated = await repository.updateFeePlanById(tenantId, planId, nextPayload);
+        if (!updated) {
+          throw new AppError('Fee plan not found', StatusCodes.NOT_FOUND);
+        }
+        return updated;
+      } catch (error) {
+        if (error?.code === 11000) {
+          throw new AppError('Fee plan already exists in tenant', StatusCodes.CONFLICT);
+        }
+        throw error;
+      }
+    },
+
     async assignFeePlan(tenantId, payload) {
       const [student, feePlan, existing] = await Promise.all([
         repository.findStudentById(tenantId, payload.studentId),

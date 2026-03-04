@@ -12,6 +12,22 @@ export const createFeePlanSchema = z
   })
   .strict();
 
+export const updateFeePlanSchema = z
+  .object({
+    name: z.string().min(2).max(80).optional(),
+    amount: z.coerce.number().positive().optional(),
+    durationMonths: z.coerce.number().int().min(1).max(60).optional(),
+    description: z.string().max(300).nullable().optional()
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field is required for update'
+  });
+
+export const updateFeePlanParamsSchema = z.object({
+  planId: z.string().regex(objectIdRegex, 'Invalid planId')
+});
+
 export const assignFeePlanSchema = z
   .object({
     studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),

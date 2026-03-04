@@ -7,7 +7,9 @@ import {
   paymentHistoryQuerySchema,
   pendingFeesListQuerySchema,
   recordPaymentSchema,
-  studentFeeStatusQuerySchema
+  studentFeeStatusQuerySchema,
+  updateFeePlanParamsSchema,
+  updateFeePlanSchema
 } from '../../validators/fee.validators.js';
 
 export const createFeeController = (feeService) => {
@@ -25,6 +27,17 @@ export const createFeeController = (feeService) => {
     getFeePlans: async (req, res, next) => {
       try {
         const data = await feeService.getFeePlans(req.tenantId);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    updateFeePlan: async (req, res, next) => {
+      try {
+        const params = parseOrThrow(updateFeePlanParamsSchema, req.params);
+        const payload = parseOrThrow(updateFeePlanSchema, req.body);
+        const data = await feeService.updateFeePlan(req.tenantId, params.planId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

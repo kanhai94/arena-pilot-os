@@ -380,6 +380,7 @@ export default function DashboardPage() {
   const [feePlanName, setFeePlanName] = useState('Monthly Prime');
   const [feeAmount, setFeeAmount] = useState('2200');
   const [feeMonths, setFeeMonths] = useState('1');
+  const [feePlanEditingId, setFeePlanEditingId] = useState<string | null>(null);
 
   const [batchName, setBatchName] = useState('U13 Elite');
   const [batchCenter, setBatchCenter] = useState('Main Center');
@@ -1507,9 +1508,27 @@ export default function DashboardPage() {
     setActiveTab('academy-pro');
     setActiveAcademyPro('plans');
     setAcademyProExpanded(true);
+    setFeePlanEditingId(null);
     setFeePlanName('');
     setFeeAmount('');
     setFeeMonths('');
+    setShowPlanComposer(true);
+    setShowClassComposer(false);
+    setShowClientComposer(false);
+    setShowCoachComposer(false);
+    setActiveAttendanceBatch(null);
+    router.replace('/dashboard?section=academy-pro-plans');
+  };
+
+  const openPlanComposerForEdit = (plan: FeePlan) => {
+    setActiveMenu('Academy Pro');
+    setActiveTab('academy-pro');
+    setActiveAcademyPro('plans');
+    setAcademyProExpanded(true);
+    setFeePlanEditingId(plan._id);
+    setFeePlanName(plan.name || '');
+    setFeeAmount(String(plan.amount ?? ''));
+    setFeeMonths(String(plan.durationMonths ?? ''));
     setShowPlanComposer(true);
     setShowClassComposer(false);
     setShowClientComposer(false);
@@ -2311,11 +2330,18 @@ export default function DashboardPage() {
                         <div className="mb-5 flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academy Pro</p>
-                            <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">Add New Plan</h3>
-                            <p className="mt-2 text-lg text-slate-500">Create plan for Academy Pro catalog.</p>
+                            <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+                              {feePlanEditingId ? 'Edit Plan' : 'Add New Plan'}
+                            </h3>
+                            <p className="mt-2 text-lg text-slate-500">
+                              {feePlanEditingId ? 'Update plan details for Academy Pro catalog.' : 'Create plan for Academy Pro catalog.'}
+                            </p>
                           </div>
                           <button
-                            onClick={() => setShowPlanComposer(false)}
+                            onClick={() => {
+                              setShowPlanComposer(false);
+                              setFeePlanEditingId(null);
+                            }}
                             className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             Back to Plans
@@ -2349,29 +2375,44 @@ export default function DashboardPage() {
                             onClick={async () => {
                               const created = await runAction(
                                 () =>
-                                  apiPostWithAuth(
-                                    '/fees/plans',
-                                    {
-                                      name: feePlanName.trim(),
-                                      amount: Number(feeAmount),
-                                      durationMonths: Number(feeMonths),
-                                      description: 'Created from Academy Pro plans panel'
-                                    },
-                                    token
-                                  ),
-                                'Plan created in Academy Pro'
+                                  feePlanEditingId
+                                    ? apiPatchWithAuth(
+                                        `/fees/plans/${feePlanEditingId}`,
+                                        {
+                                          name: feePlanName.trim(),
+                                          amount: Number(feeAmount),
+                                          durationMonths: Number(feeMonths),
+                                          description: 'Updated from Academy Pro plans panel'
+                                        },
+                                        token
+                                      )
+                                    : apiPostWithAuth(
+                                        '/fees/plans',
+                                        {
+                                          name: feePlanName.trim(),
+                                          amount: Number(feeAmount),
+                                          durationMonths: Number(feeMonths),
+                                          description: 'Created from Academy Pro plans panel'
+                                        },
+                                        token
+                                      ),
+                                feePlanEditingId ? 'Plan updated in Academy Pro' : 'Plan created in Academy Pro'
                               );
 
                               if (created) {
                                 setShowPlanComposer(false);
+                                setFeePlanEditingId(null);
                               }
                             }}
                             className="rounded-2xl bg-indigo-600 px-8 py-3 text-2xl font-bold text-white hover:bg-indigo-500 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Processing...' : 'Create Plan'}
+                            {actionLoading ? 'Processing...' : feePlanEditingId ? 'Update Plan' : 'Create Plan'}
                           </button>
                           <button
-                            onClick={() => setShowPlanComposer(false)}
+                            onClick={() => {
+                              setShowPlanComposer(false);
+                              setFeePlanEditingId(null);
+                            }}
                             className="rounded-2xl border border-slate-300 px-6 py-3 text-lg font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             Cancel
@@ -2402,12 +2443,13 @@ export default function DashboardPage() {
                               <th className="px-2 py-2 font-semibold">Duration</th>
                               <th className="px-2 py-2 font-semibold">Amount</th>
                               <th className="px-2 py-2 font-semibold">Type</th>
+                              <th className="px-2 py-2 font-semibold">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {feePlans.length === 0 ? (
                               <tr>
-                                <td className="px-2 py-3 text-slate-500" colSpan={4}>
+                                <td className="px-2 py-3 text-slate-500" colSpan={5}>
                                   No plans yet. Click + to create your first plan.
                                 </td>
                               </tr>
@@ -2419,6 +2461,15 @@ export default function DashboardPage() {
                                 <td className="px-2 py-2 text-slate-900">{formatCurrency(plan.amount)}</td>
                                 <td className="px-2 py-2 text-xs text-slate-500">
                                   {plan.durationMonths > 1 ? 'Subscription' : 'Monthly'}
+                                </td>
+                                <td className="px-2 py-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openPlanComposerForEdit(plan)}
+                                    className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                  >
+                                    Edit
+                                  </button>
                                 </td>
                               </tr>
                             ))}

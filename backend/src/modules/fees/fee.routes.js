@@ -18,6 +18,7 @@ feeRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionG
 
 feeRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.createFeePlan);
 feeRouter.get('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.getFeePlans);
+feeRouter.patch('/plans/:planId', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.updateFeePlan);
 
 feeRouter.post(
   '/student-fees/assign',

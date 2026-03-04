@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { apiPost } from '../../lib/api';
 
@@ -17,6 +18,18 @@ type RegisterResponse = {
   };
   adminUser: {
     id: string;
+    fullName: string;
+    email: string;
+    role: string;
+  };
+};
+
+type LoginResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    tenantId: string;
     fullName: string;
     email: string;
     role: string;
@@ -44,6 +57,14 @@ type RazorpayPaymentPayload = {
 };
 
 type PlanName = 'Starter' | 'Growth' | 'Pro';
+type FieldKey =
+  | 'academyName'
+  | 'ownerName'
+  | 'academyEmail'
+  | 'adminName'
+  | 'adminEmail'
+  | 'adminPassword'
+  | 'confirmPassword';
 
 const PLAN_OPTIONS: Array<{
   name: PlanName;
@@ -67,6 +88,8 @@ declare global {
 }
 
 export default function RegisterPage() {
+  const router = useRouter();
+
   const [academyName, setAcademyName] = useState('');
   const [planName, setPlanName] = useState<PlanName>('Starter');
   const [ownerName, setOwnerName] = useState('');
@@ -88,6 +111,15 @@ export default function RegisterPage() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [touchedFields, setTouchedFields] = useState<Record<FieldKey, boolean>>({
+    academyName: false,
+    ownerName: false,
+    academyEmail: false,
+    adminName: false,
+    adminEmail: false,
+    adminPassword: false,
+    confirmPassword: false
+  });
 
   const normalizedAdminEmail = useMemo(() => adminEmail.trim().toLowerCase(), [adminEmail]);
   const selectedPlan = useMemo(
@@ -137,7 +169,49 @@ export default function RegisterPage() {
   const detailsReady = !detailsError;
   const otpSnapshotMismatch = Boolean(otpSent && otpLockedSnapshot && otpLockedSnapshot !== detailsSnapshot);
   const paymentRequired = selectedPlan.monthlyPrice > 0;
-  const paymentReady = !paymentRequired || paymentDone;
+  const completedChecks = detailChecks.filter((check) => check.pass).length;
+  const completionPercent = Math.round((completedChecks / detailChecks.length) * 100);
+  const fieldErrors = useMemo<Record<FieldKey, string>>(
+    () => ({
+      academyName: academyName.trim().length >= 2 ? '' : 'Academy name at least 2 characters hona chahiye.',
+      ownerName: ownerName.trim().length >= 2 ? '' : 'Owner name at least 2 characters hona chahiye.',
+      academyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(academyEmail.trim()) ? '' : 'Valid academy email required.',
+      adminName: adminName.trim().length >= 2 ? '' : 'Admin name at least 2 characters hona chahiye.',
+      adminEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedAdminEmail) ? '' : 'Valid admin email required.',
+      adminPassword: adminPassword.length >= 8 ? '' : 'Password minimum 8 characters hona chahiye.',
+      confirmPassword:
+        adminPassword === confirmPassword && confirmPassword.length > 0 ? '' : 'Password confirmation mismatch.'
+    }),
+    [academyName, ownerName, academyEmail, adminName, normalizedAdminEmail, adminPassword, confirmPassword]
+  );
+  const touchedInvalidCount = (Object.keys(touchedFields) as FieldKey[]).filter(
+    (key) => touchedFields[key] && fieldErrors[key]
+  ).length;
+
+  const markTouched = (field: FieldKey) => {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const markAllTouched = () => {
+    setTouchedFields({
+      academyName: true,
+      ownerName: true,
+      academyEmail: true,
+      adminName: true,
+      adminEmail: true,
+      adminPassword: true,
+      confirmPassword: true
+    });
+  };
+
+  const inputClassName = (field: FieldKey) =>
+    `w-full rounded-xl border bg-white px-3 py-2.5 outline-none transition ${
+      touchedFields[field] && fieldErrors[field]
+        ? 'border-rose-300 focus:border-rose-500'
+        : touchedFields[field] && !fieldErrors[field]
+          ? 'border-emerald-300 focus:border-emerald-500'
+          : 'border-slate-300 focus:border-indigo-500'
+    }`;
 
   useEffect(() => {
     const scriptId = 'razorpay-checkout-js';
@@ -169,6 +243,7 @@ export default function RegisterPage() {
 
   const sendOtp = async () => {
     if (!detailsReady) {
+      markAllTouched();
       setError(detailsError || 'Please complete all required details.');
       return;
     }
@@ -228,7 +303,8 @@ export default function RegisterPage() {
       });
 
       setOtpVerified(true);
-      setMessage('OTP verified. Ab directly academy create kar sakte ho.');
+      setMessage('OTP verified. Creating academy and signing you in...');
+      await completeRegistrationAndLogin(normalizedOtp);
     } catch (err) {
       setOtpVerified(false);
       setError(err instanceof Error ? err.message : 'OTP verification failed');
@@ -237,89 +313,19 @@ export default function RegisterPage() {
     }
   };
 
-  const registerAcademy = async () => {
-    setError('');
-    setMessage('');
-
-    if (!detailsReady) {
-      setError(detailsError || 'Please complete all required details.');
-      return;
-    }
-
-    if (!otpSent || !otpVerified || !otpCode.trim()) {
-      setError('Pehle OTP verify karo.');
-      return;
-    }
-
-    if (otpSnapshotMismatch) {
-      setError('Details change hue hain. OTP dobara send and verify karo.');
-      setOtpSent(false);
-      setOtpVerified(false);
-      setOtpCode('');
-      setOtpLockedSnapshot('');
-      return;
-    }
-
-    if (!paymentReady) {
-      setError('Paid plan ke liye payment complete karo.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const data = await apiPost<RegisterResponse>('/auth/register-tenant', {
-        name: academyName.trim(),
-        planName,
-        ownerName: ownerName.trim(),
-        email: academyEmail.trim().toLowerCase(),
-        adminName: adminName.trim(),
-        adminEmail: normalizedAdminEmail,
-        adminPassword,
-        otpCode: otpCode.trim(),
-        ...(paymentPayload ? { payment: paymentPayload } : {})
-      });
-
-      setMessage(`Academy ${data.tenant.name} registered. Login with ${data.adminUser.email}.`);
-
-      setAcademyName('');
-      setPlanName('Starter');
-      setOwnerName('');
-      setAcademyEmail('');
-      setAdminName('');
-      setAdminEmail('');
-      setAdminPassword('');
-      setConfirmPassword('');
-      setOtpCode('');
-      setOtpSent(false);
-      setOtpVerified(false);
-      setOtpLockedSnapshot('');
-      setPaymentDone(false);
-      setPaymentPayload(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePlanPayment = async () => {
+  const handlePlanPayment = async (): Promise<RazorpayPaymentPayload> => {
     if (!paymentRequired) {
-      return;
+      throw new Error('Payment not required for selected plan.');
     }
 
     if (!detailsReady) {
-      setError(detailsError || 'Please complete all required details before payment.');
-      return;
+      throw new Error(detailsError || 'Please complete all required details before payment.');
     }
 
     if (!window.Razorpay) {
-      setError('Razorpay SDK load nahi hua. Page refresh karke retry karo.');
-      return;
+      throw new Error('Razorpay SDK load nahi hua. Page refresh karke retry karo.');
     }
 
-    setError('');
-    setMessage('');
     setPaymentLoading(true);
 
     try {
@@ -367,14 +373,84 @@ export default function RegisterPage() {
 
       setPaymentDone(true);
       setPaymentPayload(payment);
-      setMessage('Payment successful. Ab Create Academy click karo.');
-    } catch (err) {
-      setPaymentDone(false);
-      setPaymentPayload(null);
-      setError(err instanceof Error ? err.message : 'Payment failed');
+      return payment;
     } finally {
       setPaymentLoading(false);
     }
+  };
+
+  const completeRegistrationAndLogin = async (verifiedOtpCode: string) => {
+    setError('');
+    setMessage('');
+
+    if (!detailsReady) {
+      markAllTouched();
+      setError(detailsError || 'Please complete all required details.');
+      return;
+    }
+
+    if (otpSnapshotMismatch) {
+      setError('Details change hue hain. OTP dobara send and verify karo.');
+      setOtpSent(false);
+      setOtpVerified(false);
+      setOtpCode('');
+      setOtpLockedSnapshot('');
+      return;
+    }
+
+    let registrationPaymentPayload = paymentPayload;
+
+    if (paymentRequired && !registrationPaymentPayload) {
+      try {
+        registrationPaymentPayload = await handlePlanPayment();
+      } catch (err) {
+        setPaymentDone(false);
+        setPaymentPayload(null);
+        setError(err instanceof Error ? err.message : 'Payment failed');
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await apiPost<RegisterResponse>('/auth/register-tenant', {
+        name: academyName.trim(),
+        planName,
+        ownerName: ownerName.trim(),
+        email: academyEmail.trim().toLowerCase(),
+        adminName: adminName.trim(),
+        adminEmail: normalizedAdminEmail,
+        adminPassword,
+        otpCode: verifiedOtpCode,
+        ...(registrationPaymentPayload ? { payment: registrationPaymentPayload } : {})
+      });
+
+      const loginData = await apiPost<LoginResponse>('/auth/login', {
+        email: normalizedAdminEmail,
+        password: adminPassword
+      });
+
+      localStorage.setItem('accessToken', loginData.accessToken);
+      localStorage.setItem('refreshToken', loginData.refreshToken);
+      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
+
+      setMessage(`Academy ${data.tenant.name} created. Redirecting to dashboard...`);
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration/Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const registerAcademy = async () => {
+    if (!otpSent || !otpVerified || !otpCode.trim()) {
+      setError('Pehle OTP verify karo.');
+      return;
+    }
+
+    await completeRegistrationAndLogin(otpCode.trim());
   };
 
   return (
@@ -388,6 +464,19 @@ export default function RegisterPage() {
             <p className="mt-3 text-sm text-slate-200">
               Fill details, pick plan, verify OTP, and create your academy from this single screen.
             </p>
+
+            <div className="mt-5 rounded-2xl border border-white/20 bg-white/10 p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Onboarding Readiness</p>
+                <p className="text-lg font-bold text-white">{completionPercent}%</p>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-indigo-300 to-emerald-300 transition-all"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+            </div>
 
             <div className="mt-6 space-y-2 rounded-2xl border border-white/15 bg-white/5 p-4">
               {detailChecks.map((item) => (
@@ -417,7 +506,7 @@ export default function RegisterPage() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-3xl font-bold text-slate-900">Register Academy</h2>
-              <p className="mt-1 text-sm text-slate-600">One-screen onboarding with inline OTP verification</p>
+              <p className="mt-1 text-sm text-slate-600">Premium onboarding with live field validation and inline OTP verification</p>
             </div>
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -455,6 +544,30 @@ export default function RegisterPage() {
             Selected Plan: <span className="font-semibold">{selectedPlan.label}</span> - {selectedPlan.note}
           </div>
 
+          <div className="mb-4 grid gap-3 sm:grid-cols-[120px_1fr]">
+            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Progress</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{completionPercent}%</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2">
+              <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500 transition-all"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-600">
+                {completedChecks}/{detailChecks.length} required checks complete
+              </p>
+            </div>
+          </div>
+
+          {touchedInvalidCount > 0 ? (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {touchedInvalidCount} field{touchedInvalidCount > 1 ? 's' : ''} need attention before OTP.
+            </div>
+          ) : null}
+
           {paymentRequired ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
               <div>
@@ -463,7 +576,16 @@ export default function RegisterPage() {
               </div>
               <button
                 type="button"
-                onClick={handlePlanPayment}
+                onClick={async () => {
+                  setError('');
+                  setMessage('');
+                  try {
+                    await handlePlanPayment();
+                    setMessage('Payment successful. OTP verify karte hi academy auto-create ho jayegi.');
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Payment failed');
+                  }
+                }}
                 disabled={paymentLoading || paymentDone}
                 className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white disabled:opacity-50"
               >
@@ -483,9 +605,13 @@ export default function RegisterPage() {
                 type="text"
                 value={academyName}
                 onChange={(e) => setAcademyName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('academyName')}
+                className={inputClassName('academyName')}
                 placeholder="Elite Sports Academy"
               />
+              {touchedFields.academyName && fieldErrors.academyName ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.academyName}</p>
+              ) : null}
             </div>
 
             <div>
@@ -494,8 +620,12 @@ export default function RegisterPage() {
                 type="text"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('ownerName')}
+                className={inputClassName('ownerName')}
               />
+              {touchedFields.ownerName && fieldErrors.ownerName ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.ownerName}</p>
+              ) : null}
             </div>
 
             <div>
@@ -504,8 +634,12 @@ export default function RegisterPage() {
                 type="email"
                 value={academyEmail}
                 onChange={(e) => setAcademyEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('academyEmail')}
+                className={inputClassName('academyEmail')}
               />
+              {touchedFields.academyEmail && fieldErrors.academyEmail ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.academyEmail}</p>
+              ) : null}
             </div>
 
             <div>
@@ -514,8 +648,12 @@ export default function RegisterPage() {
                 type="text"
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('adminName')}
+                className={inputClassName('adminName')}
               />
+              {touchedFields.adminName && fieldErrors.adminName ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.adminName}</p>
+              ) : null}
             </div>
 
             <div>
@@ -524,8 +662,12 @@ export default function RegisterPage() {
                 type="email"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('adminEmail')}
+                className={inputClassName('adminEmail')}
               />
+              {touchedFields.adminEmail && fieldErrors.adminEmail ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.adminEmail}</p>
+              ) : null}
             </div>
 
             <div>
@@ -534,9 +676,15 @@ export default function RegisterPage() {
                 type="password"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('adminPassword')}
+                className={inputClassName('adminPassword')}
                 placeholder="Minimum 8 characters"
               />
+              {touchedFields.adminPassword && fieldErrors.adminPassword ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.adminPassword}</p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">Use at least 8 characters.</p>
+              )}
             </div>
 
             <div>
@@ -545,9 +693,15 @@ export default function RegisterPage() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
+                onBlur={() => markTouched('confirmPassword')}
+                className={inputClassName('confirmPassword')}
                 placeholder="Repeat password"
               />
+              {touchedFields.confirmPassword && fieldErrors.confirmPassword ? (
+                <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.confirmPassword}</p>
+              ) : touchedFields.confirmPassword && !fieldErrors.confirmPassword ? (
+                <p className="mt-1 text-xs font-medium text-emerald-600">Passwords matched.</p>
+              ) : null}
             </div>
           </div>
 
@@ -592,10 +746,10 @@ export default function RegisterPage() {
           <button
             type="button"
             onClick={registerAcademy}
-            disabled={loading || !otpVerified || otpSnapshotMismatch || !paymentReady}
+            disabled={loading || !otpVerified || otpSnapshotMismatch}
             className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Registering...' : paymentRequired ? 'Pay + Create Academy' : 'Create Academy'}
+            {loading ? 'Creating Academy...' : 'Create Academy'}
           </button>
 
           {error ? <p className="mt-4 text-sm font-medium text-rose-600">{error}</p> : null}
