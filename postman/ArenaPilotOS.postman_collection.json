@@ -590,6 +590,27 @@
             ],
             "url": "{{apiBaseUrl}}/fees/payments/pending?page=1&limit=50&search=&asOfDate=2026-03-03"
           }
+        },
+        {
+          "name": "PATCH /fees/plans/:planId",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2500,\n  \"durationMonths\": 1,\n  \"description\": \"Updated monthly plan\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/fees/plans/{{feePlanId}}"
+          }
         }
       ]
     },
@@ -920,6 +941,103 @@
               }
             ],
             "url": "{{apiBaseUrl}}/admin/queue/status"
+          }
+        },
+        {
+          "name": "POST /admin/tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"academyName\": \"Demo Academy\",\n  \"ownerName\": \"Owner Name\",\n  \"planName\": \"Starter\",\n  \"billingEmail\": \"owner@example.com\",\n  \"subscriptionStatus\": \"trial\",\n  \"tenantStatus\": \"active\",\n  \"paymentStatus\": \"pending\",\n  \"nextPaymentDate\": null,\n  \"customPriceOverride\": null\n}"
+            },
+            "url": "{{apiBaseUrl}}/admin/tenant"
+          }
+        },
+        {
+          "name": "PATCH /admin/tenant/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"academyName\": \"Demo Academy Updated\",\n  \"ownerName\": \"Owner Updated\",\n  \"planName\": \"Growth\",\n  \"billingEmail\": \"owner.updated@example.com\",\n  \"subscriptionStatus\": \"active\",\n  \"tenantStatus\": \"active\",\n  \"paymentStatus\": \"paid\",\n  \"nextPaymentDate\": \"2026-12-31\",\n  \"customPriceOverride\": 1999\n}"
+            },
+            "url": "{{apiBaseUrl}}/admin/tenant/{{targetTenantId}}"
+          }
+        },
+        {
+          "name": "PATCH /admin/tenant/:id/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantStatus\": \"suspended\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/admin/tenant/{{targetTenantId}}/status"
+          }
+        },
+        {
+          "name": "PATCH /admin/tenant/:id/price-override",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customPriceOverride\": 1499\n}"
+            },
+            "url": "{{apiBaseUrl}}/admin/tenant/{{targetTenantId}}/price-override"
+          }
+        },
+        {
+          "name": "POST /admin/tenant/:id/reset-access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{apiBaseUrl}}/admin/tenant/{{targetTenantId}}/reset-access"
           }
         }
       ]

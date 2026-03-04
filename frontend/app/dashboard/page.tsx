@@ -35,6 +35,7 @@ type Student = {
 type ClientMeta = {
   photoDataUrl?: string;
   photoFileName?: string;
+  dob?: string;
   rollNo?: string;
   invoiceDate?: string;
   invoiceNumber?: string;
@@ -275,7 +276,7 @@ const academyProNav: Array<{ id: AcademyProItem; label: string }> = [
   { id: 'plans', label: 'Plans' },
   { id: 'classes', label: 'Classes' },
   { id: 'class-schedule', label: 'Class Schedule' },
-  { id: 'clients', label: 'Clients' },
+  { id: 'clients', label: 'Student Registry' },
   { id: 'attendance', label: 'Attendance' },
   { id: 'renewals', label: 'Renewals' },
   { id: 'coach', label: 'Coach' }
@@ -299,7 +300,76 @@ const weekDayOptions = [
 ] as const;
 
 const fmtDate = (value: string) => new Date(value).toLocaleDateString();
-const formatCurrency = (amount: number) => `INR ${amount.toLocaleString('en-IN')}`;
+const formatCurrency = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
+const hour12Options = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
+const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
+
+type TimePeriod = 'AM' | 'PM';
+type Time12Parts = {
+  hour: string;
+  minute: string;
+  period: TimePeriod;
+};
+
+const parse24hTo12h = (time: string): Time12Parts => {
+  const match = time.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) {
+    return { hour: '09', minute: '00', period: 'AM' };
+  }
+
+  const hour24 = Number(match[1]);
+  const minute = match[2];
+  const period: TimePeriod = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12Raw = hour24 % 12 === 0 ? 12 : hour24 % 12;
+
+  return {
+    hour: String(hour12Raw).padStart(2, '0'),
+    minute,
+    period
+  };
+};
+
+const to24hFrom12h = ({ hour, minute, period }: Time12Parts) => {
+  const safeHour = Math.min(12, Math.max(1, Number(hour) || 12));
+  const safeMinute = Math.min(59, Math.max(0, Number(minute) || 0));
+  let hour24 = safeHour % 12;
+  if (period === 'PM') hour24 += 12;
+  return `${String(hour24).padStart(2, '0')}:${String(safeMinute).padStart(2, '0')}`;
+};
+
+const getAgeFromDob = (dob: string) => {
+  if (!dob) return null;
+  const birth = new Date(`${dob}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+  if (!Number.isFinite(age) || age < 1) return null;
+  return age;
+};
+
+const splitPhoneWithCode = (rawPhone?: string | null) => {
+  const fallback = { code: '+91', phone: '' };
+  const value = String(rawPhone || '').trim();
+  if (!value) return fallback;
+
+  const supportedCodes = ['+91', '+1', '+44'];
+  const matchedCode = supportedCodes.find((code) => value.startsWith(code));
+  if (matchedCode) {
+    return {
+      code: matchedCode,
+      phone: value.slice(matchedCode.length).replace(/\D/g, '')
+    };
+  }
+
+  return {
+    code: '+91',
+    phone: value.replace(/\D/g, '')
+  };
+};
 
 const pseudoTime = (index: number) => {
   const hour = 6 + (index % 8);
@@ -384,6 +454,34 @@ export default function DashboardPage() {
   const [feeAmount, setFeeAmount] = useState('2200');
   const [feeMonths, setFeeMonths] = useState('1');
   const [feePlanEditingId, setFeePlanEditingId] = useState<string | null>(null);
+  const [feeAmountTouched, setFeeAmountTouched] = useState(false);
+  const [feeMonthsTouched, setFeeMonthsTouched] = useState(false);
+  const [feePlanSubmitAttempted, setFeePlanSubmitAttempted] = useState(false);
+  const normalizedFeeAmount = feeAmount.trim();
+  const normalizedFeeMonths = feeMonths.trim();
+  const feeAmountError = useMemo(() => {
+    if (!normalizedFeeAmount) return 'Amount is required.';
+    if (!/^\d+(\.\d{1,2})?$/.test(normalizedFeeAmount)) return 'Enter a valid amount (up to 2 decimals).';
+    const value = Number(normalizedFeeAmount);
+    if (!Number.isFinite(value) || value <= 0) return 'Amount must be greater than 0.';
+    if (value > 1000000) return 'Amount cannot be more than 10,00,000.';
+    return '';
+  }, [normalizedFeeAmount]);
+  const feeMonthsError = useMemo(() => {
+    if (!normalizedFeeMonths) return 'Duration in months is required.';
+    if (!/^\d+$/.test(normalizedFeeMonths)) return 'Duration must be a whole number.';
+    const value = Number(normalizedFeeMonths);
+    if (!Number.isInteger(value) || value <= 0) return 'Duration must be at least 1 month.';
+    if (value > 120) return 'Duration cannot exceed 120 months.';
+    return '';
+  }, [normalizedFeeMonths]);
+  const canSubmitFeePlan =
+    !actionLoading &&
+    feePlanName.trim().length > 0 &&
+    feeAmountError.length === 0 &&
+    feeMonthsError.length === 0;
+  const showFeeAmountError = (feePlanSubmitAttempted || feeAmountTouched) && feeAmountError.length > 0;
+  const showFeeMonthsError = (feePlanSubmitAttempted || feeMonthsTouched) && feeMonthsError.length > 0;
 
   const [batchName, setBatchName] = useState('U13 Elite');
   const [batchCenter, setBatchCenter] = useState('Main Center');
@@ -411,6 +509,7 @@ export default function DashboardPage() {
   const [classScheduleDays, setClassScheduleDays] = useState<string[]>(['mon', 'wed', 'fri']);
   const [classStartTime, setClassStartTime] = useState('17:00');
   const [classEndTime, setClassEndTime] = useState('18:00');
+  const [classSubmitAttempted, setClassSubmitAttempted] = useState(false);
   const [classCoachId, setClassCoachId] = useState('');
   const [classFeePlanId, setClassFeePlanId] = useState('');
   const [classStatusFilter, setClassStatusFilter] = useState<'active' | 'inactive'>('active');
@@ -420,6 +519,7 @@ export default function DashboardPage() {
   const [scheduleBatchFilter, setScheduleBatchFilter] = useState('all');
   const [showClientComposer, setShowClientComposer] = useState(false);
   const [academyAttendanceDate, setAcademyAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedAttendanceClassId, setSelectedAttendanceClassId] = useState('');
   const [attendanceEntries, setAttendanceEntries] = useState<AttendanceEntry[]>([]);
   const [recentAttendanceEntries, setRecentAttendanceEntries] = useState<AttendanceEntry[]>([]);
   const [activeAttendanceBatch, setActiveAttendanceBatch] = useState<{
@@ -434,6 +534,7 @@ export default function DashboardPage() {
   const [clientFullName, setClientFullName] = useState('');
   const [clientGender, setClientGender] = useState<'male' | 'female' | 'other'>('male');
   const [clientEmail, setClientEmail] = useState('');
+  const [clientDob, setClientDob] = useState('');
   const [clientRollNo, setClientRollNo] = useState('');
   const [clientMobileCode, setClientMobileCode] = useState('+91');
   const [clientMobile, setClientMobile] = useState('');
@@ -450,6 +551,7 @@ export default function DashboardPage() {
   const [subscriptionStartDate, setSubscriptionStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
   const [subscriptionAutoRenew, setSubscriptionAutoRenew] = useState(false);
+  const [clientSubmitAttempted, setClientSubmitAttempted] = useState(false);
   const [clientMetaByStudentId, setClientMetaByStudentId] = useState<Record<string, ClientMeta>>({});
   const [renewalDueFilter, setRenewalDueFilter] = useState<(typeof renewalDueFilters)[number]>(5);
   const [coachName, setCoachName] = useState('');
@@ -507,6 +609,85 @@ export default function DashboardPage() {
 
   const isSuperAdmin = user?.role === 'SuperAdmin';
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
+  const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
+  const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
+  const classCapacityError = useMemo(() => {
+    if (!classCapacity.trim()) return 'Class capacity is required.';
+    if (!/^\d+$/.test(classCapacity.trim())) return 'Class capacity must be a whole number.';
+    const value = Number(classCapacity.trim());
+    if (!Number.isInteger(value) || value <= 0) return 'Class capacity must be greater than 0.';
+    if (value > 1000) return 'Class capacity cannot exceed 1000.';
+    return '';
+  }, [classCapacity]);
+  const classTimeError = useMemo(() => {
+    if (!classStartTime.trim() || !classEndTime.trim()) return 'Start and end time are required.';
+    const [startHour, startMinute] = classStartTime.split(':').map((v) => Number(v));
+    const [endHour, endMinute] = classEndTime.split(':').map((v) => Number(v));
+    const startTotal = startHour * 60 + startMinute;
+    const endTotal = endHour * 60 + endMinute;
+    if (Number.isNaN(startTotal) || Number.isNaN(endTotal)) return 'Please select valid class timings.';
+    if (endTotal <= startTotal) return 'End time must be later than start time.';
+    return '';
+  }, [classStartTime, classEndTime]);
+  const classFormHasRequiredMissing =
+    !classBatchName.trim() ||
+    !classSkill.trim() ||
+    !classCenter.trim() ||
+    classScheduleDays.length === 0 ||
+    !classStartTime.trim() ||
+    !classEndTime.trim();
+  const classRequiredFieldErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    if (!classBatchName.trim()) errors.batchName = 'Batch name is required.';
+    if (!classSkill.trim()) errors.skill = 'Sport / Skill is required.';
+    if (!classCenter.trim()) errors.center = 'Center name is required.';
+    if (classScheduleDays.length === 0) errors.scheduleDays = 'Please select at least one schedule day.';
+    return errors;
+  }, [classBatchName, classCenter, classScheduleDays, classSkill]);
+  const canSubmitClassForm =
+    !actionLoading &&
+    !classFormHasRequiredMissing &&
+    classCapacityError.length === 0 &&
+    classTimeError.length === 0;
+  const clientValidationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    const normalizedName = clientFullName.trim();
+    const normalizedEmail = clientEmail.trim().toLowerCase();
+    const normalizedMobile = clientMobile.trim();
+    const normalizedInvoiceAmount = invoiceAmount.trim();
+
+    if (!normalizedName) errors.fullName = 'Full name is required.';
+    if (!clientGender) errors.gender = 'Gender is required.';
+    if (!normalizedEmail) {
+      errors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      errors.email = 'Enter a valid email address.';
+    }
+    if (!normalizedMobile) {
+      errors.mobile = 'Mobile number is required.';
+    } else if (!/^\d{7,15}$/.test(normalizedMobile)) {
+      errors.mobile = 'Enter a valid mobile number.';
+    }
+    if (normalizedInvoiceAmount && !/^\d+(\.\d{1,2})?$/.test(normalizedInvoiceAmount)) {
+      errors.invoiceAmount = 'Enter valid amount (up to 2 decimals).';
+    } else if (normalizedInvoiceAmount && Number(normalizedInvoiceAmount) <= 0) {
+      errors.invoiceAmount = 'Amount must be greater than 0.';
+    }
+    if (subscriptionStartDate && subscriptionEndDate && subscriptionEndDate < subscriptionStartDate) {
+      errors.subscriptionEndDate = 'Subscription end date cannot be before start date.';
+    }
+
+    return errors;
+  }, [
+    clientEmail,
+    clientFullName,
+    clientGender,
+    clientMobile,
+    invoiceAmount,
+    subscriptionEndDate,
+    subscriptionStartDate
+  ]);
+  const canSubmitClientForm = Object.keys(clientValidationErrors).length === 0;
 
   const loadPlatformTenants = async (accessToken: string) => {
     if (!isSuperAdmin) return;
@@ -841,6 +1022,36 @@ export default function DashboardPage() {
       };
     });
   }, [academyClassRows, attendanceStudents, attendanceByBatch]);
+
+  useEffect(() => {
+    if (!selectedAttendanceClassId) return;
+    const exists = academyAttendanceRows.some((row) => row.id === selectedAttendanceClassId);
+    if (!exists) setSelectedAttendanceClassId('');
+  }, [academyAttendanceRows, selectedAttendanceClassId]);
+
+  const selectedAttendanceRows = useMemo(() => {
+    if (!selectedAttendanceClassId) return academyAttendanceRows;
+    return academyAttendanceRows.filter((row) => row.id === selectedAttendanceClassId);
+  }, [academyAttendanceRows, selectedAttendanceClassId]);
+  const selectedAttendanceSummary = useMemo(() => {
+    const selectedBatchIds = new Set(selectedAttendanceRows.map((row) => row.id));
+    const totalStudents = selectedAttendanceRows.reduce((sum, row) => sum + row.enrolled, 0);
+    const presentCount = attendanceEntries.filter((entry) => {
+      const batchId = typeof entry.batchId === 'string' ? entry.batchId : entry.batchId?._id;
+      return Boolean(batchId && selectedBatchIds.has(batchId) && entry.status === 'present');
+    }).length;
+    const absentCount = attendanceEntries.filter((entry) => {
+      const batchId = typeof entry.batchId === 'string' ? entry.batchId : entry.batchId?._id;
+      return Boolean(batchId && selectedBatchIds.has(batchId) && entry.status === 'absent');
+    }).length;
+
+    return {
+      scheduledClasses: selectedAttendanceRows.length,
+      totalStudents,
+      presentCount,
+      absentCount
+    };
+  }, [attendanceEntries, selectedAttendanceRows]);
 
   const studioRosterRows = useMemo(() => {
     const search = rosterSearchText.trim().toLowerCase();
@@ -1516,6 +1727,9 @@ export default function DashboardPage() {
     setFeePlanName('');
     setFeeAmount('');
     setFeeMonths('');
+    setFeeAmountTouched(false);
+    setFeeMonthsTouched(false);
+    setFeePlanSubmitAttempted(false);
     setShowPlanComposer(true);
     setShowClassComposer(false);
     setShowClientComposer(false);
@@ -1533,6 +1747,9 @@ export default function DashboardPage() {
     setFeePlanName(plan.name || '');
     setFeeAmount(String(plan.amount ?? ''));
     setFeeMonths(String(plan.durationMonths ?? ''));
+    setFeeAmountTouched(false);
+    setFeeMonthsTouched(false);
+    setFeePlanSubmitAttempted(false);
     setShowPlanComposer(true);
     setShowClassComposer(false);
     setShowClientComposer(false);
@@ -1554,8 +1771,9 @@ export default function DashboardPage() {
     setClassLevel('');
     setClassCapacity('');
     setClassScheduleDays([]);
-    setClassStartTime('');
-    setClassEndTime('');
+    setClassStartTime('17:00');
+    setClassEndTime('18:00');
+    setClassSubmitAttempted(false);
     setClassCoachId('');
     setClassFeePlanId('');
     setClassStatus('active');
@@ -1685,6 +1903,7 @@ export default function DashboardPage() {
     setClassCoachId(row.coachId);
     setClassFeePlanId(row.feePlanId);
     setClassStatus(row.status);
+    setClassSubmitAttempted(false);
     setShowClassComposer(true);
     setShowPlanComposer(false);
     setShowCoachComposer(false);
@@ -1719,6 +1938,20 @@ export default function DashboardPage() {
     );
   };
 
+  const updateClassTime = (type: 'start' | 'end', patch: Partial<Time12Parts>) => {
+    const current = type === 'start' ? classStartTimeParts : classEndTimeParts;
+    const next = {
+      ...current,
+      ...patch
+    } as Time12Parts;
+    const next24 = to24hFrom12h(next);
+    if (type === 'start') {
+      setClassStartTime(next24);
+      return;
+    }
+    setClassEndTime(next24);
+  };
+
   const persistClientMeta = (nextMeta: Record<string, ClientMeta>) => {
     setClientMetaByStudentId(nextMeta);
     if (typeof window !== 'undefined') {
@@ -1733,22 +1966,24 @@ export default function DashboardPage() {
     setClientFullName('');
     setClientGender('male');
     setClientEmail('');
+    setClientDob('');
     setClientRollNo('');
     setClientMobileCode('+91');
     setClientMobile('');
     setClientPhotoDataUrl('');
     setClientPhotoFileName('');
-    setInvoiceDate('');
-    setInvoiceNumber('');
+    setInvoiceDate(new Date().toISOString().slice(0, 10));
+    setInvoiceNumber(generateInvoiceNo());
     setInvoiceAmount('');
     setInvoiceRemarks('');
     setSubscriptionLevel('');
     setSubscriptionType('subscription');
     setSubscriptionPlanId('');
     setSubscriptionClassId('');
-    setSubscriptionStartDate('');
+    setSubscriptionStartDate(new Date().toISOString().slice(0, 10));
     setSubscriptionEndDate('');
     setSubscriptionAutoRenew(false);
+    setClientSubmitAttempted(false);
   };
 
   const openClientComposerForCreate = () => {
@@ -1774,9 +2009,11 @@ export default function DashboardPage() {
     setClientFullName(student.name || '');
     setClientGender((student.gender as 'male' | 'female' | 'other') || 'male');
     setClientEmail(student.email || '');
+    setClientDob(meta.dob || '');
     setClientRollNo(meta.rollNo || '');
-    setClientMobileCode('+91');
-    setClientMobile(student.parentPhone || '');
+    const parsedPhone = splitPhoneWithCode(student.parentPhone);
+    setClientMobileCode(parsedPhone.code);
+    setClientMobile(parsedPhone.phone);
     setClientPhotoDataUrl(meta.photoDataUrl || '');
     setClientPhotoFileName(meta.photoFileName || '');
     setInvoiceDate(meta.invoiceDate || new Date().toISOString().slice(0, 10));
@@ -1790,6 +2027,7 @@ export default function DashboardPage() {
     setSubscriptionStartDate(meta.subscriptionStartDate || new Date().toISOString().slice(0, 10));
     setSubscriptionEndDate(meta.subscriptionEndDate || '');
     setSubscriptionAutoRenew(Boolean(meta.subscriptionAutoRenew));
+    setClientSubmitAttempted(false);
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('clients');
@@ -1813,14 +2051,20 @@ export default function DashboardPage() {
   };
 
   const submitClientComposer = async () => {
+    setClientSubmitAttempted(true);
+    if (!canSubmitClientForm) {
+      setToast('Please fill all required student fields correctly.');
+      return;
+    }
     const normalizedPhone = `${clientMobileCode}${clientMobile}`.trim();
-    const normalizedEmail = clientEmail.trim();
+    const normalizedEmail = clientEmail.trim().toLowerCase();
 
     const ok = await runAction(
       async () => {
+        const derivedAge = getAgeFromDob(clientDob);
         const studentPayload = {
           name: clientFullName.trim(),
-          age: 12,
+          age: derivedAge || 12,
           gender: clientGender,
           parentName: clientFullName.trim(),
           parentPhone: normalizedPhone,
@@ -1852,6 +2096,7 @@ export default function DashboardPage() {
           [studentId]: {
             photoDataUrl: clientPhotoDataUrl || undefined,
             photoFileName: clientPhotoFileName || undefined,
+            dob: clientDob || undefined,
             rollNo: clientRollNo || undefined,
             invoiceDate,
             invoiceNumber,
@@ -1870,7 +2115,7 @@ export default function DashboardPage() {
 
         return studentResult;
       },
-      clientEditingId ? 'Client updated' : 'Client added'
+      clientEditingId ? 'Student updated' : 'Student added'
     );
 
     if (ok) {
@@ -1928,7 +2173,7 @@ export default function DashboardPage() {
       'Subscription End',
       'Auto Renew',
       'Fee Status',
-      'Client Status'
+      'Student Status'
     ];
 
     const rows = students.map((student) => {
@@ -1976,7 +2221,7 @@ export default function DashboardPage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setToast('Client registry exported as CSV');
+    setToast('Student registry exported as CSV');
   };
 
   return (
@@ -2368,24 +2613,53 @@ export default function DashboardPage() {
                             onChange={(e) => setFeePlanName(e.target.value)}
                             placeholder="Plan title"
                           />
-                          <input
-                            className="rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
-                            value={feeAmount}
-                            onChange={(e) => setFeeAmount(e.target.value)}
-                            placeholder="Amount"
-                          />
-                          <input
-                            className="rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
-                            value={feeMonths}
-                            onChange={(e) => setFeeMonths(e.target.value)}
-                            placeholder="Duration months"
-                          />
+                          <div>
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-semibold text-slate-500">
+                                ₹
+                              </span>
+                              <input
+                                className="w-full rounded-3xl border border-slate-300 py-5 pl-16 pr-6 text-2xl text-slate-900 placeholder:text-slate-400"
+                                value={feeAmount}
+                                onChange={(e) => {
+                                  const sanitized = e.target.value
+                                    .replace(/[^\d.]/g, '')
+                                    .replace(/(\..*)\./g, '$1');
+                                  setFeeAmountTouched(true);
+                                  setFeeAmount(sanitized);
+                                }}
+                                onBlur={() => setFeeAmountTouched(true)}
+                                placeholder="Amount"
+                                inputMode="decimal"
+                              />
+                            </div>
+                            {showFeeAmountError ? <p className="mt-2 text-sm font-medium text-rose-600">{feeAmountError}</p> : null}
+                          </div>
+                          <div>
+                            <input
+                              className="w-full rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
+                              value={feeMonths}
+                              onChange={(e) => {
+                                setFeeMonthsTouched(true);
+                                setFeeMonths(e.target.value.replace(/\D/g, ''));
+                              }}
+                              onBlur={() => setFeeMonthsTouched(true)}
+                              placeholder="Duration months"
+                              inputMode="numeric"
+                            />
+                            {showFeeMonthsError ? <p className="mt-2 text-sm font-medium text-rose-600">{feeMonthsError}</p> : null}
+                          </div>
                         </div>
 
                         <div className="mt-5 flex flex-wrap items-center gap-3">
                           <button
-                            disabled={actionLoading}
+                            disabled={!canSubmitFeePlan}
                             onClick={async () => {
+                              setFeePlanSubmitAttempted(true);
+                              if (!canSubmitFeePlan) {
+                                setToast('Please enter a valid amount and duration.');
+                                return;
+                              }
                               const created = await runAction(
                                 () =>
                                   feePlanEditingId
@@ -2522,6 +2796,9 @@ export default function DashboardPage() {
                             onChange={(e) => setClassBatchName(e.target.value)}
                             placeholder="Batch name"
                           />
+                          {classSubmitAttempted && classRequiredFieldErrors.batchName ? (
+                            <p className="-mt-2 text-sm font-medium text-rose-600">{classRequiredFieldErrors.batchName}</p>
+                          ) : null}
                           <input
                             className="w-full rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
                             value={classTitle}
@@ -2542,6 +2819,12 @@ export default function DashboardPage() {
                               placeholder="Center name"
                             />
                           </div>
+                          {classSubmitAttempted && (classRequiredFieldErrors.skill || classRequiredFieldErrors.center) ? (
+                            <div className="-mt-2 grid gap-1 text-sm font-medium text-rose-600 md:grid-cols-2">
+                              <p>{classRequiredFieldErrors.skill || ''}</p>
+                              <p>{classRequiredFieldErrors.center || ''}</p>
+                            </div>
+                          ) : null}
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                             <input
                               className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
@@ -2552,7 +2835,7 @@ export default function DashboardPage() {
                             <input
                               className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
                               value={classCapacity}
-                              onChange={(e) => setClassCapacity(e.target.value)}
+                              onChange={(e) => setClassCapacity(e.target.value.replace(/\D/g, ''))}
                               placeholder="Class capacity"
                             />
                           </div>
@@ -2589,19 +2872,80 @@ export default function DashboardPage() {
                             ))}
                           </select>
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <input
-                              className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
-                              value={classStartTime}
-                              onChange={(e) => setClassStartTime(e.target.value)}
-                              placeholder="Start HH:mm"
-                            />
-                            <input
-                              className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
-                              value={classEndTime}
-                              onChange={(e) => setClassEndTime(e.target.value)}
-                              placeholder="End HH:mm"
-                            />
+                            <div className="rounded-2xl border border-slate-300 p-3">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Start Time</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classStartTimeParts.hour}
+                                  onChange={(e) => updateClassTime('start', { hour: e.target.value })}
+                                >
+                                  {hour12Options.map((hour) => (
+                                    <option key={hour} value={hour}>
+                                      {hour}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classStartTimeParts.minute}
+                                  onChange={(e) => updateClassTime('start', { minute: e.target.value })}
+                                >
+                                  {minuteOptions.map((minute) => (
+                                    <option key={minute} value={minute}>
+                                      {minute}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classStartTimeParts.period}
+                                  onChange={(e) => updateClassTime('start', { period: e.target.value as TimePeriod })}
+                                >
+                                  <option value="AM">AM</option>
+                                  <option value="PM">PM</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-slate-300 p-3">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">End Time</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classEndTimeParts.hour}
+                                  onChange={(e) => updateClassTime('end', { hour: e.target.value })}
+                                >
+                                  {hour12Options.map((hour) => (
+                                    <option key={hour} value={hour}>
+                                      {hour}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classEndTimeParts.minute}
+                                  onChange={(e) => updateClassTime('end', { minute: e.target.value })}
+                                >
+                                  {minuteOptions.map((minute) => (
+                                    <option key={minute} value={minute}>
+                                      {minute}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-base font-semibold"
+                                  value={classEndTimeParts.period}
+                                  onChange={(e) => updateClassTime('end', { period: e.target.value as TimePeriod })}
+                                >
+                                  <option value="AM">AM</option>
+                                  <option value="PM">PM</option>
+                                </select>
+                              </div>
+                            </div>
                           </div>
+                          {classSubmitAttempted && classTimeError ? (
+                            <p className="text-sm font-medium text-rose-600">{classTimeError}</p>
+                          ) : null}
 
                           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <p className="mb-2 text-sm font-semibold text-slate-700">Schedule Days</p>
@@ -2629,6 +2973,13 @@ export default function DashboardPage() {
                               })}
                             </div>
                           </div>
+                          {classSubmitAttempted && classRequiredFieldErrors.scheduleDays ? (
+                            <p className="-mt-2 text-sm font-medium text-rose-600">{classRequiredFieldErrors.scheduleDays}</p>
+                          ) : null}
+
+                          {classSubmitAttempted && classCapacityError ? (
+                            <p className="text-sm font-medium text-rose-600">{classCapacityError}</p>
+                          ) : null}
 
                           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                             <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
@@ -2661,17 +3012,13 @@ export default function DashboardPage() {
 
                         <div className="mt-5 flex flex-wrap items-center gap-3">
                           <button
-                            disabled={
-                              actionLoading ||
-                              !classBatchName.trim() ||
-                              !classSkill.trim() ||
-                              !classCenter.trim() ||
-                              classScheduleDays.length === 0 ||
-                              !classStartTime.trim() ||
-                              !classEndTime.trim() ||
-                              !classCapacity.trim()
-                            }
+                            disabled={actionLoading}
                             onClick={async () => {
+                              setClassSubmitAttempted(true);
+                              if (!canSubmitClassForm) {
+                                setToast('Please enter valid class timing and capacity.');
+                                return;
+                              }
                               const created = await runAction(
                                 () => {
                                   const payload = {
@@ -2685,7 +3032,7 @@ export default function DashboardPage() {
                                     scheduleDays: classScheduleDays,
                                     startTime: classStartTime.trim(),
                                     endTime: classEndTime.trim(),
-                                    capacity: Number(classCapacity),
+                                    capacity: Number(classCapacity.trim()),
                                     ...(classEditBatchId ? { status: classStatus } : {})
                                   };
 
@@ -2930,21 +3277,42 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      {selectedAttendanceClassId
+                        ? `Selected class: ${selectedAttendanceRows[0]?.title || 'Unknown'}`
+                        : 'Selected class: All scheduled classes'}
+                    </p>
+                    {selectedAttendanceClassId ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAttendanceClassId('')}
+                        className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Clear selection
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Scheduled Classes</p>
-                      <p className="mt-1 text-2xl font-extrabold text-slate-900">{academyAttendanceRows.length}</p>
+                      <p className="mt-1 text-2xl font-extrabold text-slate-900">{selectedAttendanceSummary.scheduledClasses}</p>
+                    </div>
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                      <p className="text-xs uppercase tracking-[0.12em] text-indigo-700">Total Students</p>
+                      <p className="mt-1 text-2xl font-extrabold text-indigo-800">{selectedAttendanceSummary.totalStudents}</p>
                     </div>
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-emerald-700">Present</p>
                       <p className="mt-1 text-2xl font-extrabold text-emerald-800">
-                        {attendanceEntries.filter((entry) => entry.status === 'present').length}
+                        {selectedAttendanceSummary.presentCount}
                       </p>
                     </div>
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-rose-700">Absent</p>
                       <p className="mt-1 text-2xl font-extrabold text-rose-800">
-                        {attendanceEntries.filter((entry) => entry.status === 'absent').length}
+                        {selectedAttendanceSummary.absentCount}
                       </p>
                     </div>
                   </div>
@@ -2970,7 +3338,13 @@ export default function DashboardPage() {
                           </tr>
                         ) : null}
                         {academyAttendanceRows.map((row) => (
-                          <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/70">
+                          <tr
+                            key={row.id}
+                            onClick={() => setSelectedAttendanceClassId((prev) => (prev === row.id ? '' : row.id))}
+                            className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50/70 ${
+                              selectedAttendanceClassId === row.id ? 'bg-indigo-50/70' : ''
+                            }`}
+                          >
                             <td className="px-3 py-3 font-semibold text-slate-900">{row.title}</td>
                             <td className="px-3 py-3 text-slate-700">{row.centerName}</td>
                             <td className="px-3 py-3 text-slate-700">{row.capacity}</td>
@@ -2978,7 +3352,10 @@ export default function DashboardPage() {
                             <td className="px-3 py-3 text-slate-700">{row.attendanceText}</td>
                             <td className="px-3 py-3 text-right">
                               <button
-                                onClick={() => openAttendanceMarker(row.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openAttendanceMarker(row.id);
+                                }}
                                 className="rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
                                 aria-label={`Mark attendance for ${row.title}`}
                               >
@@ -3062,84 +3439,125 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academy Pro</p>
                             <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-                              {clientEditingId ? 'Edit Client' : 'New Client'}
+                              {clientEditingId ? 'Edit Student' : 'New Student'}
                             </h3>
                             <p className="mt-2 text-lg text-slate-500">
-                              Add client profile, invoice details and subscription in one flow.
+                              Add student profile, invoice details and subscription in one flow.
                             </p>
                           </div>
                           <button
                             onClick={() => setShowClientComposer(false)}
                             className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
-                            Back to Clients
+                            Back to Student Registry
                           </button>
                         </div>
 
                         <div className="grid gap-4">
                           <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
-                            <h4 className="text-lg font-bold text-slate-900">Client Profile</h4>
-                            <div className="mt-4 flex flex-col items-center gap-3">
-                              <label className="group flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-slate-300 bg-white">
-                                {clientPhotoDataUrl ? (
-                                  <img src={clientPhotoDataUrl} alt="Client" className="h-full w-full object-cover" />
-                                ) : (
-                                  <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-700">Upload Photo</span>
-                                )}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => handleClientPhotoUpload(e.target.files?.[0] || null)}
-                                />
-                              </label>
-                              {clientPhotoFileName ? <p className="text-xs text-slate-500">{clientPhotoFileName}</p> : null}
-                            </div>
+                            <h4 className="text-lg font-bold text-slate-900">Student Profile</h4>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-[200px_1fr] lg:items-start">
+                              <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white p-4 lg:mx-0">
+                                <label className="group flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-indigo-200 bg-white shadow-sm">
+                                  {clientPhotoDataUrl ? (
+                                    <img src={clientPhotoDataUrl} alt="Client" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="text-xs font-semibold text-slate-500 group-hover:text-indigo-700">Upload Photo</span>
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => handleClientPhotoUpload(e.target.files?.[0] || null)}
+                                  />
+                                </label>
+                                <div className="text-center">
+                                  <p className="text-xs font-semibold text-slate-700">Student Photo</p>
+                                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                                    {clientPhotoFileName || 'JPG/PNG up to 5MB'}
+                                  </p>
+                                </div>
+                              </div>
 
-                            <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              <input
-                                value={clientFullName}
-                                onChange={(e) => setClientFullName(e.target.value)}
-                                placeholder="Full name"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <input
-                                value={clientRollNo}
-                                onChange={(e) => setClientRollNo(e.target.value)}
-                                placeholder="Roll no"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <select
-                                value={clientGender}
-                                onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              >
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                              </select>
-                              <input
-                                value={clientEmail}
-                                onChange={(e) => setClientEmail(e.target.value)}
-                                placeholder="Email"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <div className="grid grid-cols-[110px_1fr] gap-2">
-                                <select
-                                  value={clientMobileCode}
-                                  onChange={(e) => setClientMobileCode(e.target.value)}
-                                  className="rounded-2xl border border-slate-300 px-3 py-3"
-                                >
-                                  <option value="+91">IND +91</option>
-                                  <option value="+1">US +1</option>
-                                  <option value="+44">UK +44</option>
-                                </select>
-                                <input
-                                  value={clientMobile}
-                                  onChange={(e) => setClientMobile(e.target.value)}
-                                  placeholder="Mobile"
-                                  className="rounded-2xl border border-slate-300 px-4 py-3"
-                                />
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  Full name
+                                  <input
+                                    value={clientFullName}
+                                    onChange={(e) => setClientFullName(e.target.value)}
+                                    placeholder="Full name"
+                                    className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.fullName ? 'border-rose-400' : 'border-slate-300'}`}
+                                  />
+                                  {clientSubmitAttempted && clientValidationErrors.fullName ? (
+                                    <span className="text-xs font-medium text-rose-600">{clientValidationErrors.fullName}</span>
+                                  ) : null}
+                                </label>
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  DOB
+                                  <input
+                                    type="date"
+                                    value={clientDob}
+                                    onChange={(e) => setClientDob(e.target.value)}
+                                    max={new Date().toISOString().slice(0, 10)}
+                                    className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  />
+                                </label>
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  Roll no
+                                  <input
+                                    value={clientRollNo}
+                                    onChange={(e) => setClientRollNo(e.target.value)}
+                                    placeholder="Roll no"
+                                    className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  />
+                                </label>
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  Gender
+                                  <select
+                                    value={clientGender}
+                                    onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
+                                    className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
+                                  >
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                </label>
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  Email
+                                  <input
+                                    value={clientEmail}
+                                    onChange={(e) => setClientEmail(e.target.value)}
+                                    placeholder="Email"
+                                    className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
+                                  />
+                                  {clientSubmitAttempted && clientValidationErrors.email ? (
+                                    <span className="text-xs font-medium text-rose-600">{clientValidationErrors.email}</span>
+                                  ) : null}
+                                </label>
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                  Mobile
+                                  <div className="grid grid-cols-[110px_1fr] gap-2">
+                                    <select
+                                      value={clientMobileCode}
+                                      onChange={(e) => setClientMobileCode(e.target.value)}
+                                      className="rounded-2xl border border-slate-300 px-3 py-3 font-normal"
+                                    >
+                                      <option value="+91">IND +91</option>
+                                      <option value="+1">US +1</option>
+                                      <option value="+44">UK +44</option>
+                                    </select>
+                                    <input
+                                      value={clientMobile}
+                                      onChange={(e) => setClientMobile(e.target.value.replace(/\D/g, '').slice(0, 15))}
+                                      placeholder="Mobile"
+                                      className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.mobile ? 'border-rose-400' : 'border-slate-300'}`}
+                                    />
+                                  </div>
+                                  {clientSubmitAttempted && clientValidationErrors.mobile ? (
+                                    <span className="text-xs font-medium text-rose-600">{clientValidationErrors.mobile}</span>
+                                  ) : null}
+                                </label>
                               </div>
                             </div>
                           </section>
@@ -3147,42 +3565,65 @@ export default function DashboardPage() {
                           <section className="rounded-3xl border border-slate-200 bg-white p-5">
                             <h4 className="text-lg font-bold text-slate-900">Invoice Details</h4>
                             <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              <input
-                                type="date"
-                                value={invoiceDate}
-                                onChange={(e) => setInvoiceDate(e.target.value)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <input
-                                value={invoiceNumber}
-                                onChange={(e) => setInvoiceNumber(e.target.value)}
-                                placeholder="Invoice number"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <input
-                                value={invoiceAmount}
-                                onChange={(e) => setInvoiceAmount(e.target.value)}
-                                placeholder="Amount"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <input
-                                value={invoiceRemarks}
-                                onChange={(e) => setInvoiceRemarks(e.target.value)}
-                                placeholder="Remarks"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Invoice date
+                                <input
+                                  type="date"
+                                  value={invoiceDate}
+                                  onChange={(e) => setInvoiceDate(e.target.value)}
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Invoice number
+                                <input
+                                  value={invoiceNumber}
+                                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                                  placeholder="Invoice number"
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Amount
+                                <div className="relative">
+                                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-500">₹</span>
+                                  <input
+                                    value={invoiceAmount}
+                                    onChange={(e) =>
+                                      setInvoiceAmount(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))
+                                    }
+                                    placeholder="Amount"
+                                    className={`w-full rounded-2xl border py-3 pl-9 pr-4 font-normal ${clientSubmitAttempted && clientValidationErrors.invoiceAmount ? 'border-rose-400' : 'border-slate-300'}`}
+                                  />
+                                </div>
+                                {clientSubmitAttempted && clientValidationErrors.invoiceAmount ? (
+                                  <span className="text-xs font-medium text-rose-600">{clientValidationErrors.invoiceAmount}</span>
+                                ) : null}
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Remarks
+                                <input
+                                  value={invoiceRemarks}
+                                  onChange={(e) => setInvoiceRemarks(e.target.value)}
+                                  placeholder="Remarks"
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                />
+                              </label>
                             </div>
                           </section>
 
                           <section className="rounded-3xl border border-slate-200 bg-white p-5">
                             <h4 className="text-lg font-bold text-slate-900">Subscription Details</h4>
                             <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              <input
-                                value={subscriptionLevel}
-                                onChange={(e) => setSubscriptionLevel(e.target.value)}
-                                placeholder="Level"
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Level
+                                <input
+                                  value={subscriptionLevel}
+                                  onChange={(e) => setSubscriptionLevel(e.target.value)}
+                                  placeholder="Level"
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                />
+                              </label>
                               <div className="flex items-center gap-2 rounded-2xl border border-slate-300 px-3 py-2">
                                 <label className="flex items-center gap-2 text-sm">
                                   <input
@@ -3201,42 +3642,58 @@ export default function DashboardPage() {
                                   Trial
                                 </label>
                               </div>
-                              <select
-                                value={subscriptionPlanId}
-                                onChange={(e) => setSubscriptionPlanId(e.target.value)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              >
-                                <option value="">Select plan</option>
-                                {feePlans.map((plan) => (
-                                  <option key={plan._id} value={plan._id}>
-                                    {plan.name} - {formatCurrency(plan.amount)}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                value={subscriptionClassId}
-                                onChange={(e) => setSubscriptionClassId(e.target.value)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              >
-                                <option value="">Select class</option>
-                                {academyClassRows.map((row) => (
-                                  <option key={row.id} value={row.id}>
-                                    {row.title}
-                                  </option>
-                                ))}
-                              </select>
-                              <input
-                                type="date"
-                                value={subscriptionStartDate}
-                                onChange={(e) => setSubscriptionStartDate(e.target.value)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
-                              <input
-                                type="date"
-                                value={subscriptionEndDate}
-                                onChange={(e) => setSubscriptionEndDate(e.target.value)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3"
-                              />
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Plan
+                                <select
+                                  value={subscriptionPlanId}
+                                  onChange={(e) => setSubscriptionPlanId(e.target.value)}
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                >
+                                  <option value="">Select plan</option>
+                                  {feePlans.map((plan) => (
+                                    <option key={plan._id} value={plan._id}>
+                                      {plan.name} - {formatCurrency(plan.amount)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Class
+                                <select
+                                  value={subscriptionClassId}
+                                  onChange={(e) => setSubscriptionClassId(e.target.value)}
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                >
+                                  <option value="">Select class</option>
+                                  {academyClassRows.map((row) => (
+                                    <option key={row.id} value={row.id}>
+                                      {row.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Start date
+                                <input
+                                  type="date"
+                                  value={subscriptionStartDate}
+                                  onChange={(e) => setSubscriptionStartDate(e.target.value)}
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                End date
+                                <input
+                                  type="date"
+                                  value={subscriptionEndDate}
+                                  min={subscriptionStartDate || undefined}
+                                  onChange={(e) => setSubscriptionEndDate(e.target.value)}
+                                  className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.subscriptionEndDate ? 'border-rose-400' : 'border-slate-300'}`}
+                                />
+                                {clientSubmitAttempted && clientValidationErrors.subscriptionEndDate ? (
+                                  <span className="text-xs font-medium text-rose-600">{clientValidationErrors.subscriptionEndDate}</span>
+                                ) : null}
+                              </label>
                             </div>
                             <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
                               <input
@@ -3252,10 +3709,10 @@ export default function DashboardPage() {
                         <div className="mt-5 flex flex-wrap items-center gap-3">
                           <button
                             onClick={submitClientComposer}
-                            disabled={actionLoading || !clientFullName.trim() || !clientMobile.trim()}
+                            disabled={actionLoading}
                             className="rounded-2xl bg-slate-900 px-8 py-3 text-2xl font-bold text-white hover:bg-slate-800 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Processing...' : clientEditingId ? 'Update Client' : 'Add Client'}
+                            {actionLoading ? 'Processing...' : clientEditingId ? 'Update Student' : 'Add Student'}
                           </button>
                           <button
                             onClick={() => setShowClientComposer(false)}
@@ -3270,7 +3727,7 @@ export default function DashboardPage() {
                     <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
-                          <h3 className="text-xl font-bold text-slate-900">Client Registry</h3>
+                          <h3 className="text-xl font-bold text-slate-900">Student Registry</h3>
                           <p className="text-sm text-slate-600">
                             Active learners: {studentsTotal}, paid: {paidStudentsCount}, pending: {pendingStudentsCount}
                           </p>
@@ -3279,8 +3736,8 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={exportClientsCsv}
-                            title="Export clients"
-                            aria-label="Export clients"
+                            title="Export students"
+                            aria-label="Export students"
                             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
                           >
                             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -3293,7 +3750,7 @@ export default function DashboardPage() {
                             onClick={openClientComposerForCreate}
                             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
                           >
-                            + Add Client
+                            + Add Student
                           </button>
                         </div>
                       </div>
@@ -3309,14 +3766,14 @@ export default function DashboardPage() {
                               <th className="px-2 py-2 font-semibold">Roll no</th>
                               <th className="px-2 py-2 font-semibold">Level</th>
                               <th className="px-2 py-2 font-semibold">Receivable</th>
-                              <th className="px-2 py-2 font-semibold">Edit User</th>
+                              <th className="px-2 py-2 font-semibold">Edit Student</th>
                             </tr>
                           </thead>
                           <tbody>
                             {students.length === 0 ? (
                               <tr>
                                 <td className="px-2 py-3 text-slate-500" colSpan={8}>
-                                  No clients found. Click Add Client.
+                                  No students found. Click Add Student.
                                 </td>
                               </tr>
                             ) : null}
@@ -3364,7 +3821,7 @@ export default function DashboardPage() {
                                       onClick={() => openClientComposerForEdit(student)}
                                       className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                     >
-                                      Edit User
+                                      Edit Student
                                     </button>
                                   </td>
                                 </tr>
@@ -3607,7 +4064,7 @@ export default function DashboardPage() {
                     onClick={openClientComposerForCreate}
                     className="rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
                   >
-                    + Academy Pro New Client
+                    + Academy Pro Add Student
                   </button>
                 </div>
               </article>
