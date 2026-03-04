@@ -559,6 +559,7 @@ export default function DashboardPage() {
   const [coachTitle, setCoachTitle] = useState('');
   const [coachDesignation, setCoachDesignation] = useState('');
   const [coachPassword, setCoachPassword] = useState(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+  const [coachSubmitAttempted, setCoachSubmitAttempted] = useState(false);
 
   const [broadcastText, setBroadcastText] = useState('Reminder: Recovery drills start 30 minutes early tomorrow.');
   const [debugOutput, setDebugOutput] = useState('');
@@ -688,6 +689,35 @@ export default function DashboardPage() {
     subscriptionStartDate
   ]);
   const canSubmitClientForm = Object.keys(clientValidationErrors).length === 0;
+  const coachValidationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    const normalizedCoachName = coachName.trim();
+    const normalizedCoachEmail = coachEmail.trim().toLowerCase();
+
+    if (!normalizedCoachName) {
+      errors.name = 'Coach name is required.';
+    } else {
+      const nameExists = coaches.some(
+        (coach) => coach.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
+      );
+      if (nameExists) {
+        errors.name = 'This coach name already exists. Use a different name.';
+      }
+    }
+
+    if (!normalizedCoachEmail) {
+      errors.email = 'Coach email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCoachEmail)) {
+      errors.email = 'Enter a valid coach email address.';
+    }
+
+    if (!coachTitle.trim()) errors.title = 'Title is required.';
+    if (!coachDesignation.trim()) errors.designation = 'Designation is required.';
+    if (!coachPassword.trim()) errors.password = 'Temporary password is required.';
+
+    return errors;
+  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, coaches]);
+  const canSubmitCoachForm = Object.keys(coachValidationErrors).length === 0;
 
   const loadPlatformTenants = async (accessToken: string) => {
     if (!isSuperAdmin) return;
@@ -1793,6 +1823,7 @@ export default function DashboardPage() {
     setCoachTitle('');
     setCoachDesignation('');
     setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+    setCoachSubmitAttempted(false);
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('coach');
@@ -2124,6 +2155,11 @@ export default function DashboardPage() {
   };
 
   const submitCoach = async () => {
+    setCoachSubmitAttempted(true);
+    if (!canSubmitCoachForm) {
+      setToast('Please fix coach form errors.');
+      return;
+    }
     const ok = await runAction(
       () =>
         apiPostWithAuth(
@@ -2148,6 +2184,7 @@ export default function DashboardPage() {
       setCoachTitle('');
       setCoachDesignation('');
       setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+      setCoachSubmitAttempted(false);
     }
   };
 
@@ -4001,32 +4038,44 @@ export default function DashboardPage() {
                             value={coachName}
                             onChange={(e) => setCoachName(e.target.value)}
                             placeholder="Coach name"
-                            className="rounded-xl border border-slate-300 px-3 py-2"
+                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
                           />
+                          {coachSubmitAttempted && coachValidationErrors.name ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.name}</p>
+                          ) : null}
                           <input
                             value={coachEmail}
                             onChange={(e) => setCoachEmail(e.target.value)}
                             placeholder="Coach email"
-                            className="rounded-xl border border-slate-300 px-3 py-2"
+                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
                           />
+                          {coachSubmitAttempted && coachValidationErrors.email ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.email}</p>
+                          ) : null}
                           <input
                             value={coachTitle}
                             onChange={(e) => setCoachTitle(e.target.value)}
                             placeholder="Title"
-                            className="rounded-xl border border-slate-300 px-3 py-2"
+                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.title ? 'border-rose-400' : 'border-slate-300'}`}
                           />
+                          {coachSubmitAttempted && coachValidationErrors.title ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.title}</p>
+                          ) : null}
                           <input
                             value={coachDesignation}
                             onChange={(e) => setCoachDesignation(e.target.value)}
                             placeholder="Designation"
-                            className="rounded-xl border border-slate-300 px-3 py-2"
+                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.designation ? 'border-rose-400' : 'border-slate-300'}`}
                           />
+                          {coachSubmitAttempted && coachValidationErrors.designation ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.designation}</p>
+                          ) : null}
                           <div className="grid grid-cols-[1fr_auto] gap-2">
                             <input
                               value={coachPassword}
                               onChange={(e) => setCoachPassword(e.target.value)}
                               placeholder="Temporary login password"
-                              className="rounded-xl border border-slate-300 px-3 py-2"
+                              className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
                             />
                             <button
                               type="button"
@@ -4036,9 +4085,12 @@ export default function DashboardPage() {
                               Regenerate
                             </button>
                           </div>
+                          {coachSubmitAttempted && coachValidationErrors.password ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
+                          ) : null}
                           <button
                             onClick={submitCoach}
-                            disabled={actionLoading || !coachName.trim() || !coachEmail.trim() || !coachTitle.trim() || !coachDesignation.trim() || !coachPassword.trim()}
+                            disabled={actionLoading}
                             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
                           >
                             {actionLoading ? 'Saving...' : 'Add Coach'}
