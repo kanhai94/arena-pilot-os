@@ -1,0 +1,694 @@
+{
+  "info": {
+    "name": "ArenaPilot OS API",
+    "description": "Postman collection for ArenaPilot OS backend APIs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/v1/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{apiBaseUrl}}/health"
+          }
+        },
+        {
+          "name": "GET /healthz",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{apiRootUrl}}/healthz"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /auth/create-registration-order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planName\": \"Growth\",\n  \"academyEmail\": \"academy@example.com\",\n  \"adminEmail\": \"admin@example.com\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/create-registration-order"
+          }
+        },
+        {
+          "name": "POST /auth/request-signup-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/request-signup-otp"
+          }
+        },
+        {
+          "name": "POST /auth/verify-signup-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otpCode\": \"123456\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/verify-signup-otp"
+          }
+        },
+        {
+          "name": "POST /auth/request-forgot-password-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/request-forgot-password-otp"
+          }
+        },
+        {
+          "name": "POST /auth/reset-password-with-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otpCode\": \"123456\",\n  \"newPassword\": \"NewStrongPass@123\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/reset-password-with-otp"
+          }
+        },
+        {
+          "name": "POST /auth/register-tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Elite Sports Academy\",\n  \"ownerName\": \"Kanhai Kumar\",\n  \"planName\": \"Starter\",\n  \"email\": \"academy@example.com\",\n  \"adminName\": \"Academy Admin\",\n  \"adminEmail\": \"admin@example.com\",\n  \"adminPassword\": \"Admin@12345\",\n  \"otpCode\": \"123456\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/register-tenant"
+          }
+        },
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.tokens) {",
+                  "  pm.environment.set('accessToken', json.data.tokens.accessToken);",
+                  "  pm.environment.set('refreshToken', json.data.tokens.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "POST /auth/refresh-token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/refresh-token"
+          }
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/auth/logout"
+          }
+        },
+        {
+          "name": "GET /auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "GET /auth/registration-stats (SuperAdmin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/auth/registration-stats"
+          }
+        },
+        {
+          "name": "GET /auth/protected-example",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/auth/protected-example"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "POST /students",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Arjun Yadav\",\n  \"age\": 13,\n  \"gender\": \"male\",\n  \"parentName\": \"Rakesh Yadav\",\n  \"parentPhone\": \"+919900011122\",\n  \"email\": \"arjun@example.com\",\n  \"batchId\": null,\n  \"feeStatus\": \"pending\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/students"
+          }
+        },
+        {
+          "name": "GET /students?page=1&limit=20",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/students?page=1&limit=20&search=&status=active"
+          }
+        },
+        {
+          "name": "GET /students/:studentId",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "PUT /students/:studentId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Arjun Yadav\",\n  \"age\": 14,\n  \"gender\": \"male\",\n  \"parentName\": \"Rakesh Yadav\",\n  \"parentPhone\": \"+919900011122\",\n  \"email\": \"arjun.updated@example.com\",\n  \"batchId\": null,\n  \"feeStatus\": \"paid\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "PATCH /students/:studentId/deactivate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/students/{{studentId}}/deactivate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batches",
+      "item": [
+        {
+          "name": "POST /batches",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"U13 Evening Beginners\",\n  \"centerName\": \"Main Center\",\n  \"feePlanId\": null,\n  \"sportType\": \"Football\",\n  \"coachId\": null,\n  \"scheduleDays\": [\"mon\", \"wed\", \"fri\"],\n  \"startTime\": \"17:00\",\n  \"endTime\": \"18:00\",\n  \"capacity\": 30\n}"
+            },
+            "url": "{{apiBaseUrl}}/batches"
+          }
+        },
+        {
+          "name": "GET /batches",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/batches?page=1&limit=20&status=active"
+          }
+        },
+        {
+          "name": "PUT /batches/:batchId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"U13 Evening Advanced\",\n  \"centerName\": \"Main Center\",\n  \"sportType\": \"Football\",\n  \"scheduleDays\": [\"tue\", \"thu\"],\n  \"startTime\": \"18:00\",\n  \"endTime\": \"19:00\",\n  \"capacity\": 35,\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/batches/{{batchId}}"
+          }
+        },
+        {
+          "name": "PATCH /batches/:batchId/deactivate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/batches/{{batchId}}/deactivate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "POST /attendance/mark",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{batchId}}\",\n  \"date\": \"2026-03-03\",\n  \"records\": [\n    { \"studentId\": \"{{studentId}}\", \"status\": \"present\" }\n  ]\n}"
+            },
+            "url": "{{apiBaseUrl}}/attendance/mark"
+          }
+        },
+        {
+          "name": "GET /attendance/by-date",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/attendance/by-date?date=2026-03-03&page=1&limit=50&batchId={{batchId}}"
+          }
+        },
+        {
+          "name": "GET /attendance/student-stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/attendance/student-stats?studentId={{studentId}}&fromDate=2026-03-01&toDate=2026-03-31"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fees",
+      "item": [
+        {
+          "name": "POST /fees/plans",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Monthly\",\n  \"amount\": 2200,\n  \"durationMonths\": 1,\n  \"description\": \"Monthly fee plan\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/fees/plans"
+          }
+        },
+        {
+          "name": "GET /fees/plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/fees/plans"
+          }
+        },
+        {
+          "name": "POST /fees/student-fees/assign",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"feePlanId\": \"{{feePlanId}}\",\n  \"startDate\": \"2026-03-01\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/fees/student-fees/assign"
+          }
+        },
+        {
+          "name": "GET /fees/student-fees/status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/fees/student-fees/status?studentId={{studentId}}&asOfDate=2026-03-03"
+          }
+        },
+        {
+          "name": "POST /fees/payments",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"amountPaid\": 1500,\n  \"paymentDate\": \"2026-03-03\",\n  \"paymentMode\": \"upi\",\n  \"referenceNote\": \"UPI ref 12345\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/fees/payments"
+          }
+        },
+        {
+          "name": "GET /fees/payments/history",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/fees/payments/history?studentId={{studentId}}&page=1&limit=50"
+          }
+        },
+        {
+          "name": "GET /fees/payments/pending",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/fees/payments/pending?page=1&limit=50&search=&asOfDate=2026-03-03"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "POST /notifications/fee-reminder/trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"asOfDate\": \"2026-03-03\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/notifications/fee-reminder/trigger"
+          }
+        },
+        {
+          "name": "POST /notifications/broadcast/send",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageContent\": \"Tomorrow holiday notice\",\n  \"studentIds\": [\"{{studentId}}\"]\n}"
+            },
+            "url": "{{apiBaseUrl}}/notifications/broadcast/send"
+          }
+        },
+        {
+          "name": "GET /notifications/logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/notifications/logs?page=1&limit=50&status=queued&messageType=broadcast"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Team Members",
+      "item": [
+        {
+          "name": "POST /team-members",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Coach One\",\n  \"title\": \"Head Coach\",\n  \"designation\": \"Football Coach\",\n  \"email\": \"coach.one@example.com\",\n  \"password\": \"Coach@12345\",\n  \"role\": \"Coach\",\n  \"permissions\": [\"students.manage\", \"batches.manage\", \"attendance.manage\"]\n}"
+            },
+            "url": "{{apiBaseUrl}}/team-members"
+          }
+        },
+        {
+          "name": "GET /team-members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/team-members"
+          }
+        },
+        {
+          "name": "PATCH /team-members/:userId/access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"Coach\",\n  \"permissions\": [\"students.manage\", \"batches.manage\", \"attendance.manage\"],\n  \"isActive\": true\n}"
+            },
+            "url": "{{apiBaseUrl}}/team-members/{{userId}}/access"
+          }
+        },
+        {
+          "name": "PATCH /team-members/:userId/deactivate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/team-members/{{userId}}/deactivate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing (Tenant)",
+      "item": [
+        {
+          "name": "POST /billing/plans (SuperAdmin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Growth\",\n  \"priceMonthly\": 1999,\n  \"studentLimit\": 50,\n  \"features\": [\"attendance\", \"fees\", \"notifications\"],\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{apiBaseUrl}}/billing/plans"
+          }
+        },
+        {
+          "name": "POST /billing/subscribe",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"startDate\": \"2026-03-03\",\n  \"autoRenew\": true\n}"
+            },
+            "url": "{{apiBaseUrl}}/billing/subscribe"
+          }
+        },
+        {
+          "name": "POST /billing/upgrade",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"autoRenew\": true\n}"
+            },
+            "url": "{{apiBaseUrl}}/billing/upgrade"
+          }
+        },
+        {
+          "name": "POST /billing/cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/billing/cancel"
+          }
+        },
+        {
+          "name": "GET /billing/current",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/billing/current"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscription",
+      "item": [
+        {
+          "name": "GET /subscription/current",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/subscription/current"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (SuperAdmin)",
+      "item": [
+        {
+          "name": "GET /admin/tenants",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/admin/tenants?plan=Growth&status=active&page=1&limit=50"
+          }
+        },
+        {
+          "name": "GET /admin/settings/razorpay",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{apiBaseUrl}}/admin/settings/razorpay"
+          }
+        },
+        {
+          "name": "PUT /admin/settings/razorpay",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"rzp_test_1234567890\",\n  \"keySecret\": \"test_secret_1234567890\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{apiBaseUrl}}/admin/settings/razorpay"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "apiRootUrl", "value": "https://arena-pilot-os.onrender.com" },
+    { "key": "apiBaseUrl", "value": "https://arena-pilot-os.onrender.com/api/v1" },
+    { "key": "loginEmail", "value": "kan94301@gmail.com" },
+    { "key": "loginPassword", "value": "Kanhai9430" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "studentId", "value": "000000000000000000000000" },
+    { "key": "batchId", "value": "000000000000000000000000" },
+    { "key": "feePlanId", "value": "000000000000000000000000" },
+    { "key": "planId", "value": "000000000000000000000000" },
+    { "key": "userId", "value": "000000000000000000000000" }
+  ]
+}
