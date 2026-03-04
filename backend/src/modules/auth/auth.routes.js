@@ -4,6 +4,7 @@ import { createAuthService } from './auth.service.js';
 import { authRepository } from './auth.repository.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
@@ -25,7 +26,7 @@ authRouter.post('/login', authController.login);
 authRouter.post('/refresh-token', authController.refreshToken);
 authRouter.post('/logout', authController.logout);
 
-authRouter.get('/me', authMiddleware, tenantMiddleware, tenantAccessGuard, authController.getMe);
+authRouter.get('/me', authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, authController.getMe);
 authRouter.get(
   '/registration-stats',
   authMiddleware,
@@ -37,6 +38,7 @@ authRouter.get(
   '/protected-example',
   authMiddleware,
   tenantMiddleware,
+  tenantContextMiddleware,
   tenantAccessGuard,
   roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
   authController.protectedTenantEcho

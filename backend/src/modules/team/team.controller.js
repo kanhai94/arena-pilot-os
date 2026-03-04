@@ -12,7 +12,7 @@ export const createTeamController = (teamService) => {
     createTeamMember: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createTeamMemberSchema, req.body);
-        const data = await teamService.createTeamMember(req.tenantId, payload);
+        const data = await teamService.createTeamMember(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -21,7 +21,7 @@ export const createTeamController = (teamService) => {
 
     listTeamMembers: async (req, res, next) => {
       try {
-        const data = await teamService.listTeamMembers(req.tenantId);
+        const data = await teamService.listTeamMembers();
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -32,7 +32,7 @@ export const createTeamController = (teamService) => {
       try {
         const { userId } = parseOrThrow(teamMemberIdParamSchema, req.params);
         const payload = parseOrThrow(updateTeamMemberAccessSchema, req.body);
-        const data = await teamService.updateTeamMemberAccess(req.tenantId, userId, payload);
+        const data = await teamService.updateTeamMemberAccess(userId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -42,7 +42,7 @@ export const createTeamController = (teamService) => {
     deactivateTeamMember: async (req, res, next) => {
       try {
         const { userId } = parseOrThrow(teamMemberIdParamSchema, req.params);
-        const data = await teamService.deactivateTeamMember(req.tenantId, userId);
+        const data = await teamService.deactivateTeamMember(userId);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

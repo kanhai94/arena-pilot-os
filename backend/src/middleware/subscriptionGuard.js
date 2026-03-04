@@ -4,7 +4,7 @@ import { billingService } from '../modules/billing/billing.container.js';
 export const subscriptionGuard = (options = {}) => {
   return async (req, res, next) => {
     try {
-      const access = await billingService.getGuardAccess(req.tenantId, options);
+      const access = await billingService.getGuardAccess(undefined, options);
 
       if (!access.allowed) {
         return next(

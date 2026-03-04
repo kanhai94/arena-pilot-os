@@ -17,7 +17,7 @@ export const createFeeController = (feeService) => {
     createFeePlan: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createFeePlanSchema, req.body);
-        const data = await feeService.createFeePlan(req.tenantId, payload);
+        const data = await feeService.createFeePlan(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -26,7 +26,7 @@ export const createFeeController = (feeService) => {
 
     getFeePlans: async (req, res, next) => {
       try {
-        const data = await feeService.getFeePlans(req.tenantId);
+        const data = await feeService.getFeePlans();
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -37,7 +37,7 @@ export const createFeeController = (feeService) => {
       try {
         const params = parseOrThrow(updateFeePlanParamsSchema, req.params);
         const payload = parseOrThrow(updateFeePlanSchema, req.body);
-        const data = await feeService.updateFeePlan(req.tenantId, params.planId, payload);
+        const data = await feeService.updateFeePlan(params.planId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -47,7 +47,7 @@ export const createFeeController = (feeService) => {
     assignFeePlan: async (req, res, next) => {
       try {
         const payload = parseOrThrow(assignFeePlanSchema, req.body);
-        const data = await feeService.assignFeePlan(req.tenantId, payload);
+        const data = await feeService.assignFeePlan(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -57,7 +57,7 @@ export const createFeeController = (feeService) => {
     getStudentFeeStatus: async (req, res, next) => {
       try {
         const query = parseOrThrow(studentFeeStatusQuerySchema, req.query);
-        const data = await feeService.getStudentFeeStatus(req.tenantId, query.studentId, query.asOfDate);
+        const data = await feeService.getStudentFeeStatus(query.studentId, query.asOfDate);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -67,7 +67,7 @@ export const createFeeController = (feeService) => {
     recordPayment: async (req, res, next) => {
       try {
         const payload = parseOrThrow(recordPaymentSchema, req.body);
-        const data = await feeService.recordPayment(req.tenantId, req.auth.userId, payload);
+        const data = await feeService.recordPayment(req.auth.userId, payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -77,7 +77,7 @@ export const createFeeController = (feeService) => {
     paymentHistory: async (req, res, next) => {
       try {
         const query = parseOrThrow(paymentHistoryQuerySchema, req.query);
-        const data = await feeService.paymentHistory(req.tenantId, query.studentId, query.page, query.limit);
+        const data = await feeService.paymentHistory(query.studentId, query.page, query.limit);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -87,13 +87,7 @@ export const createFeeController = (feeService) => {
     pendingFeesList: async (req, res, next) => {
       try {
         const query = parseOrThrow(pendingFeesListQuerySchema, req.query);
-        const data = await feeService.pendingFeesList(
-          req.tenantId,
-          query.page,
-          query.limit,
-          query.search,
-          query.asOfDate
-        );
+        const data = await feeService.pendingFeesList(query.page, query.limit, query.search, query.asOfDate);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

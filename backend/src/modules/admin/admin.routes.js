@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
 import { adminRepository } from './admin.repository.js';
@@ -11,7 +12,7 @@ const adminRouter = Router();
 const adminService = createAdminService(adminRepository);
 const adminController = createAdminController(adminService);
 
-adminRouter.use(authMiddleware, roleMiddleware(ROLES.SUPER_ADMIN));
+adminRouter.use(authMiddleware, tenantContextMiddleware, roleMiddleware(ROLES.SUPER_ADMIN));
 
 adminRouter.get('/tenants', adminController.getTenants);
 adminRouter.post('/tenant', adminController.createTenant);

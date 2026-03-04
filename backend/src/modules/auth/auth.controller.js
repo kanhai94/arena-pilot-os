@@ -111,7 +111,7 @@ export const createAuthController = (authService) => {
 
     getMe: async (req, res, next) => {
       try {
-        const data = await authService.getMyProfile(req.auth.userId, req.tenantId);
+        const data = await authService.getMyProfile(req.auth.userId);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

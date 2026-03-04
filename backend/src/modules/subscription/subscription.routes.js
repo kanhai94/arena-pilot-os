@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
@@ -13,7 +14,7 @@ const subscriptionRouter = Router();
 const subscriptionService = createSubscriptionService({ billingService });
 const subscriptionController = createSubscriptionController(subscriptionService);
 
-subscriptionRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard);
+subscriptionRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard);
 
 subscriptionRouter.get(
   '/current',

@@ -11,7 +11,7 @@ export const createNotificationController = (service) => {
     triggerFeeReminder: async (req, res, next) => {
       try {
         const payload = parseOrThrow(triggerFeeReminderSchema, req.body);
-        const data = await service.triggerFeeReminderEvent(req.tenantId, payload);
+        const data = await service.triggerFeeReminderEvent(payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -21,7 +21,7 @@ export const createNotificationController = (service) => {
     sendBroadcastMessage: async (req, res, next) => {
       try {
         const payload = parseOrThrow(sendBroadcastSchema, req.body);
-        const data = await service.sendBroadcastEvent(req.tenantId, payload);
+        const data = await service.sendBroadcastEvent(payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -31,7 +31,7 @@ export const createNotificationController = (service) => {
     getNotificationLogs: async (req, res, next) => {
       try {
         const query = parseOrThrow(notificationLogsQuerySchema, req.query);
-        const data = await service.getNotificationLogs(req.tenantId, query);
+        const data = await service.getNotificationLogs(query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

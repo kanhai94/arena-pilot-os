@@ -4,11 +4,15 @@ import { computeFeeMetrics } from '../fees/fee.utils.js';
 import { normalizeToUTCDate } from '../fees/fee.utils.js';
 import { domainEvents, DOMAIN_EVENTS } from '../../events/domainEvents.js';
 import { queueLogger } from '../../config/logger.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 export const createNotificationService = ({ repository, enqueueJob, whatsappAdapter, tenantMetricsService }) => {
+  const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
+
   const queueNotification = async ({ tenantId, studentId = null, phoneNumber, messageType, messageContent }) => {
+    const scopedTenantId = resolveTenantId(tenantId);
     const notification = await repository.createNotification({
-      tenantId,
+      tenantId: scopedTenantId,
       studentId,
       phoneNumber,
       messageType,
@@ -16,13 +20,14 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
       status: 'queued'
     });
 
-    await enqueueJob(String(notification._id), String(tenantId));
+    await enqueueJob(String(notification._id), String(scopedTenantId));
 
     return notification;
   };
 
   return {
-    async triggerFeeReminderEvent(tenantId, payload = {}) {
+    async triggerFeeReminderEvent(payload = {}) {
+      const tenantId = resolveTenantId();
       const asOfDate = payload.asOfDate ? normalizeToUTCDate(payload.asOfDate) : new Date();
       const candidates = await repository.getPendingFeeCandidates(tenantId, payload.studentId);
 
@@ -58,7 +63,8 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
       return { triggered };
     },
 
-    async sendBroadcastEvent(tenantId, payload) {
+    async sendBroadcastEvent(payload) {
+      const tenantId = resolveTenantId();
       const recipients = payload.studentIds
         ? await repository.getStudentsByIds(tenantId, payload.studentIds)
         : await repository.getAllActiveStudents(tenantId);
@@ -77,7 +83,8 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
       };
     },
 
-    async getNotificationLogs(tenantId, query) {
+    async getNotificationLogs(query) {
+      const tenantId = resolveTenantId();
       const { items, total } = await repository.getNotificationLogs({
         tenantId,
         page: query.page,
@@ -97,8 +104,9 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
       };
     },
 
-    async processQueuedNotification(notificationId) {
-      const notification = await repository.findNotificationById(notificationId);
+    async processQueuedNotification(notificationId, explicitTenantId = null) {
+      const scopedTenantId = resolveTenantId(explicitTenantId);
+      const notification = await repository.findNotificationById(notificationId, scopedTenantId);
       if (!notification) {
         throw new AppError('Notification not found', StatusCodes.NOT_FOUND);
       }
@@ -109,20 +117,20 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
 
       try {
         await whatsappAdapter.sendMessage(notification.phoneNumber, notification.messageContent);
-        const sent = await repository.markNotificationSent(notificationId, notification.tenantId);
+        const sent = await repository.markNotificationSent(notificationId, scopedTenantId);
         if (tenantMetricsService?.incrementRemindersSentThisMonth) {
-          await tenantMetricsService.incrementRemindersSentThisMonth(String(notification.tenantId), 1);
+          await tenantMetricsService.incrementRemindersSentThisMonth(String(scopedTenantId), 1);
         }
         return sent;
       } catch (error) {
         await repository.markNotificationFailed(
           notificationId,
           error?.message || 'Notification delivery failed',
-          notification.tenantId
+          scopedTenantId
         );
         queueLogger.error(
           {
-            tenantId: String(notification.tenantId),
+            tenantId: String(scopedTenantId),
             notificationId,
             reason: error?.message || 'unknown',
             err: error

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
 import { billingService } from './billing.container.js';
@@ -11,7 +12,7 @@ const billingController = createBillingController(billingService);
 
 billingRouter.post('/webhooks/razorpay', billingController.razorpayWebhook);
 
-billingRouter.use(authMiddleware, tenantMiddleware);
+billingRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware);
 
 billingRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN), billingController.createPlan);
 billingRouter.post(

@@ -4,6 +4,9 @@ import { Tenant } from '../../models/tenant.model.js';
 import { Student } from '../../models/student.model.js';
 import { User } from '../../models/user.model.js';
 import { Payment } from '../../models/payment.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const billingRepository = {
   createPlan(payload) {
@@ -39,8 +42,9 @@ export const billingRepository = {
   },
 
   async findCurrentSubscription(tenantId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Subscription.findOne({
-      tenantId,
+      tenantId: scopedTenantId,
       status: { $in: ['trial', 'active', 'expired'] }
     })
       .sort({ createdAt: -1 })
@@ -48,40 +52,47 @@ export const billingRepository = {
   },
 
   async findLatestSubscription(tenantId) {
-    return Subscription.findOne({ tenantId }).sort({ createdAt: -1 }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Subscription.findOne({ tenantId: scopedTenantId }).sort({ createdAt: -1 }).lean();
   },
 
   updateSubscriptionById(tenantId, subscriptionId, updatePayload) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Subscription.findOneAndUpdate(
-      { _id: subscriptionId, tenantId },
+      { _id: subscriptionId, tenantId: scopedTenantId },
       { $set: updatePayload },
       { new: true, lean: true }
     );
   },
 
   cancelAllActiveSubscriptions(tenantId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Subscription.updateMany(
-      { tenantId, status: { $in: ['trial', 'active'] } },
+      { tenantId: scopedTenantId, status: { $in: ['trial', 'active'] } },
       { $set: { status: 'cancelled', autoRenew: false } }
     );
   },
 
   updateTenantSubscription(tenantId, payload) {
-    return Tenant.findOneAndUpdate({ _id: tenantId }, { $set: payload }, { new: true, lean: true });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, { $set: payload }, { new: true, lean: true });
   },
 
   findTenantById(tenantId) {
-    return Tenant.findOne({ _id: tenantId }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Tenant.findOne({ _id: scopedTenantId }).lean();
   },
 
   findTenantByIdWithPlan(tenantId) {
-    return Tenant.findOne({ _id: tenantId })
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Tenant.findOne({ _id: scopedTenantId })
       .populate({ path: 'currentPlanId', select: 'name priceMonthly studentLimit features status' })
       .lean();
   },
 
   countActiveStudents(tenantId) {
-    return Student.countDocuments({ tenantId, status: 'active' });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.countDocuments({ tenantId: scopedTenantId, status: 'active' });
   },
 
   findPaymentByRazorpayPaymentId(razorpayPaymentId, tenantId = null) {
@@ -94,8 +105,9 @@ export const billingRepository = {
   },
 
   findDefaultRecorderUser(tenantId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return User.findOne({
-      tenantId,
+      tenantId: scopedTenantId,
       role: { $in: ['AcademyAdmin', 'SuperAdmin'] },
       isActive: true
     })
@@ -104,6 +116,7 @@ export const billingRepository = {
   },
 
   updateTenantPaymentSnapshot(tenantId, payload) {
-    return Tenant.updateOne({ _id: tenantId }, { $set: payload });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Tenant.updateOne({ _id: scopedTenantId }, { $set: payload });
   }
 };

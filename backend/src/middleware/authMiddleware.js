@@ -23,6 +23,8 @@ export const authMiddleware = (req, res, next) => {
       role: decoded.role,
       permissions: decoded.permissions || []
     };
+    req.user = decoded;
+    req.tenantId = decoded.tenantId || null;
 
     return next();
   } catch (error) {

@@ -2,12 +2,15 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { ROLE_DEFAULT_PERMISSIONS } from '../../constants/permissions.js';
 import { hashPassword } from '../../utils/password.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const uniquePermissions = (permissions) => [...new Set(permissions)];
 
 export const createTeamService = (repository) => {
+  const resolveTenantId = () => TenantContext.requireTenantId();
   return {
-    async createTeamMember(tenantId, payload) {
+    async createTeamMember(payload) {
+      const tenantId = resolveTenantId();
       const existing = await repository.findActiveUserByEmail(tenantId, payload.email);
       if (existing) {
         throw new AppError('User with this email already exists', StatusCodes.CONFLICT);
@@ -50,7 +53,8 @@ export const createTeamService = (repository) => {
       };
     },
 
-    async listTeamMembers(tenantId) {
+    async listTeamMembers() {
+      const tenantId = resolveTenantId();
       const members = await repository.findTeamMembers(tenantId);
 
       return {
@@ -70,7 +74,8 @@ export const createTeamService = (repository) => {
       };
     },
 
-    async updateTeamMemberAccess(tenantId, userId, payload) {
+    async updateTeamMemberAccess(userId, payload) {
+      const tenantId = resolveTenantId();
       const existing = await repository.findTeamMemberById(tenantId, userId);
       if (!existing) {
         throw new AppError('Team member not found', StatusCodes.NOT_FOUND);
@@ -109,7 +114,8 @@ export const createTeamService = (repository) => {
       };
     },
 
-    async deactivateTeamMember(tenantId, userId) {
+    async deactivateTeamMember(userId) {
+      const tenantId = resolveTenantId();
       const updated = await repository.updateTeamMemberById(tenantId, userId, { isActive: false });
 
       if (!updated) {

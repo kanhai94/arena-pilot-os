@@ -1,6 +1,8 @@
 import { Student } from '../../models/student.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const studentRepository = {
   createStudent(payload) {
@@ -8,8 +10,9 @@ export const studentRepository = {
   },
 
   findActiveDuplicateByIdentity(tenantId, normalizedName, normalizedParentPhone, rawName, rawParentPhone, excludeStudentId = null) {
+    const scopedTenantId = resolveTenantId(tenantId);
     const filter = {
-      tenantId,
+      tenantId: scopedTenantId,
       status: 'active',
       $or: [
         {
@@ -31,11 +34,13 @@ export const studentRepository = {
   },
 
   findStudentById(tenantId, studentId) {
-    return Student.findOne({ _id: studentId, tenantId }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.findOne({ _id: studentId, tenantId: scopedTenantId }).lean();
   },
 
   async findStudents({ tenantId, page, limit, search, status }) {
-    const baseFilter = { tenantId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const baseFilter = { tenantId: scopedTenantId };
 
     if (status) {
       baseFilter.status = status;
@@ -65,16 +70,18 @@ export const studentRepository = {
   },
 
   updateStudentById(tenantId, studentId, updatePayload) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Student.findOneAndUpdate(
-      { _id: studentId, tenantId },
+      { _id: studentId, tenantId: scopedTenantId },
       { $set: updatePayload },
       { new: true, lean: true }
     );
   },
 
   deactivateStudentById(tenantId, studentId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Student.findOneAndUpdate(
-      { _id: studentId, tenantId, status: 'active' },
+      { _id: studentId, tenantId: scopedTenantId, status: 'active' },
       { $set: { status: 'inactive' } },
       { new: true, lean: true }
     );

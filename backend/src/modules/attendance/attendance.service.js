@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { ROLES } from '../../constants/roles.js';
 import { domainEvents, DOMAIN_EVENTS } from '../../events/domainEvents.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const normalizeToUTCDate = (value) => {
   const inputDate = new Date(value);
@@ -13,9 +14,11 @@ const normalizeToUTCDate = (value) => {
 
 export const createAttendanceService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
+  const resolveTenantId = () => TenantContext.requireTenantId();
 
   return {
-    async markAttendance(tenantId, auth, payload) {
+    async markAttendance(auth, payload) {
+      const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
       const batch = await repository.findBatchById(tenantId, payload.batchId, coachScopedId);
 
@@ -101,7 +104,8 @@ export const createAttendanceService = (repository, dependencies = {}) => {
       };
     },
 
-    async getAttendanceByDate(tenantId, auth, query) {
+    async getAttendanceByDate(auth, query) {
+      const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
       const normalizedDate = normalizeToUTCDate(query.date);
 
@@ -132,7 +136,8 @@ export const createAttendanceService = (repository, dependencies = {}) => {
       };
     },
 
-    async getStudentAttendanceStats(tenantId, auth, query) {
+    async getStudentAttendanceStats(auth, query) {
+      const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
 
       return repository.getStudentAttendanceStats({

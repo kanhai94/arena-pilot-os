@@ -1,10 +1,14 @@
 import { Attendance } from '../../models/attendance.model.js';
 import { Batch } from '../../models/batch.model.js';
 import { Student } from '../../models/student.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const attendanceRepository = {
   findBatchById(tenantId, batchId, coachId = null) {
-    const filter = { _id: batchId, tenantId, status: 'active' };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { _id: batchId, tenantId: scopedTenantId, status: 'active' };
     if (coachId) {
       filter.coachId = coachId;
     }
@@ -12,7 +16,8 @@ export const attendanceRepository = {
   },
 
   findStudentsInBatch(tenantId, batchId, studentIds) {
-    return Student.find({ _id: { $in: studentIds }, tenantId, batchId, status: 'active' })
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.find({ _id: { $in: studentIds }, tenantId: scopedTenantId, batchId, status: 'active' })
       .select('_id name parentPhone')
       .lean();
   },
@@ -22,14 +27,15 @@ export const attendanceRepository = {
   },
 
   async getAttendanceByDate({ tenantId, date, batchId, coachId, page, limit }) {
-    const match = { tenantId, date };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const match = { tenantId: scopedTenantId, date };
 
     if (batchId) {
       match.batchId = batchId;
     }
 
     if (coachId) {
-      const coachBatches = await Batch.find({ tenantId, coachId, status: 'active' }).select('_id').lean();
+      const coachBatches = await Batch.find({ tenantId: scopedTenantId, coachId, status: 'active' }).select('_id').lean();
       const coachBatchIds = coachBatches.map((batch) => batch._id);
       match.batchId = batchId ? batchId : { $in: coachBatchIds };
     }
@@ -52,7 +58,8 @@ export const attendanceRepository = {
   },
 
   async getStudentAttendanceStats({ tenantId, studentId, fromDate, toDate, coachId }) {
-    const match = { tenantId, studentId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const match = { tenantId: scopedTenantId, studentId };
 
     if (fromDate || toDate) {
       match.date = {};
@@ -65,7 +72,7 @@ export const attendanceRepository = {
     }
 
     if (coachId) {
-      const coachBatches = await Batch.find({ tenantId, coachId, status: 'active' }).select('_id').lean();
+      const coachBatches = await Batch.find({ tenantId: scopedTenantId, coachId, status: 'active' }).select('_id').lean();
       const coachBatchIds = coachBatches.map((batch) => batch._id);
       match.batchId = { $in: coachBatchIds };
     }

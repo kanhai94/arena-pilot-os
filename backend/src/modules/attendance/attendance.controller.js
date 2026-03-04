@@ -11,7 +11,7 @@ export const createAttendanceController = (attendanceService) => {
     markAttendance: async (req, res, next) => {
       try {
         const payload = parseOrThrow(markAttendanceSchema, req.body);
-        const data = await attendanceService.markAttendance(req.tenantId, req.auth, payload);
+        const data = await attendanceService.markAttendance(req.auth, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -21,7 +21,7 @@ export const createAttendanceController = (attendanceService) => {
     getAttendanceByDate: async (req, res, next) => {
       try {
         const query = parseOrThrow(attendanceByDateQuerySchema, req.query);
-        const data = await attendanceService.getAttendanceByDate(req.tenantId, req.auth, query);
+        const data = await attendanceService.getAttendanceByDate(req.auth, query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -31,7 +31,7 @@ export const createAttendanceController = (attendanceService) => {
     getStudentAttendanceStats: async (req, res, next) => {
       try {
         const query = parseOrThrow(attendanceStatsQuerySchema, req.query);
-        const data = await attendanceService.getStudentAttendanceStats(req.tenantId, req.auth, query);
+        const data = await attendanceService.getStudentAttendanceStats(req.auth, query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

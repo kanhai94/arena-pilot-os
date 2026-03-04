@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
@@ -15,7 +16,7 @@ const attendanceRouter = Router();
 const attendanceService = createAttendanceService(attendanceRepository, { tenantMetricsService });
 const attendanceController = createAttendanceController(attendanceService);
 
-attendanceRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());
+attendanceRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
 attendanceRouter.post(
   '/mark',

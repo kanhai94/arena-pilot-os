@@ -1,14 +1,17 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const normalizeName = (value) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 const normalizePhone = (value) => value.replace(/\D/g, '');
 
 export const createStudentService = (repository, dependencies = {}) => {
   const { billingService, tenantMetricsService } = dependencies;
+  const resolveTenantId = () => TenantContext.requireTenantId();
 
   return {
-    async createStudent(tenantId, userId, payload) {
+    async createStudent(userId, payload) {
+      const tenantId = resolveTenantId();
       if (billingService?.checkPlanLimit) {
         await billingService.checkPlanLimit(tenantId, 'student', { throwOnLimitReached: true });
       }
@@ -45,7 +48,8 @@ export const createStudentService = (repository, dependencies = {}) => {
       return student;
     },
 
-    async listStudents(tenantId, query) {
+    async listStudents(query) {
+      const tenantId = resolveTenantId();
       const { page, limit, search, status } = query;
       const { items, total } = await repository.findStudents({
         tenantId,
@@ -66,7 +70,8 @@ export const createStudentService = (repository, dependencies = {}) => {
       };
     },
 
-    async getStudentById(tenantId, studentId) {
+    async getStudentById(studentId) {
+      const tenantId = resolveTenantId();
       const student = await repository.findStudentById(tenantId, studentId);
       if (!student) {
         throw new AppError('Student not found', StatusCodes.NOT_FOUND);
@@ -74,7 +79,8 @@ export const createStudentService = (repository, dependencies = {}) => {
       return student;
     },
 
-    async updateStudent(tenantId, studentId, payload) {
+    async updateStudent(studentId, payload) {
+      const tenantId = resolveTenantId();
       const existing = await repository.findStudentById(tenantId, studentId);
       if (!existing) {
         throw new AppError('Student not found', StatusCodes.NOT_FOUND);
@@ -115,7 +121,8 @@ export const createStudentService = (repository, dependencies = {}) => {
       return updated;
     },
 
-    async deactivateStudent(tenantId, studentId) {
+    async deactivateStudent(studentId) {
+      const tenantId = resolveTenantId();
       const deactivated = await repository.deactivateStudentById(tenantId, studentId);
 
       if (!deactivated) {

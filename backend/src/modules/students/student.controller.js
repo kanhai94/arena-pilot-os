@@ -13,7 +13,7 @@ export const createStudentController = (studentService) => {
     createStudent: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createStudentSchema, req.body);
-        const data = await studentService.createStudent(req.tenantId, req.auth.userId, payload);
+        const data = await studentService.createStudent(req.auth.userId, payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -23,7 +23,7 @@ export const createStudentController = (studentService) => {
     listStudents: async (req, res, next) => {
       try {
         const query = parseOrThrow(listStudentsQuerySchema, req.query);
-        const data = await studentService.listStudents(req.tenantId, query);
+        const data = await studentService.listStudents(query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -33,7 +33,7 @@ export const createStudentController = (studentService) => {
     getStudentById: async (req, res, next) => {
       try {
         const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
-        const data = await studentService.getStudentById(req.tenantId, studentId);
+        const data = await studentService.getStudentById(studentId);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -44,7 +44,7 @@ export const createStudentController = (studentService) => {
       try {
         const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
         const payload = parseOrThrow(updateStudentSchema, req.body);
-        const data = await studentService.updateStudent(req.tenantId, studentId, payload);
+        const data = await studentService.updateStudent(studentId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -54,7 +54,7 @@ export const createStudentController = (studentService) => {
     deactivateStudent: async (req, res, next) => {
       try {
         const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
-        const data = await studentService.deactivateStudent(req.tenantId, studentId);
+        const data = await studentService.deactivateStudent(studentId);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

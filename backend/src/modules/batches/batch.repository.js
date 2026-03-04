@@ -1,10 +1,14 @@
 import { Batch } from '../../models/batch.model.js';
 import { User } from '../../models/user.model.js';
 import { FeePlan } from '../../models/feePlan.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const batchRepository = {
   findCoachById(tenantId, coachId) {
-    return User.findOne({ _id: coachId, tenantId, role: 'Coach', isActive: true }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return User.findOne({ _id: coachId, tenantId: scopedTenantId, role: 'Coach', isActive: true }).lean();
   },
 
   createBatch(payload) {
@@ -12,11 +16,13 @@ export const batchRepository = {
   },
 
   findFeePlanById(tenantId, feePlanId) {
-    return FeePlan.findOne({ _id: feePlanId, tenantId }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return FeePlan.findOne({ _id: feePlanId, tenantId: scopedTenantId }).lean();
   },
 
   async listBatches({ tenantId, coachId, page, limit, status, sportType, centerName }) {
-    const filter = { tenantId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { tenantId: scopedTenantId };
 
     if (coachId) {
       filter.coachId = coachId;
@@ -48,7 +54,8 @@ export const batchRepository = {
   },
 
   findBatchById(tenantId, batchId, coachId = null) {
-    const filter = { _id: batchId, tenantId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { _id: batchId, tenantId: scopedTenantId };
 
     if (coachId) {
       filter.coachId = coachId;
@@ -58,12 +65,14 @@ export const batchRepository = {
   },
 
   updateBatchById(tenantId, batchId, updatePayload) {
-    return Batch.findOneAndUpdate({ _id: batchId, tenantId }, { $set: updatePayload }, { new: true, lean: true });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Batch.findOneAndUpdate({ _id: batchId, tenantId: scopedTenantId }, { $set: updatePayload }, { new: true, lean: true });
   },
 
   deactivateBatchById(tenantId, batchId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Batch.findOneAndUpdate(
-      { _id: batchId, tenantId, status: 'active' },
+      { _id: batchId, tenantId: scopedTenantId, status: 'active' },
       { $set: { status: 'inactive' } },
       { new: true, lean: true }
     );

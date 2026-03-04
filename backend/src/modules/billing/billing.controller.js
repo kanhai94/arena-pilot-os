@@ -35,7 +35,7 @@ export const createBillingController = (service) => {
     subscribeTenant: async (req, res, next) => {
       try {
         const payload = parseOrThrow(subscribeTenantSchema, req.body);
-        const data = await service.subscribeTenant(req.tenantId, payload);
+        const data = await service.subscribeTenant(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -45,7 +45,7 @@ export const createBillingController = (service) => {
     upgradePlan: async (req, res, next) => {
       try {
         const payload = parseOrThrow(upgradePlanSchema, req.body);
-        const data = await service.upgradePlan(req.tenantId, payload);
+        const data = await service.upgradePlan(payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -54,7 +54,7 @@ export const createBillingController = (service) => {
 
     cancelSubscription: async (req, res, next) => {
       try {
-        const data = await service.cancelSubscription(req.tenantId);
+        const data = await service.cancelSubscription();
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -63,7 +63,7 @@ export const createBillingController = (service) => {
 
     getCurrentSubscription: async (req, res, next) => {
       try {
-        const data = await service.getCurrentSubscription(req.tenantId);
+        const data = await service.getCurrentSubscription();
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

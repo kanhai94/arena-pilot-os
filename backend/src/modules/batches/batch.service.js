@@ -1,10 +1,13 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { ROLES } from '../../constants/roles.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 export const createBatchService = (repository) => {
+  const resolveTenantId = () => TenantContext.requireTenantId();
   return {
-    async createBatch(tenantId, payload) {
+    async createBatch(payload) {
+      const tenantId = resolveTenantId();
       const [coach, feePlan] = await Promise.all([
         payload.coachId ? repository.findCoachById(tenantId, payload.coachId) : Promise.resolve(null),
         payload.feePlanId ? repository.findFeePlanById(tenantId, payload.feePlanId) : Promise.resolve(null)
@@ -32,7 +35,8 @@ export const createBatchService = (repository) => {
       }
     },
 
-    async listBatches(tenantId, auth, query) {
+    async listBatches(auth, query) {
+      const tenantId = resolveTenantId();
       const { page, limit, status, sportType, centerName } = query;
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
 
@@ -57,7 +61,8 @@ export const createBatchService = (repository) => {
       };
     },
 
-    async updateBatch(tenantId, batchId, payload) {
+    async updateBatch(batchId, payload) {
+      const tenantId = resolveTenantId();
       if (payload.coachId || payload.feePlanId) {
         const [coach, feePlan] = await Promise.all([
           payload.coachId ? repository.findCoachById(tenantId, payload.coachId) : Promise.resolve(true),
@@ -91,7 +96,8 @@ export const createBatchService = (repository) => {
       }
     },
 
-    async deactivateBatch(tenantId, batchId) {
+    async deactivateBatch(batchId) {
+      const tenantId = resolveTenantId();
       const deactivated = await repository.deactivateBatchById(tenantId, batchId);
       if (deactivated) {
         return deactivated;

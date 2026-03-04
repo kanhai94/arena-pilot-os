@@ -4,7 +4,7 @@ import { AppError } from '../errors/appError.js';
 export const checkPlanLimit = (resourceType) => {
   return async (req, res, next) => {
     try {
-      const limitResult = await billingService.checkPlanLimit(req.tenantId, resourceType);
+      const limitResult = await billingService.checkPlanLimit(undefined, resourceType);
 
       if (!limitResult.allowed) {
         return next(

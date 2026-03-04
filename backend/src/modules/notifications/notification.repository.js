@@ -1,6 +1,9 @@
 import { Notification } from '../../models/notification.model.js';
 import { Student } from '../../models/student.model.js';
 import { StudentFee } from '../../models/studentFee.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const notificationRepository = {
   createNotification(payload) {
@@ -8,18 +11,12 @@ export const notificationRepository = {
   },
 
   findNotificationById(notificationId, tenantId = null) {
-    const filter = { _id: notificationId };
-    if (tenantId) {
-      filter.tenantId = tenantId;
-    }
+    const filter = { _id: notificationId, tenantId: resolveTenantId(tenantId) };
     return Notification.findOne(filter).lean();
   },
 
   markNotificationSent(notificationId, tenantId = null) {
-    const filter = { _id: notificationId };
-    if (tenantId) {
-      filter.tenantId = tenantId;
-    }
+    const filter = { _id: notificationId, tenantId: resolveTenantId(tenantId) };
     return Notification.findOneAndUpdate(
       filter,
       { $set: { status: 'sent', lastError: null, failedAt: null } },
@@ -28,10 +25,7 @@ export const notificationRepository = {
   },
 
   markNotificationFailed(notificationId, errorMessage = 'Unknown processing error', tenantId = null) {
-    const filter = { _id: notificationId };
-    if (tenantId) {
-      filter.tenantId = tenantId;
-    }
+    const filter = { _id: notificationId, tenantId: resolveTenantId(tenantId) };
     return Notification.findOneAndUpdate(
       filter,
       {
@@ -43,7 +37,8 @@ export const notificationRepository = {
   },
 
   async getNotificationLogs({ tenantId, page, limit, status, messageType }) {
-    const filter = { tenantId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { tenantId: scopedTenantId };
 
     if (status) {
       filter.status = status;
@@ -69,17 +64,20 @@ export const notificationRepository = {
   },
 
   getStudentsByIds(tenantId, studentIds) {
-    return Student.find({ _id: { $in: studentIds }, tenantId, status: 'active' })
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.find({ _id: { $in: studentIds }, tenantId: scopedTenantId, status: 'active' })
       .select('_id name parentPhone feeStatus')
       .lean();
   },
 
   getAllActiveStudents(tenantId) {
-    return Student.find({ tenantId, status: 'active' }).select('_id name parentPhone feeStatus').lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.find({ tenantId: scopedTenantId, status: 'active' }).select('_id name parentPhone feeStatus').lean();
   },
 
   async getPendingFeeCandidates(tenantId, studentId = null) {
-    const match = { tenantId, status: 'active' };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const match = { tenantId: scopedTenantId, status: 'active' };
 
     if (studentId) {
       match.studentId = studentId;

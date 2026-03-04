@@ -13,7 +13,7 @@ export const createBatchController = (batchService) => {
     createBatch: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createBatchSchema, req.body);
-        const data = await batchService.createBatch(req.tenantId, payload);
+        const data = await batchService.createBatch(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
@@ -23,7 +23,7 @@ export const createBatchController = (batchService) => {
     getBatches: async (req, res, next) => {
       try {
         const query = parseOrThrow(listBatchesQuerySchema, req.query);
-        const data = await batchService.listBatches(req.tenantId, req.auth, query);
+        const data = await batchService.listBatches(req.auth, query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -34,7 +34,7 @@ export const createBatchController = (batchService) => {
       try {
         const { batchId } = parseOrThrow(batchIdParamSchema, req.params);
         const payload = parseOrThrow(updateBatchSchema, req.body);
-        const data = await batchService.updateBatch(req.tenantId, batchId, payload);
+        const data = await batchService.updateBatch(batchId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -44,7 +44,7 @@ export const createBatchController = (batchService) => {
     deactivateBatch: async (req, res, next) => {
       try {
         const { batchId } = parseOrThrow(batchIdParamSchema, req.params);
-        const data = await batchService.deactivateBatch(req.tenantId, batchId);
+        const data = await batchService.deactivateBatch(batchId);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

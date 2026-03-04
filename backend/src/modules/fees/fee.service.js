@@ -2,11 +2,14 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { normalizeToUTCDate, addMonthsUTC, computeFeeMetrics } from './fee.utils.js';
 import { paymentLogger } from '../../config/logger.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 export const createFeeService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
+  const resolveTenantId = () => TenantContext.requireTenantId();
 
-  const calculateStudentFeeStatus = async (tenantId, studentFee, asOfDate) => {
+  const calculateStudentFeeStatus = async (studentFee, asOfDate) => {
+    const tenantId = resolveTenantId();
     const paymentRows = await repository.sumPaymentsForStudent(tenantId, studentFee.studentId, studentFee.startDate);
     const totalPaid = paymentRows[0]?.totalPaid || 0;
 
@@ -20,7 +23,8 @@ export const createFeeService = (repository, dependencies = {}) => {
     });
   };
 
-  const refreshStudentFeeDerivedState = async (tenantId, studentFee) => {
+  const refreshStudentFeeDerivedState = async (studentFee) => {
+    const tenantId = resolveTenantId();
     const asOfDate = new Date();
     const paymentRows = await repository.sumPaymentsForStudent(tenantId, studentFee.studentId, studentFee.startDate);
     const totalPaid = paymentRows[0]?.totalPaid || 0;
@@ -48,7 +52,8 @@ export const createFeeService = (repository, dependencies = {}) => {
   };
 
   return {
-    async createFeePlan(tenantId, payload) {
+    async createFeePlan(payload) {
+      const tenantId = resolveTenantId();
       try {
         return await repository.createFeePlan({
           ...payload,
@@ -63,11 +68,13 @@ export const createFeeService = (repository, dependencies = {}) => {
       }
     },
 
-    getFeePlans(tenantId) {
+    getFeePlans() {
+      const tenantId = resolveTenantId();
       return repository.getFeePlans(tenantId);
     },
 
-    async updateFeePlan(tenantId, planId, payload) {
+    async updateFeePlan(planId, payload) {
+      const tenantId = resolveTenantId();
       try {
         const nextPayload = {
           ...payload,
@@ -87,7 +94,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       }
     },
 
-    async assignFeePlan(tenantId, payload) {
+    async assignFeePlan(payload) {
+      const tenantId = resolveTenantId();
       const [student, feePlan, existing] = await Promise.all([
         repository.findStudentById(tenantId, payload.studentId),
         repository.findFeePlanById(tenantId, payload.feePlanId),
@@ -123,7 +131,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       return studentFee;
     },
 
-    async getStudentFeeStatus(tenantId, studentId, asOfInput) {
+    async getStudentFeeStatus(studentId, asOfInput) {
+      const tenantId = resolveTenantId();
       const studentFee = await repository.findActiveStudentFeeByStudentId(tenantId, studentId);
       if (!studentFee) {
         throw new AppError('No active fee assignment for student', StatusCodes.NOT_FOUND);
@@ -136,7 +145,7 @@ export const createFeeService = (repository, dependencies = {}) => {
 
       const withPlan = { ...studentFee, feePlan };
       const asOfDate = asOfInput ? normalizeToUTCDate(asOfInput) : new Date();
-      const metrics = await calculateStudentFeeStatus(tenantId, withPlan, asOfDate);
+      const metrics = await calculateStudentFeeStatus(withPlan, asOfDate);
 
       return {
         studentId,
@@ -157,7 +166,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       };
     },
 
-    async recordPayment(tenantId, recordedBy, payload) {
+    async recordPayment(recordedBy, payload) {
+      const tenantId = resolveTenantId();
       const [student, studentFee] = await Promise.all([
         repository.findStudentById(tenantId, payload.studentId),
         repository.findActiveStudentFeeByStudentId(tenantId, payload.studentId)
@@ -204,7 +214,7 @@ export const createFeeService = (repository, dependencies = {}) => {
         throw new AppError('Linked fee plan not found', StatusCodes.NOT_FOUND);
       }
 
-      const metrics = await refreshStudentFeeDerivedState(tenantId, { ...studentFee, feePlan });
+      const metrics = await refreshStudentFeeDerivedState({ ...studentFee, feePlan });
 
       return {
         payment,
@@ -212,7 +222,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       };
     },
 
-    async paymentHistory(tenantId, studentId, page, limit) {
+    async paymentHistory(studentId, page, limit) {
+      const tenantId = resolveTenantId();
       const student = await repository.findStudentById(tenantId, studentId);
       if (!student) {
         throw new AppError('Student not found', StatusCodes.NOT_FOUND);
@@ -232,7 +243,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       };
     },
 
-    async pendingFeesList(tenantId, page, limit, search, asOfInput) {
+    async pendingFeesList(page, limit, search, asOfInput) {
+      const tenantId = resolveTenantId();
       const asOfDate = asOfInput ? normalizeToUTCDate(asOfInput) : new Date();
       const { rows, total } = await repository.getPendingStudentFeesBase(tenantId, page, limit, search);
 

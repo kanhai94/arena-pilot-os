@@ -2,6 +2,9 @@ import { FeePlan } from '../../models/feePlan.model.js';
 import { StudentFee } from '../../models/studentFee.model.js';
 import { Payment } from '../../models/payment.model.js';
 import { Student } from '../../models/student.model.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const feeRepository = {
   createFeePlan(payload) {
@@ -9,23 +12,28 @@ export const feeRepository = {
   },
 
   getFeePlans(tenantId) {
-    return FeePlan.find({ tenantId }).sort({ createdAt: -1 }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return FeePlan.find({ tenantId: scopedTenantId }).sort({ createdAt: -1 }).lean();
   },
 
   findFeePlanById(tenantId, feePlanId) {
-    return FeePlan.findOne({ _id: feePlanId, tenantId }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return FeePlan.findOne({ _id: feePlanId, tenantId: scopedTenantId }).lean();
   },
 
   updateFeePlanById(tenantId, feePlanId, updatePayload) {
-    return FeePlan.findOneAndUpdate({ _id: feePlanId, tenantId }, { $set: updatePayload }, { new: true, lean: true });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return FeePlan.findOneAndUpdate({ _id: feePlanId, tenantId: scopedTenantId }, { $set: updatePayload }, { new: true, lean: true });
   },
 
   findStudentById(tenantId, studentId) {
-    return Student.findOne({ _id: studentId, tenantId, status: 'active' }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.findOne({ _id: studentId, tenantId: scopedTenantId, status: 'active' }).lean();
   },
 
   findActiveStudentFeeByStudentId(tenantId, studentId) {
-    return StudentFee.findOne({ tenantId, studentId, status: 'active' }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return StudentFee.findOne({ tenantId: scopedTenantId, studentId, status: 'active' }).lean();
   },
 
   createStudentFee(payload) {
@@ -33,18 +41,20 @@ export const feeRepository = {
   },
 
   updateStudentFeeById(tenantId, studentFeeId, updatePayload) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return StudentFee.findOneAndUpdate(
-      { _id: studentFeeId, tenantId },
+      { _id: studentFeeId, tenantId: scopedTenantId },
       { $set: updatePayload },
       { new: true, lean: true }
     );
   },
 
   sumPaymentsForStudent(tenantId, studentId, fromDate) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return Payment.aggregate([
       {
         $match: {
-          tenantId,
+          tenantId: scopedTenantId,
           studentId,
           paymentDate: { $gte: fromDate }
         }
@@ -63,7 +73,8 @@ export const feeRepository = {
   },
 
   async getPaymentHistory(tenantId, studentId, page, limit) {
-    const filter = { tenantId, studentId };
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { tenantId: scopedTenantId, studentId };
     const skip = (page - 1) * limit;
 
     const [items, total, totals] = await Promise.all([
@@ -88,6 +99,7 @@ export const feeRepository = {
   },
 
   async getPendingStudentFeesBase(tenantId, page, limit, search) {
+    const scopedTenantId = resolveTenantId(tenantId);
     const skip = (page - 1) * limit;
 
     const studentMatch = search
@@ -100,7 +112,7 @@ export const feeRepository = {
       : {};
 
     const pipeline = [
-      { $match: { tenantId, status: 'active' } },
+      { $match: { tenantId: scopedTenantId, status: 'active' } },
       {
         $lookup: {
           from: 'feeplans',
@@ -184,6 +196,7 @@ export const feeRepository = {
   },
 
   updateStudentFeeStatus(tenantId, studentId, feeStatus) {
-    return Student.updateOne({ _id: studentId, tenantId }, { $set: { feeStatus } });
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.updateOne({ _id: studentId, tenantId: scopedTenantId }, { $set: { feeStatus } });
   }
 };

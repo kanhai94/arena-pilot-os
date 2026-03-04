@@ -1,5 +1,8 @@
 import { User } from '../../models/user.model.js';
 import { TEAM_MEMBER_ROLES } from '../../constants/roles.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
+
+const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
 export const teamRepository = {
   createTeamMember(payload) {
@@ -7,12 +10,14 @@ export const teamRepository = {
   },
 
   findActiveUserByEmail(tenantId, email) {
-    return User.findOne({ tenantId, email: email.toLowerCase(), isActive: true }).lean();
+    const scopedTenantId = resolveTenantId(tenantId);
+    return User.findOne({ tenantId: scopedTenantId, email: email.toLowerCase(), isActive: true }).lean();
   },
 
   findTeamMembers(tenantId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return User.find({
-      tenantId,
+      tenantId: scopedTenantId,
       role: { $in: TEAM_MEMBER_ROLES }
     })
       .sort({ createdAt: -1 })
@@ -20,18 +25,20 @@ export const teamRepository = {
   },
 
   findTeamMemberById(tenantId, userId) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return User.findOne({
       _id: userId,
-      tenantId,
+      tenantId: scopedTenantId,
       role: { $in: TEAM_MEMBER_ROLES }
     }).lean();
   },
 
   updateTeamMemberById(tenantId, userId, updatePayload) {
+    const scopedTenantId = resolveTenantId(tenantId);
     return User.findOneAndUpdate(
       {
         _id: userId,
-        tenantId,
+        tenantId: scopedTenantId,
         role: { $in: TEAM_MEMBER_ROLES }
       },
       { $set: updatePayload },

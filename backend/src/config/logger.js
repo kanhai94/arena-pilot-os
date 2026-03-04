@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import winston from 'winston';
 import { env } from './env.js';
+import { TenantContext } from '../core/context/tenantContext.js';
 
 const logDir = path.resolve(process.cwd(), env.LOG_DIR);
 if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
@@ -136,13 +137,18 @@ const normalizeLogArgs = (args) => {
 };
 
 const createScopedLoggerWith = (targetLogger, scope = {}) => {
-  const write = (level, ...args) => {
-    const { message, meta } = normalizeLogArgs(args);
-    const safeMeta = sanitizeMeta({
-      tenantId: null,
+  const resolveLogMeta = (meta = {}) => {
+    const contextTenantId = TenantContext.getTenantId();
+    return sanitizeMeta({
       ...scope,
+      tenantId: contextTenantId || scope.tenantId || null,
       ...meta
     });
+  };
+
+  const write = (level, ...args) => {
+    const { message, meta } = normalizeLogArgs(args);
+    const safeMeta = resolveLogMeta(meta);
     targetLogger.log(level, message, safeMeta);
   };
 
@@ -154,6 +160,15 @@ const createScopedLoggerWith = (targetLogger, scope = {}) => {
     fatal: (...args) => write('error', ...args),
     child: (childScope) => createScopedLoggerWith(targetLogger, { ...scope, ...childScope })
   };
+};
+
+export const resolveScopedLogMeta = (scope = {}, meta = {}) => {
+  const contextTenantId = TenantContext.getTenantId();
+  return sanitizeMeta({
+    ...scope,
+    tenantId: contextTenantId || scope.tenantId || null,
+    ...meta
+  });
 };
 
 export const createScopedLogger = (scope = {}) => createScopedLoggerWith(baseLogger, scope);

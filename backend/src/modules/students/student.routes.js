@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { checkPlanLimit } from '../../middleware/checkPlanLimit.js';
@@ -17,7 +18,7 @@ const studentRouter = Router();
 const studentService = createStudentService(studentRepository, { billingService, tenantMetricsService });
 const studentController = createStudentController(studentService);
 
-studentRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());
+studentRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
 studentRouter.post(
   '/',

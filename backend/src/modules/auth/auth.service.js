@@ -15,6 +15,7 @@ import {
   getRazorpayPublicKeyId,
   verifyRazorpaySignature
 } from '../../adapters/razorpay.adapter.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const generateOtpCode = () => String(crypto.randomInt(100000, 999999));
 const PLAN_SIZE_MAP = {
@@ -464,7 +465,8 @@ export const createAuthService = (repository, dependencies = {}) => {
       return { loggedOut: true };
     },
 
-    async getMyProfile(userId, tenantId) {
+    async getMyProfile(userId) {
+      const tenantId = TenantContext.requireTenantId();
       const user = await repository.findUserById(userId, tenantId);
       if (!user || !user.isActive) {
         throw new AppError('User not found', StatusCodes.NOT_FOUND);

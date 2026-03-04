@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
+import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
@@ -15,7 +16,7 @@ const feeRouter = Router();
 const feeService = createFeeService(feeRepository, { tenantMetricsService });
 const feeController = createFeeController(feeService);
 
-feeRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());
+feeRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
 feeRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.createFeePlan);
 feeRouter.get('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.getFeePlans);

@@ -7,7 +7,7 @@ import { queueLogger } from '../config/logger.js';
 const worker = new Worker(
   NOTIFICATION_QUEUE_NAME,
   async (job) => {
-    await notificationService.processQueuedNotification(job.data.notificationId);
+    await notificationService.processQueuedNotification(job.data.notificationId, job.data.tenantId || null);
   },
   {
     connection: createRedisConnection(),

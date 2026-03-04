@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { paymentLogger, webhookLogger } from '../../config/logger.js';
 import { verifyRazorpayWebhookSignature } from '../../adapters/razorpay.adapter.js';
+import { TenantContext } from '../../core/context/tenantContext.js';
 
 const PLAN_LIMIT_ERROR_CODE = 'PLAN_LIMIT_REACHED';
 const PLAN_LIMIT_MESSAGE = 'Student limit reached. Upgrade your plan.';
@@ -75,6 +76,7 @@ const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 
 export const createBillingService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
+  const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
   const ensureDefaultPlans = async () => {
     await Promise.all(
@@ -405,9 +407,10 @@ export const createBillingService = (repository, dependencies = {}) => {
     },
 
     async createTrialForTenant(tenantId) {
+      const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
 
-      const existing = await repository.findCurrentSubscription(tenantId);
+      const existing = await repository.findCurrentSubscription(scopedTenantId);
       if (existing) {
         return existing;
       }
@@ -418,7 +421,7 @@ export const createBillingService = (repository, dependencies = {}) => {
       const defaultPlan = (await repository.findActivePlanByName('Starter')) || (await repository.findLowestActivePlan());
 
       const trial = await repository.createSubscription({
-        tenantId,
+        tenantId: scopedTenantId,
         planId: defaultPlan?._id || null,
         startDate,
         endDate,
@@ -426,12 +429,13 @@ export const createBillingService = (repository, dependencies = {}) => {
         autoRenew: false
       });
 
-      await repository.updateTenantSubscription(tenantId, buildTenantSnapshot({ subscription: trial, plan: defaultPlan }));
+      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription: trial, plan: defaultPlan }));
 
       return trial;
     },
 
-    async subscribeTenant(tenantId, payload) {
+    async subscribeTenant(payload, tenantId = null) {
+      const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
 
       const plan = await repository.findPlanById(payload.planId);
@@ -439,13 +443,13 @@ export const createBillingService = (repository, dependencies = {}) => {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
 
-      await repository.cancelAllActiveSubscriptions(tenantId);
+      await repository.cancelAllActiveSubscriptions(scopedTenantId);
 
       const startDate = payload.startDate ? normalizeDate(payload.startDate) : normalizeDate(new Date());
       const endDate = addMonthsUTC(startDate, 1);
 
       const subscription = await repository.createSubscription({
-        tenantId,
+        tenantId: scopedTenantId,
         planId: plan._id,
         startDate,
         endDate,
@@ -453,25 +457,26 @@ export const createBillingService = (repository, dependencies = {}) => {
         autoRenew: payload.autoRenew ?? true
       });
 
-      await repository.updateTenantSubscription(tenantId, buildTenantSnapshot({ subscription, plan }));
+      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription, plan }));
 
-      return buildSubscriptionResponse(tenantId, subscription.toObject ? subscription.toObject() : subscription);
+      return buildSubscriptionResponse(scopedTenantId, subscription.toObject ? subscription.toObject() : subscription);
     },
 
     async activateTenantPlanByName(tenantId, planName, autoRenew = true) {
+      const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
       const plan = await repository.findActivePlanByName(planName);
       if (!plan) {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
 
-      await repository.cancelAllActiveSubscriptions(tenantId);
+      await repository.cancelAllActiveSubscriptions(scopedTenantId);
 
       const startDate = normalizeDate(new Date());
       const endDate = addMonthsUTC(startDate, 1);
 
       const subscription = await repository.createSubscription({
-        tenantId,
+        tenantId: scopedTenantId,
         planId: plan._id,
         startDate,
         endDate,
@@ -479,12 +484,13 @@ export const createBillingService = (repository, dependencies = {}) => {
         autoRenew
       });
 
-      await repository.updateTenantSubscription(tenantId, buildTenantSnapshot({ subscription, plan }));
+      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription, plan }));
 
-      return buildSubscriptionResponse(tenantId, toPlain(subscription));
+      return buildSubscriptionResponse(scopedTenantId, toPlain(subscription));
     },
 
-    async upgradePlan(tenantId, payload) {
+    async upgradePlan(payload, tenantId = null) {
+      const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
 
       const plan = await repository.findPlanById(payload.planId);
@@ -492,13 +498,13 @@ export const createBillingService = (repository, dependencies = {}) => {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
 
-      await repository.cancelAllActiveSubscriptions(tenantId);
+      await repository.cancelAllActiveSubscriptions(scopedTenantId);
 
       const startDate = normalizeDate(new Date());
       const endDate = addMonthsUTC(startDate, 1);
 
       const subscription = await repository.createSubscription({
-        tenantId,
+        tenantId: scopedTenantId,
         planId: plan._id,
         startDate,
         endDate,
@@ -506,45 +512,48 @@ export const createBillingService = (repository, dependencies = {}) => {
         autoRenew: payload.autoRenew ?? true
       });
 
-      await repository.updateTenantSubscription(tenantId, buildTenantSnapshot({ subscription, plan }));
+      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription, plan }));
 
-      return buildSubscriptionResponse(tenantId, subscription.toObject ? subscription.toObject() : subscription);
+      return buildSubscriptionResponse(scopedTenantId, subscription.toObject ? subscription.toObject() : subscription);
     },
 
-    async cancelSubscription(tenantId) {
-      const subscription = await syncCurrentSubscriptionState(tenantId);
+    async cancelSubscription(tenantId = null) {
+      const scopedTenantId = resolveTenantId(tenantId);
+      const subscription = await syncCurrentSubscriptionState(scopedTenantId);
       if (!subscription) {
         throw new AppError('Subscription not found', StatusCodes.NOT_FOUND);
       }
 
-      const cancelled = await repository.updateSubscriptionById(tenantId, subscription._id, {
+      const cancelled = await repository.updateSubscriptionById(scopedTenantId, subscription._id, {
         status: 'cancelled',
         autoRenew: false
       });
 
       const plan = cancelled?.planId ? await repository.findPlanById(cancelled.planId) : null;
       await repository.updateTenantSubscription(
-        tenantId,
+        scopedTenantId,
         buildTenantSnapshot({ subscription: cancelled, plan, statusOverride: 'expired' })
       );
 
       return cancelled;
     },
 
-    async getCurrentSubscription(tenantId) {
-      const subscription = await syncCurrentSubscriptionState(tenantId);
+    async getCurrentSubscription(tenantId = null) {
+      const scopedTenantId = resolveTenantId(tenantId);
+      const subscription = await syncCurrentSubscriptionState(scopedTenantId);
       if (!subscription) {
         throw new AppError('Subscription not found', StatusCodes.NOT_FOUND);
       }
 
-      return buildSubscriptionResponse(tenantId, subscription);
+      return buildSubscriptionResponse(scopedTenantId, subscription);
     },
 
-    async getCurrentUsage(tenantId) {
+    async getCurrentUsage(tenantId = null) {
+      const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
-      await syncCurrentSubscriptionState(tenantId);
+      await syncCurrentSubscriptionState(scopedTenantId);
 
-      const tenant = await repository.findTenantById(tenantId);
+      const tenant = await repository.findTenantById(scopedTenantId);
       if (!tenant) {
         throw new AppError('Tenant not found', StatusCodes.NOT_FOUND);
       }
@@ -555,7 +564,7 @@ export const createBillingService = (repository, dependencies = {}) => {
         plan = await repository.findPlanByName(tenant.planName);
       }
 
-      const currentUsage = await repository.countActiveStudents(tenantId);
+      const currentUsage = await repository.countActiveStudents(scopedTenantId);
       const studentLimit = typeof tenant.studentLimit === 'number' ? tenant.studentLimit : plan?.studentLimit ?? null;
       const remainingSlots = studentLimit === null ? null : Math.max(studentLimit - currentUsage, 0);
 
@@ -569,14 +578,15 @@ export const createBillingService = (repository, dependencies = {}) => {
     },
 
     async checkPlanLimit(tenantId, resourceType, options = {}) {
+      const scopedTenantId = resolveTenantId(tenantId);
       if (resourceType !== 'student') {
         throw new AppError('Unsupported resource type for plan check', StatusCodes.BAD_REQUEST);
       }
 
       await ensureDefaultPlans();
-      await syncCurrentSubscriptionState(tenantId);
+      await syncCurrentSubscriptionState(scopedTenantId);
 
-      const tenant = await repository.findTenantById(tenantId);
+      const tenant = await repository.findTenantById(scopedTenantId);
       if (!tenant) {
         throw new AppError('Tenant not found', StatusCodes.NOT_FOUND);
       }
@@ -592,7 +602,7 @@ export const createBillingService = (repository, dependencies = {}) => {
           : typeof plan?.studentLimit === 'number'
             ? plan.studentLimit
             : null;
-      const currentUsage = await repository.countActiveStudents(tenantId);
+      const currentUsage = await repository.countActiveStudents(scopedTenantId);
       const remainingSlots = studentLimit === null ? null : Math.max(studentLimit - currentUsage, 0);
       const isLimitReached = studentLimit !== null && currentUsage >= studentLimit;
 
@@ -626,7 +636,8 @@ export const createBillingService = (repository, dependencies = {}) => {
     },
 
     async getGuardAccess(tenantId, options = {}) {
-      const subscription = await syncCurrentSubscriptionState(tenantId);
+      const scopedTenantId = resolveTenantId(tenantId);
+      const subscription = await syncCurrentSubscriptionState(scopedTenantId);
       if (!subscription) {
         return {
           allowed: false,
@@ -645,7 +656,7 @@ export const createBillingService = (repository, dependencies = {}) => {
       }
 
       if (options.enforceStudentLimit) {
-        const limit = await this.checkPlanLimit(tenantId, 'student');
+        const limit = await this.checkPlanLimit(scopedTenantId, 'student');
         if (!limit.allowed) {
           return {
             allowed: false,
