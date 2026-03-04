@@ -179,6 +179,8 @@ type PlatformTenant = {
   academyName: string;
   ownerName: string;
   planName: string;
+  workspaceId?: string | null;
+  academyCode?: string | null;
   billingEmail?: string | null;
   studentCount: number;
   subscriptionStatus: string;
@@ -524,6 +526,7 @@ export default function DashboardPage() {
     const normalized = response.items.map((row) => ({
       ...row,
       id: row.id || `${row.academyName}-${row.ownerName}`.replace(/\s+/g, '-').toLowerCase(),
+      workspaceId: row.workspaceId || row.academyCode || null,
       tenantStatus: row.tenantStatus || 'active',
       paymentStatus: row.paymentStatus || 'pending',
       nextPaymentDate: row.nextPaymentDate || null
@@ -4003,19 +4006,20 @@ export default function DashboardPage() {
                           <th className="px-3 py-3 font-semibold">Next Payment</th>
                           <th className="px-3 py-3 font-semibold">Tenant Status</th>
                           <th className="px-3 py-3 font-semibold">Actions</th>
+                          <th className="px-3 py-3 font-semibold">Workspace ID</th>
                         </tr>
                       </thead>
                       <tbody>
                         {platformTenantLoading ? (
                           <tr>
-                            <td colSpan={8} className="px-3 py-5 text-center text-slate-500">
+                            <td colSpan={9} className="px-3 py-5 text-center text-slate-500">
                               Loading tenants...
                             </td>
                           </tr>
                         ) : null}
                         {!platformTenantLoading && platformTenants.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-3 py-5 text-center text-slate-500">
+                            <td colSpan={9} className="px-3 py-5 text-center text-slate-500">
                               No tenants available.
                             </td>
                           </tr>
@@ -4037,36 +4041,17 @@ export default function DashboardPage() {
                                 <td className="px-3 py-3">
                                   <div className="flex flex-wrap gap-1">
                                     <button
-                                      onClick={() => setDebugOutput(JSON.stringify(tenant, null, 2))}
-                                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                    >
-                                      View
-                                    </button>
-                                    <button
                                       onClick={() => openPlatformTenantComposerForEdit(tenant)}
                                       className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
                                     >
                                       Edit
                                     </button>
-                                    <button
-                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'blocked')}
-                                      className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                                    >
-                                      Block
-                                    </button>
-                                    <button
-                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'active')}
-                                      className="rounded-lg border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-                                    >
-                                      Activate
-                                    </button>
-                                    <button
-                                      onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'suspended')}
-                                      className="rounded-lg border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                                    >
-                                      Suspend
-                                    </button>
                                   </div>
+                                </td>
+                                <td className="px-3 py-3 text-slate-700">
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs">
+                                    {tenant.workspaceId || '-'}
+                                  </span>
                                 </td>
                               </tr>
                             ))
