@@ -8,6 +8,38 @@ export const superAdminTenantsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
 
+export const adminTenantIdParamsSchema = z
+  .object({
+    id: z.string().trim().min(8)
+  })
+  .strict();
+
+export const createOrUpdateTenantSchema = z
+  .object({
+    academyName: z.string().trim().min(2).max(120),
+    ownerName: z.string().trim().min(2).max(120),
+    planName: z.string().trim().min(2).max(80).default('Starter'),
+    billingEmail: z.string().email().nullable().optional(),
+    subscriptionStatus: z.enum(['trial', 'active', 'expired', 'suspended', 'cancelled']).default('trial'),
+    tenantStatus: z.enum(['active', 'blocked', 'suspended']).default('active'),
+    paymentStatus: z.enum(['paid', 'pending', 'failed']).default('pending'),
+    nextPaymentDate: z.string().date().nullable().optional(),
+    customPriceOverride: z.number().min(0).nullable().optional()
+  })
+  .strict();
+
+export const updateTenantStatusSchema = z
+  .object({
+    tenantStatus: z.enum(['active', 'blocked', 'suspended'])
+  })
+  .strict();
+
+export const updateTenantPriceOverrideSchema = z
+  .object({
+    customPriceOverride: z.number().min(0).nullable()
+  })
+  .strict();
+
 export const updateRazorpaySettingsSchema = z
   .object({
     keyId: z.string().min(10).max(64),
