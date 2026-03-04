@@ -7,7 +7,7 @@ export const tenantAccessGuard = async (req, res, next) => {
       return next();
     }
 
-    const tenant = await Tenant.findById(req.tenantId).select('tenantStatus').lean();
+    const tenant = await Tenant.findOne({ _id: req.tenantId }).select('tenantStatus').lean();
     if (!tenant) {
       return next(new AppError('Tenant not found', 404));
     }

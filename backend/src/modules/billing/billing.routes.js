@@ -9,6 +9,8 @@ import { createBillingController } from './billing.controller.js';
 const billingRouter = Router();
 const billingController = createBillingController(billingService);
 
+billingRouter.post('/webhooks/razorpay', billingController.razorpayWebhook);
+
 billingRouter.use(authMiddleware, tenantMiddleware);
 
 billingRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN), billingController.createPlan);

@@ -6,8 +6,8 @@ export const teamRepository = {
     return User.create(payload);
   },
 
-  findActiveUserByEmail(email) {
-    return User.findOne({ email: email.toLowerCase(), isActive: true }).lean();
+  findActiveUserByEmail(tenantId, email) {
+    return User.findOne({ tenantId, email: email.toLowerCase(), isActive: true }).lean();
   },
 
   findTeamMembers(tenantId) {

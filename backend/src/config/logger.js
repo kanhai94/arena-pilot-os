@@ -14,6 +14,29 @@ const logFormat = winston.format.combine(
   winston.format.json()
 );
 
+const SECRET_KEYS = ['password', 'secret', 'token', 'authorization', 'apiKey', 'keySecret', 'smtpPass'];
+
+const sanitizeMeta = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeMeta(item));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const clone = {};
+  for (const [key, val] of Object.entries(value)) {
+    const keyLower = key.toLowerCase();
+    if (SECRET_KEYS.some((candidate) => keyLower.includes(candidate.toLowerCase()))) {
+      clone[key] = '[REDACTED]';
+      continue;
+    }
+    clone[key] = sanitizeMeta(val);
+  }
+  return clone;
+};
+
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -49,6 +72,38 @@ const baseLogger = winston.createLogger({
   transports: baseTransports
 });
 
+const buildChannelTransports = (channelFileName) => {
+  const transports = [
+    new winston.transports.Console({
+      level: env.LOG_LEVEL,
+      format: env.NODE_ENV === 'development' ? consoleFormat : logFormat
+    })
+  ];
+
+  if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
+    transports.push(
+      new winston.transports.File({
+        filename: path.join(logDir, channelFileName),
+        format: logFormat
+      })
+    );
+  }
+
+  return transports;
+};
+
+const createChannelLogger = (channel) =>
+  winston.createLogger({
+    level: env.LOG_LEVEL,
+    format: logFormat,
+    defaultMeta: { channel },
+    transports: buildChannelTransports(`${channel}.log`)
+  });
+
+export const paymentWinstonLogger = createChannelLogger('payment');
+export const webhookWinstonLogger = createChannelLogger('webhook');
+export const queueWinstonLogger = createChannelLogger('queue');
+
 const normalizeLogArgs = (args) => {
   if (args.length === 0) {
     return { message: '', meta: {} };
@@ -80,10 +135,15 @@ const normalizeLogArgs = (args) => {
   return { message: String(first), meta: {} };
 };
 
-export const createScopedLogger = (scope = {}) => {
+const createScopedLoggerWith = (targetLogger, scope = {}) => {
   const write = (level, ...args) => {
     const { message, meta } = normalizeLogArgs(args);
-    baseLogger.log(level, message, { ...scope, ...meta });
+    const safeMeta = sanitizeMeta({
+      tenantId: null,
+      ...scope,
+      ...meta
+    });
+    targetLogger.log(level, message, safeMeta);
   };
 
   return {
@@ -92,11 +152,16 @@ export const createScopedLogger = (scope = {}) => {
     warn: (...args) => write('warn', ...args),
     error: (...args) => write('error', ...args),
     fatal: (...args) => write('error', ...args),
-    child: (childScope) => createScopedLogger({ ...scope, ...childScope })
+    child: (childScope) => createScopedLoggerWith(targetLogger, { ...scope, ...childScope })
   };
 };
 
+export const createScopedLogger = (scope = {}) => createScopedLoggerWith(baseLogger, scope);
+
 export const logger = createScopedLogger();
+export const paymentLogger = createScopedLoggerWith(paymentWinstonLogger, { channel: 'payment' });
+export const webhookLogger = createScopedLoggerWith(webhookWinstonLogger, { channel: 'webhook' });
+export const queueLogger = createScopedLoggerWith(queueWinstonLogger, { channel: 'queue' });
 
 const requestTransports = [new winston.transports.Console({ format: logFormat })];
 if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {

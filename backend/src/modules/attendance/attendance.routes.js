@@ -5,13 +5,14 @@ import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { ROLES } from '../../constants/roles.js';
+import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
 import { attendanceRepository } from './attendance.repository.js';
 import { createAttendanceService } from './attendance.service.js';
 import { createAttendanceController } from './attendance.controller.js';
 
 const attendanceRouter = Router();
 
-const attendanceService = createAttendanceService(attendanceRepository);
+const attendanceService = createAttendanceService(attendanceRepository, { tenantMetricsService });
 const attendanceController = createAttendanceController(attendanceService);
 
 attendanceRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());

@@ -100,6 +100,42 @@ const tenantSchema = new mongoose.Schema(
     planEndDate: {
       type: Date,
       default: null
+    },
+    totalStudents: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null
+    },
+    lastActivityAt: {
+      type: Date,
+      default: null
+    },
+    metricsMonth: {
+      type: String,
+      default: () => {
+        const now = new Date();
+        return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+      },
+      index: true
+    },
+    attendanceCountThisMonth: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    paymentsRecordedThisMonth: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    remindersSentThisMonth: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   {
@@ -107,5 +143,11 @@ const tenantSchema = new mongoose.Schema(
     versionKey: false
   }
 );
+
+tenantSchema.index({ tenantStatus: 1, subscriptionStatus: 1, metricsMonth: 1 });
+tenantSchema.index({ tenantStatus: 1 });
+tenantSchema.index({ subscriptionStatus: 1 });
+tenantSchema.index({ createdAt: -1 });
+tenantSchema.index({ lastActivityAt: -1 });
 
 export const Tenant = mongoose.model('Tenant', tenantSchema);

@@ -2,6 +2,8 @@ import { Plan } from '../../models/plan.model.js';
 import { Subscription } from '../../models/subscription.model.js';
 import { Tenant } from '../../models/tenant.model.js';
 import { Student } from '../../models/student.model.js';
+import { User } from '../../models/user.model.js';
+import { Payment } from '../../models/payment.model.js';
 
 export const billingRepository = {
   createPlan(payload) {
@@ -13,7 +15,7 @@ export const billingRepository = {
   },
 
   findPlanById(planId) {
-    return Plan.findById(planId).lean();
+    return Plan.findOne({ _id: planId }).lean();
   },
 
   findPlanByName(name) {
@@ -49,8 +51,12 @@ export const billingRepository = {
     return Subscription.findOne({ tenantId }).sort({ createdAt: -1 }).lean();
   },
 
-  updateSubscriptionById(subscriptionId, updatePayload) {
-    return Subscription.findByIdAndUpdate(subscriptionId, { $set: updatePayload }, { new: true, lean: true });
+  updateSubscriptionById(tenantId, subscriptionId, updatePayload) {
+    return Subscription.findOneAndUpdate(
+      { _id: subscriptionId, tenantId },
+      { $set: updatePayload },
+      { new: true, lean: true }
+    );
   },
 
   cancelAllActiveSubscriptions(tenantId) {
@@ -61,18 +67,43 @@ export const billingRepository = {
   },
 
   updateTenantSubscription(tenantId, payload) {
-    return Tenant.findByIdAndUpdate(tenantId, { $set: payload }, { new: true, lean: true });
+    return Tenant.findOneAndUpdate({ _id: tenantId }, { $set: payload }, { new: true, lean: true });
   },
 
   findTenantById(tenantId) {
-    return Tenant.findById(tenantId).lean();
+    return Tenant.findOne({ _id: tenantId }).lean();
   },
 
   findTenantByIdWithPlan(tenantId) {
-    return Tenant.findById(tenantId).populate({ path: 'currentPlanId', select: 'name priceMonthly studentLimit features status' }).lean();
+    return Tenant.findOne({ _id: tenantId })
+      .populate({ path: 'currentPlanId', select: 'name priceMonthly studentLimit features status' })
+      .lean();
   },
 
   countActiveStudents(tenantId) {
     return Student.countDocuments({ tenantId, status: 'active' });
+  },
+
+  findPaymentByRazorpayPaymentId(razorpayPaymentId, tenantId = null) {
+    const filter = tenantId ? { razorpayPaymentId, tenantId } : { razorpayPaymentId };
+    return Payment.findOne(filter).lean();
+  },
+
+  createWebhookPayment(payload) {
+    return Payment.create(payload);
+  },
+
+  findDefaultRecorderUser(tenantId) {
+    return User.findOne({
+      tenantId,
+      role: { $in: ['AcademyAdmin', 'SuperAdmin'] },
+      isActive: true
+    })
+      .select('_id')
+      .lean();
+  },
+
+  updateTenantPaymentSnapshot(tenantId, payload) {
+    return Tenant.updateOne({ _id: tenantId }, { $set: payload });
   }
 };

@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { connectDatabase } from './config/database.js';
+import { ensureIndexes } from './config/indexes.js';
 import { getRedisStatus } from './config/redis.js';
 import { logger } from './config/logger.js';
 import { ensureSuperAdminBootstrap } from './bootstrap/superAdmin.bootstrap.js';
@@ -10,6 +11,7 @@ import { billingService } from './modules/billing/billing.container.js';
 const startServer = async () => {
   try {
     await connectDatabase();
+    await ensureIndexes();
 
     await ensureSuperAdminBootstrap();
     await billingService.ensureDefaultPlans();

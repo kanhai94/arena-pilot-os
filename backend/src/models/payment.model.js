@@ -29,6 +29,26 @@ const paymentSchema = new mongoose.Schema(
       enum: ['cash', 'online', 'upi'],
       required: true
     },
+    razorpayOrderId: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    razorpayPaymentId: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    razorpaySignature: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    paymentSource: {
+      type: String,
+      enum: ['manual', 'razorpay_webhook'],
+      default: 'manual'
+    },
     referenceNote: {
       type: String,
       trim: true,
@@ -48,5 +68,8 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.index({ tenantId: 1, studentId: 1, paymentDate: -1 });
+paymentSchema.index({ tenantId: 1, createdAt: -1 });
+paymentSchema.index({ tenantId: 1, studentId: 1 });
+paymentSchema.index({ razorpayPaymentId: 1 }, { unique: true, sparse: true });
 
 export const Payment = mongoose.model('Payment', paymentSchema);

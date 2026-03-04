@@ -15,6 +15,7 @@ import { notificationRouter } from './modules/notifications/notification.routes.
 import { teamRouter } from './modules/team/team.routes.js';
 import { subscriptionRouter } from './modules/subscription/subscription.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
+import { platformRouter } from './modules/platform/platform.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -59,7 +60,16 @@ export const createApp = () => {
   app.disable('x-powered-by');
   app.use(cors(corsOptions));
   app.use(mongoSanitize({ replaceWith: '_' }));
-  app.use(express.json({ limit: env.REQUEST_BODY_LIMIT }));
+  app.use(
+    express.json({
+      limit: env.REQUEST_BODY_LIMIT,
+      verify: (req, _res, buf) => {
+        if (buf && buf.length > 0) {
+          req.rawBody = buf.toString('utf8');
+        }
+      }
+    })
+  );
   app.use(express.urlencoded({ extended: true, limit: env.REQUEST_BODY_LIMIT }));
 
   app.use('/api/v1', apiRateLimiter);
@@ -67,6 +77,8 @@ export const createApp = () => {
 
   app.use('/health', healthRouter);
   app.use('/api/v1/health', healthRouter);
+  app.use('/platform', platformRouter);
+  app.use('/api/v1/platform', platformRouter);
   app.get('/healthz', (req, res) => res.status(200).json({ success: true, data: { status: 'ok' } }));
 
   app.use('/api/v1/auth', authRouter);

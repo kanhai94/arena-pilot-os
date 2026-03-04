@@ -5,13 +5,14 @@ import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { ROLES } from '../../constants/roles.js';
+import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
 import { feeRepository } from './fee.repository.js';
 import { createFeeService } from './fee.service.js';
 import { createFeeController } from './fee.controller.js';
 
 const feeRouter = Router();
 
-const feeService = createFeeService(feeRepository);
+const feeService = createFeeService(feeRepository, { tenantMetricsService });
 const feeController = createFeeController(feeService);
 
 feeRouter.use(authMiddleware, tenantMiddleware, tenantAccessGuard, subscriptionGuard());

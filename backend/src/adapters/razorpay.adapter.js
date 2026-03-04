@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
 import { AppError } from '../errors/appError.js';
@@ -60,4 +61,21 @@ export const verifyRazorpaySignature = async ({ orderId, paymentId, signature })
     .digest('hex');
 
   return expected === signature;
+};
+
+export const verifyRazorpayWebhookSignature = ({ rawBody, signature }) => {
+  if (!env.RAZORPAY_WEBHOOK_SECRET) {
+    throw new AppError('Razorpay webhook secret is not configured', 503);
+  }
+
+  const expected = crypto
+    .createHmac('sha256', env.RAZORPAY_WEBHOOK_SECRET)
+    .update(rawBody || '')
+    .digest('hex');
+
+  if (!signature || expected.length !== signature.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 };

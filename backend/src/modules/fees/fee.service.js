@@ -1,8 +1,11 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { normalizeToUTCDate, addMonthsUTC, computeFeeMetrics } from './fee.utils.js';
+import { paymentLogger } from '../../config/logger.js';
 
-export const createFeeService = (repository) => {
+export const createFeeService = (repository, dependencies = {}) => {
+  const { tenantMetricsService } = dependencies;
+
   const calculateStudentFeeStatus = async (tenantId, studentFee, asOfDate) => {
     const paymentRows = await repository.sumPaymentsForStudent(tenantId, studentFee.studentId, studentFee.startDate);
     const totalPaid = paymentRows[0]?.totalPaid || 0;
@@ -34,7 +37,7 @@ export const createFeeService = (repository) => {
       asOfDate
     });
 
-    await repository.updateStudentFeeById(studentFee._id, {
+    await repository.updateStudentFeeById(tenantId, studentFee._id, {
       nextDueDate,
       status: metrics.isCompleted ? 'inactive' : 'active'
     });
@@ -179,6 +182,22 @@ export const createFeeService = (repository) => {
         referenceNote: payload.referenceNote || null,
         recordedBy
       });
+
+      paymentLogger.info(
+        {
+          tenantId: String(tenantId),
+          studentId: payload.studentId,
+          paymentId: String(payment._id),
+          amountPaid: payload.amountPaid,
+          paymentMode: payload.paymentMode,
+          source: 'manual'
+        },
+        'Manual payment recorded'
+      );
+
+      if (tenantMetricsService?.incrementPaymentsRecordedThisMonth) {
+        await tenantMetricsService.incrementPaymentsRecordedThisMonth(String(tenantId), 1);
+      }
 
       const feePlan = await repository.findFeePlanById(tenantId, studentFee.feePlanId);
       if (!feePlan) {

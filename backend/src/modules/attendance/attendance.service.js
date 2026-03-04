@@ -11,7 +11,9 @@ const normalizeToUTCDate = (value) => {
   return new Date(Date.UTC(inputDate.getUTCFullYear(), inputDate.getUTCMonth(), inputDate.getUTCDate()));
 };
 
-export const createAttendanceService = (repository) => {
+export const createAttendanceService = (repository, dependencies = {}) => {
+  const { tenantMetricsService } = dependencies;
+
   return {
     async markAttendance(tenantId, auth, payload) {
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
@@ -62,6 +64,10 @@ export const createAttendanceService = (repository) => {
       }));
 
       const writeResult = await repository.bulkUpsertAttendance(operations);
+
+      if (tenantMetricsService?.incrementAttendanceCountThisMonth) {
+        await tenantMetricsService.incrementAttendanceCountThisMonth(String(tenantId), uniqueRecords.length);
+      }
 
       const absentStudents = uniqueRecords
         .filter((record) => record.status === 'absent')

@@ -43,7 +43,8 @@ const attendanceSchema = new mongoose.Schema(
   }
 );
 
-attendanceSchema.index({ tenantId: 1, date: 1 });
+attendanceSchema.index({ tenantId: 1, date: -1 });
+attendanceSchema.index({ tenantId: 1, studentId: 1, date: -1 });
 attendanceSchema.index({ tenantId: 1, studentId: 1, date: 1 }, { unique: true });
 attendanceSchema.index({ tenantId: 1, batchId: 1, date: 1 });
 

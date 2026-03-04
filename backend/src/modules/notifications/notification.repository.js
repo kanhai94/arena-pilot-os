@@ -7,19 +7,35 @@ export const notificationRepository = {
     return Notification.create(payload);
   },
 
-  findNotificationById(notificationId) {
-    return Notification.findById(notificationId).lean();
+  findNotificationById(notificationId, tenantId = null) {
+    const filter = { _id: notificationId };
+    if (tenantId) {
+      filter.tenantId = tenantId;
+    }
+    return Notification.findOne(filter).lean();
   },
 
-  markNotificationSent(notificationId) {
-    return Notification.findByIdAndUpdate(notificationId, { $set: { status: 'sent' } }, { new: true, lean: true });
+  markNotificationSent(notificationId, tenantId = null) {
+    const filter = { _id: notificationId };
+    if (tenantId) {
+      filter.tenantId = tenantId;
+    }
+    return Notification.findOneAndUpdate(
+      filter,
+      { $set: { status: 'sent', lastError: null, failedAt: null } },
+      { new: true, lean: true }
+    );
   },
 
-  markNotificationFailed(notificationId) {
-    return Notification.findByIdAndUpdate(
-      notificationId,
+  markNotificationFailed(notificationId, errorMessage = 'Unknown processing error', tenantId = null) {
+    const filter = { _id: notificationId };
+    if (tenantId) {
+      filter.tenantId = tenantId;
+    }
+    return Notification.findOneAndUpdate(
+      filter,
       {
-        $set: { status: 'failed' },
+        $set: { status: 'failed', lastError: String(errorMessage).slice(0, 500), failedAt: new Date() },
         $inc: { retryCount: 1 }
       },
       { new: true, lean: true }

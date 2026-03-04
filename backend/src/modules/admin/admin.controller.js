@@ -35,6 +35,15 @@ export const createAdminController = (service) => {
       } catch (error) {
         return next(error);
       }
+    },
+
+    getQueueStatus: async (req, res, next) => {
+      try {
+        const data = await service.getQueueStatus();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
     }
   };
 };

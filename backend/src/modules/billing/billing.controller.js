@@ -9,6 +9,19 @@ import {
 
 export const createBillingController = (service) => {
   return {
+    razorpayWebhook: async (req, res, next) => {
+      try {
+        const data = await service.processRazorpayWebhook({
+          signature: req.headers['x-razorpay-signature'],
+          rawBody: req.rawBody,
+          payload: req.body
+        });
+        return apiSuccess(res, data, StatusCodes.OK);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     createPlan: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createPlanSchema, req.body);

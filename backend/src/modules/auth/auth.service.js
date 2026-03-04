@@ -24,7 +24,9 @@ const PLAN_SIZE_MAP = {
 };
 const PAID_PLANS = new Set(['Growth', 'Pro']);
 
-export const createAuthService = (repository) => {
+export const createAuthService = (repository, dependencies = {}) => {
+  const { tenantMetricsService } = dependencies;
+
   const createRegistrationOrder = async ({ planName, academyEmail, adminEmail }) => {
     if (!PAID_PLANS.has(planName)) {
       throw new AppError('Starter plan does not require payment', StatusCodes.BAD_REQUEST);
@@ -187,7 +189,8 @@ export const createAuthService = (repository) => {
   const generateAcademyCode = async () => {
     const nextValue = await repository.getNextAcademySequence();
     const prefix = env.ACADEMY_CODE_PREFIX.toLowerCase();
-    return `${prefix}-${String(nextValue).padStart(env.ACADEMY_CODE_PAD, '0')}`;
+    const separator = env.ACADEMY_CODE_SEPARATOR ?? '-';
+    return `${prefix}${separator}${String(nextValue).padStart(env.ACADEMY_CODE_PAD, '0')}`;
   };
 
   const requestOtp = async (email, purpose) => {
@@ -312,8 +315,8 @@ export const createAuthService = (repository) => {
       }
 
       const passwordHash = await hashPassword(newPassword);
-      await repository.updateUserPassword(user._id, passwordHash);
-      await repository.revokeAllUserRefreshTokens(user._id);
+      await repository.updateUserPassword(user._id, user.tenantId, passwordHash);
+      await repository.revokeAllUserRefreshTokens(user._id, user.tenantId);
 
       return { reset: true };
     },
@@ -415,6 +418,10 @@ export const createAuthService = (repository) => {
         throw new AppError('Invalid credentials', StatusCodes.UNAUTHORIZED);
       }
 
+      if (tenantMetricsService?.markLogin) {
+        await tenantMetricsService.markLogin(String(user.tenantId));
+      }
+
       return buildTokenResponse(user, requestMeta);
     },
 
@@ -427,7 +434,7 @@ export const createAuthService = (repository) => {
       }
 
       const tokenHash = hashToken(refreshToken);
-      const consumedToken = await repository.consumeRefreshToken(tokenHash);
+      const consumedToken = await repository.consumeRefreshToken(tokenHash, decoded.sub, decoded.tenantId);
       if (!consumedToken) {
         throw new AppError('Refresh token expired or revoked', StatusCodes.UNAUTHORIZED);
       }
@@ -436,7 +443,7 @@ export const createAuthService = (repository) => {
         throw new AppError('Invalid refresh token', StatusCodes.UNAUTHORIZED);
       }
 
-      const user = await repository.findUserById(decoded.sub);
+      const user = await repository.findUserById(decoded.sub, decoded.tenantId);
       if (!user || !user.isActive) {
         throw new AppError('User not found or inactive', StatusCodes.UNAUTHORIZED);
       }
@@ -445,20 +452,30 @@ export const createAuthService = (repository) => {
     },
 
     async logout(refreshToken) {
+      let decoded = null;
+      try {
+        decoded = verifyRefreshToken(refreshToken);
+      } catch {
+        throw new AppError('Invalid refresh token', StatusCodes.UNAUTHORIZED);
+      }
+
       const tokenHash = hashToken(refreshToken);
-      await repository.revokeRefreshToken(tokenHash);
+      await repository.revokeRefreshToken(tokenHash, decoded.sub, decoded.tenantId);
       return { loggedOut: true };
     },
 
-    async getMyProfile(userId) {
-      const user = await repository.findUserById(userId);
+    async getMyProfile(userId, tenantId) {
+      const user = await repository.findUserById(userId, tenantId);
       if (!user || !user.isActive) {
         throw new AppError('User not found', StatusCodes.NOT_FOUND);
       }
 
+      const tenant = await repository.findTenantById(user.tenantId);
+
       return {
         id: String(user._id),
         tenantId: String(user.tenantId),
+        academyCode: tenant?.academyCode || null,
         fullName: user.fullName,
         email: user.email,
         role: user.role,

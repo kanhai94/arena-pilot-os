@@ -7,10 +7,11 @@ import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { ROLES } from '../../constants/roles.js';
+import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
 
 const authRouter = Router();
 
-const authService = createAuthService(authRepository);
+const authService = createAuthService(authRepository, { tenantMetricsService });
 const authController = createAuthController(authService);
 
 authRouter.post('/create-registration-order', authController.createRegistrationOrder);

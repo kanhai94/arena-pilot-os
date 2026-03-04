@@ -5,7 +5,7 @@ const normalizeName = (value) => value.trim().replace(/\s+/g, ' ').toLowerCase()
 const normalizePhone = (value) => value.replace(/\D/g, '');
 
 export const createStudentService = (repository, dependencies = {}) => {
-  const { billingService } = dependencies;
+  const { billingService, tenantMetricsService } = dependencies;
 
   return {
     async createStudent(tenantId, userId, payload) {
@@ -37,6 +37,10 @@ export const createStudentService = (repository, dependencies = {}) => {
         normalizedName,
         normalizedParentPhone
       });
+
+      if (tenantMetricsService?.adjustTotalStudents) {
+        await tenantMetricsService.adjustTotalStudents(String(tenantId), 1);
+      }
 
       return student;
     },
@@ -104,6 +108,10 @@ export const createStudentService = (repository, dependencies = {}) => {
         throw new AppError('Student not found', StatusCodes.NOT_FOUND);
       }
 
+      if (tenantMetricsService?.touchActivity) {
+        await tenantMetricsService.touchActivity(String(tenantId));
+      }
+
       return updated;
     },
 
@@ -116,6 +124,10 @@ export const createStudentService = (repository, dependencies = {}) => {
           throw new AppError('Student not found', StatusCodes.NOT_FOUND);
         }
         return existing;
+      }
+
+      if (tenantMetricsService?.adjustTotalStudents) {
+        await tenantMetricsService.adjustTotalStudents(String(tenantId), -1);
       }
 
       return deactivated;

@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { createRedisConnection } from '../config/redis.js';
 import { NOTIFICATION_QUEUE_NAME } from '../queues/notification.queue.js';
 import { notificationService } from '../modules/notifications/notification.container.js';
-import { logger } from '../config/logger.js';
+import { queueLogger } from '../config/logger.js';
 
 const worker = new Worker(
   NOTIFICATION_QUEUE_NAME,
@@ -16,15 +16,23 @@ const worker = new Worker(
 );
 
 worker.on('ready', () => {
-  logger.info('Notification worker started');
+  queueLogger.info('Notification worker started');
 });
 
 worker.on('completed', (job) => {
-  logger.info({ jobId: job.id }, 'Notification job completed');
+  queueLogger.info({ jobId: job.id }, 'Notification job completed');
 });
 
 worker.on('failed', (job, error) => {
-  logger.error({ jobId: job?.id, err: error }, 'Notification job failed');
+  queueLogger.error(
+    {
+      jobId: job?.id,
+      tenantId: job?.data?.tenantId || null,
+      reason: error?.message || 'unknown',
+      err: error
+    },
+    'Notification job failed'
+  );
 });
 
 const shutdown = async () => {

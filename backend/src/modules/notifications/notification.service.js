@@ -3,8 +3,9 @@ import { AppError } from '../../errors/appError.js';
 import { computeFeeMetrics } from '../fees/fee.utils.js';
 import { normalizeToUTCDate } from '../fees/fee.utils.js';
 import { domainEvents, DOMAIN_EVENTS } from '../../events/domainEvents.js';
+import { queueLogger } from '../../config/logger.js';
 
-export const createNotificationService = ({ repository, enqueueJob, whatsappAdapter }) => {
+export const createNotificationService = ({ repository, enqueueJob, whatsappAdapter, tenantMetricsService }) => {
   const queueNotification = async ({ tenantId, studentId = null, phoneNumber, messageType, messageContent }) => {
     const notification = await repository.createNotification({
       tenantId,
@@ -15,7 +16,7 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
       status: 'queued'
     });
 
-    await enqueueJob(String(notification._id));
+    await enqueueJob(String(notification._id), String(tenantId));
 
     return notification;
   };
@@ -108,9 +109,26 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
 
       try {
         await whatsappAdapter.sendMessage(notification.phoneNumber, notification.messageContent);
-        return repository.markNotificationSent(notificationId);
+        const sent = await repository.markNotificationSent(notificationId, notification.tenantId);
+        if (tenantMetricsService?.incrementRemindersSentThisMonth) {
+          await tenantMetricsService.incrementRemindersSentThisMonth(String(notification.tenantId), 1);
+        }
+        return sent;
       } catch (error) {
-        await repository.markNotificationFailed(notificationId);
+        await repository.markNotificationFailed(
+          notificationId,
+          error?.message || 'Notification delivery failed',
+          notification.tenantId
+        );
+        queueLogger.error(
+          {
+            tenantId: String(notification.tenantId),
+            notificationId,
+            reason: error?.message || 'unknown',
+            err: error
+          },
+          'Notification processing failed'
+        );
         throw error;
       }
     },

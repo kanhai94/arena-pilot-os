@@ -81,7 +81,7 @@ export const ensureSuperAdminBootstrap = async () => {
         }
       }
     );
-    tenant = await Tenant.findById(tenant._id).lean();
+    tenant = await Tenant.findOne({ _id: tenant._id }).lean();
   }
 
   const existingSubscription = await Subscription.findOne({ tenantId: tenant._id, status: { $in: ['trial', 'active'] } })

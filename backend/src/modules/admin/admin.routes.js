@@ -14,6 +14,7 @@ const adminController = createAdminController(adminService);
 adminRouter.use(authMiddleware, roleMiddleware(ROLES.SUPER_ADMIN));
 
 adminRouter.get('/tenants', adminController.getTenants);
+adminRouter.get('/queue/status', adminController.getQueueStatus);
 adminRouter.get('/settings/razorpay', adminController.getRazorpaySettings);
 adminRouter.put('/settings/razorpay', adminController.updateRazorpaySettings);
 

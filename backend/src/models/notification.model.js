@@ -40,6 +40,14 @@ const notificationSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0
+    },
+    lastError: {
+      type: String,
+      default: null
+    },
+    failedAt: {
+      type: Date,
+      default: null
     }
   },
   {
@@ -49,5 +57,8 @@ const notificationSchema = new mongoose.Schema(
 );
 
 notificationSchema.index({ tenantId: 1, createdAt: -1 });
+notificationSchema.index({ tenantId: 1, status: 1 });
+notificationSchema.index({ tenantId: 1, retryCount: 1 });
+notificationSchema.index({ tenantId: 1, updatedAt: -1 });
 
 export const Notification = mongoose.model('Notification', notificationSchema);

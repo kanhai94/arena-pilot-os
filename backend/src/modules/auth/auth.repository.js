@@ -54,7 +54,7 @@ export const authRepository = {
   },
 
   findTenantById(tenantId) {
-    return Tenant.findById(tenantId).lean();
+    return Tenant.findOne({ _id: tenantId }).lean();
   },
 
   findUserByEmailWithPassword(email) {
@@ -65,12 +65,16 @@ export const authRepository = {
     return User.findOne({ email: email.toLowerCase(), isActive: true }).lean();
   },
 
-  findUserById(userId) {
-    return User.findById(userId).lean();
+  findUserById(userId, tenantId = null) {
+    const filter = { _id: userId };
+    if (tenantId) {
+      filter.tenantId = tenantId;
+    }
+    return User.findOne(filter).lean();
   },
 
-  updateUserPassword(userId, passwordHash) {
-    return User.updateOne({ _id: userId }, { $set: { passwordHash } });
+  updateUserPassword(userId, tenantId, passwordHash) {
+    return User.updateOne({ _id: userId, tenantId }, { $set: { passwordHash } });
   },
 
   createRefreshToken(payload) {
@@ -81,10 +85,12 @@ export const authRepository = {
     return RefreshToken.findOne({ tokenHash }).lean();
   },
 
-  consumeRefreshToken(tokenHash) {
+  consumeRefreshToken(tokenHash, userId, tenantId) {
     return RefreshToken.findOneAndUpdate(
       {
         tokenHash,
+        userId,
+        tenantId,
         revokedAt: null,
         expiresAt: { $gte: new Date() }
       },
@@ -93,12 +99,12 @@ export const authRepository = {
     );
   },
 
-  revokeRefreshToken(tokenHash) {
-    return RefreshToken.updateOne({ tokenHash, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  revokeRefreshToken(tokenHash, userId, tenantId) {
+    return RefreshToken.updateOne({ tokenHash, userId, tenantId, revokedAt: null }, { $set: { revokedAt: new Date() } });
   },
 
-  revokeAllUserRefreshTokens(userId) {
-    return RefreshToken.updateMany({ userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  revokeAllUserRefreshTokens(userId, tenantId) {
+    return RefreshToken.updateMany({ userId, tenantId, revokedAt: null }, { $set: { revokedAt: new Date() } });
   },
 
   async createOtp(payload) {

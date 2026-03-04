@@ -38,10 +38,12 @@ const envSchema = z.object({
   OTP_SUBJECT_FORGOT: z.string().default('Reset your Sports Academy account password'),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(10).optional(),
   SUPER_ADMIN_NAME: z.string().default('Super Admin'),
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
   SUPER_ADMIN_PASSWORD: z.string().min(8).optional(),
   ACADEMY_CODE_PREFIX: z.string().regex(/^[A-Za-z0-9]+$/, 'ACADEMY_CODE_PREFIX must be alphanumeric').default('kan'),
+  ACADEMY_CODE_SEPARATOR: z.string().regex(/^[-_]*$/, 'ACADEMY_CODE_SEPARATOR must be "-" or "_" or empty').default('-'),
   ACADEMY_CODE_PAD: z.coerce.number().int().min(2).max(8).default(2)
 });
 

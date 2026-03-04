@@ -62,5 +62,6 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ tenantId: 1, role: 1 });
+userSchema.index({ tenantId: 1 });
 
 export const User = mongoose.model('User', userSchema);

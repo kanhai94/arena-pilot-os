@@ -18,6 +18,7 @@ export const requestLogger = (req, res, next) => {
       url: req.originalUrl,
       statusCode: res.statusCode,
       durationMs: Number(durationMs.toFixed(2)),
+      tenantId: req.tenantId || req.auth?.tenantId || null,
       ip: req.ip,
       userAgent: req.headers['user-agent'] || null
     });

@@ -32,8 +32,12 @@ export const feeRepository = {
     return StudentFee.create(payload);
   },
 
-  updateStudentFeeById(studentFeeId, updatePayload) {
-    return StudentFee.findByIdAndUpdate(studentFeeId, { $set: updatePayload }, { new: true, lean: true });
+  updateStudentFeeById(tenantId, studentFeeId, updatePayload) {
+    return StudentFee.findOneAndUpdate(
+      { _id: studentFeeId, tenantId },
+      { $set: updatePayload },
+      { new: true, lean: true }
+    );
   },
 
   sumPaymentsForStudent(tenantId, studentId, fromDate) {

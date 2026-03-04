@@ -7,6 +7,7 @@ import { apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } fro
 type UserSession = {
   id: string;
   tenantId: string;
+  academyCode?: string | null;
   fullName: string;
   email: string;
   role: string;
@@ -2158,9 +2159,18 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs text-slate-200">
                   {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
                 </p>
-                <button onClick={() => token && loadDashboardData(token)} className="mt-3 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25">
-                  Refresh Snapshot
-                </button>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => token && loadDashboardData(token)}
+                    className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+                  >
+                    Refresh Snapshot
+                  </button>
+                  <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                    <span className="text-[10px] uppercase tracking-[0.16em] text-slate-200">Workspace ID</span>
+                    <span className="ml-2 font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+                  </div>
+                </div>
               </div>
             </div>
 

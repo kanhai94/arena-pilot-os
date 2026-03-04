@@ -8,7 +8,7 @@ const uniquePermissions = (permissions) => [...new Set(permissions)];
 export const createTeamService = (repository) => {
   return {
     async createTeamMember(tenantId, payload) {
-      const existing = await repository.findActiveUserByEmail(payload.email);
+      const existing = await repository.findActiveUserByEmail(tenantId, payload.email);
       if (existing) {
         throw new AppError('User with this email already exists', StatusCodes.CONFLICT);
       }
@@ -17,17 +17,25 @@ export const createTeamService = (repository) => {
       const roleDefaults = ROLE_DEFAULT_PERMISSIONS[payload.role] || [];
       const selectedPermissions = uniquePermissions(payload.permissions || roleDefaults);
 
-      const member = await repository.createTeamMember({
-        tenantId,
-        fullName: payload.fullName,
-        title: payload.title || '',
-        designation: payload.designation || '',
-        email: payload.email.toLowerCase(),
-        passwordHash,
-        role: payload.role,
-        permissions: selectedPermissions,
-        isActive: true
-      });
+      let member;
+      try {
+        member = await repository.createTeamMember({
+          tenantId,
+          fullName: payload.fullName,
+          title: payload.title || '',
+          designation: payload.designation || '',
+          email: payload.email.toLowerCase(),
+          passwordHash,
+          role: payload.role,
+          permissions: selectedPermissions,
+          isActive: true
+        });
+      } catch (error) {
+        if (error?.code === 11000) {
+          throw new AppError('User with this email already exists', StatusCodes.CONFLICT);
+        }
+        throw error;
+      }
 
       return {
         id: String(member._id),

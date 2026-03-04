@@ -1,5 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
+import { paymentLogger, webhookLogger } from '../../config/logger.js';
+import { verifyRazorpayWebhookSignature } from '../../adapters/razorpay.adapter.js';
 
 const PLAN_LIMIT_ERROR_CODE = 'PLAN_LIMIT_REACHED';
 const PLAN_LIMIT_MESSAGE = 'Student limit reached. Upgrade your plan.';
@@ -71,7 +73,9 @@ const buildTenantSnapshot = ({ subscription, plan, statusOverride }) => {
 
 const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 
-export const createBillingService = (repository) => {
+export const createBillingService = (repository, dependencies = {}) => {
+  const { tenantMetricsService } = dependencies;
+
   const ensureDefaultPlans = async () => {
     await Promise.all(
       DEFAULT_PLANS.map((plan) =>
@@ -94,7 +98,7 @@ export const createBillingService = (repository) => {
 
     const now = new Date();
     if ((subscription.status === 'trial' || subscription.status === 'active') && new Date(subscription.endDate) < now) {
-      const expired = await repository.updateSubscriptionById(subscription._id, {
+      const expired = await repository.updateSubscriptionById(tenantId, subscription._id, {
         status: 'expired',
         autoRenew: false
       });
@@ -156,6 +160,248 @@ export const createBillingService = (repository) => {
         currency: 'INR',
         studentLimit: plan.studentLimit
       };
+    },
+
+    async processRazorpayWebhook({ signature, rawBody, payload }) {
+      const eventType = payload?.event || 'unknown';
+      const paymentEntity = payload?.payload?.payment?.entity;
+      const razorpayPaymentId = paymentEntity?.id || null;
+      const razorpayOrderId = paymentEntity?.order_id || null;
+      const notes = paymentEntity?.notes || {};
+      const tenantIdFromNotes = notes.tenantId || notes.tenant_id || null;
+
+      try {
+        const signatureValid = verifyRazorpayWebhookSignature({ rawBody, signature });
+        if (!signatureValid) {
+          webhookLogger.warn(
+            {
+              tenantId: null,
+              eventType,
+              razorpayPaymentId,
+              reason: 'invalid_signature'
+            },
+            'Razorpay webhook rejected'
+          );
+          return {
+            accepted: true,
+            status: 'invalid_signature'
+          };
+        }
+      } catch (error) {
+        webhookLogger.error(
+          {
+            tenantId: null,
+            eventType,
+            razorpayPaymentId,
+            err: error
+          },
+          'Razorpay webhook signature verification error'
+        );
+        return {
+          accepted: true,
+          status: 'processing_error'
+        };
+      }
+
+      try {
+        if (eventType !== 'payment.captured') {
+          webhookLogger.info(
+            {
+              tenantId: null,
+              eventType,
+              razorpayPaymentId,
+              status: 'ignored'
+            },
+            'Razorpay webhook ignored'
+          );
+          return {
+            accepted: true,
+            status: 'ignored'
+          };
+        }
+
+        if (!razorpayPaymentId) {
+          webhookLogger.error(
+            {
+              tenantId: null,
+              eventType,
+              reason: 'missing_payment_id'
+            },
+            'Razorpay webhook processing error'
+          );
+          return {
+            accepted: true,
+            status: 'processing_error'
+          };
+        }
+
+        const duplicate = await repository.findPaymentByRazorpayPaymentId(razorpayPaymentId, tenantIdFromNotes);
+        if (duplicate) {
+          webhookLogger.warn(
+            {
+              tenantId: String(duplicate.tenantId || ''),
+              eventType,
+              razorpayPaymentId,
+              status: 'duplicate'
+            },
+            'Duplicate Razorpay webhook attempt'
+          );
+          return {
+            accepted: true,
+            status: 'duplicate'
+          };
+        }
+
+        const tenantId = notes.tenantId || notes.tenant_id || null;
+        const studentId = notes.studentId || notes.student_id || null;
+
+        if (!tenantId || !studentId) {
+          webhookLogger.error(
+            {
+              tenantId: tenantId || null,
+              eventType,
+              razorpayPaymentId,
+              reason: 'missing_tenant_or_student_in_notes'
+            },
+            'Razorpay webhook processing error'
+          );
+          return {
+            accepted: true,
+            status: 'processing_error'
+          };
+        }
+
+        const recorder = await repository.findDefaultRecorderUser(tenantId);
+        if (!recorder?._id) {
+          webhookLogger.error(
+            {
+              tenantId,
+              eventType,
+              razorpayPaymentId,
+              reason: 'recorder_user_not_found'
+            },
+            'Razorpay webhook processing error'
+          );
+          return {
+            accepted: true,
+            status: 'processing_error'
+          };
+        }
+
+        const amountPaid = Number(paymentEntity?.amount || 0) / 100;
+        const paymentDate = paymentEntity?.created_at ? new Date(Number(paymentEntity.created_at) * 1000) : new Date();
+
+        if (!(amountPaid > 0)) {
+          webhookLogger.error(
+            {
+              tenantId,
+              eventType,
+              razorpayPaymentId,
+              reason: 'invalid_amount'
+            },
+            'Razorpay webhook processing error'
+          );
+          return {
+            accepted: true,
+            status: 'processing_error'
+          };
+        }
+
+        try {
+          await repository.createWebhookPayment({
+            tenantId,
+            studentId,
+            amountPaid,
+            paymentDate,
+            paymentMode: 'online',
+            razorpayOrderId,
+            razorpayPaymentId,
+            razorpaySignature: signature || null,
+            paymentSource: 'razorpay_webhook',
+            referenceNote: `Razorpay captured webhook (${eventType})`,
+            recordedBy: recorder._id
+          });
+        } catch (error) {
+          if (error?.code === 11000) {
+            webhookLogger.warn(
+              {
+                tenantId,
+                eventType,
+                razorpayPaymentId,
+                status: 'duplicate'
+              },
+              'Duplicate Razorpay payment ignored by unique index'
+            );
+            return {
+              accepted: true,
+              status: 'duplicate'
+            };
+          }
+
+          webhookLogger.error(
+            {
+              tenantId,
+              eventType,
+              razorpayPaymentId,
+              err: error
+            },
+            'Razorpay webhook processing error'
+          );
+          return {
+            accepted: true,
+            status: 'processing_error'
+          };
+        }
+
+        await repository.updateTenantPaymentSnapshot(tenantId, {
+          paymentStatus: 'paid',
+          lastPaymentDate: paymentDate
+        });
+
+        if (tenantMetricsService?.incrementPaymentsRecordedThisMonth) {
+          await tenantMetricsService.incrementPaymentsRecordedThisMonth(String(tenantId), 1);
+        }
+
+        webhookLogger.info(
+          {
+            tenantId,
+            eventType,
+            razorpayPaymentId,
+            status: 'success'
+          },
+          'Razorpay webhook processed successfully'
+        );
+        paymentLogger.info(
+          {
+            tenantId,
+            eventType,
+            razorpayPaymentId,
+            amountPaid,
+            paymentMode: 'online',
+            source: 'razorpay_webhook'
+          },
+          'Webhook payment recorded'
+        );
+
+        return {
+          accepted: true,
+          status: 'success'
+        };
+      } catch (error) {
+        webhookLogger.error(
+          {
+            tenantId: null,
+            eventType,
+            razorpayPaymentId,
+            err: error
+          },
+          'Razorpay webhook unhandled processing error'
+        );
+        return {
+          accepted: true,
+          status: 'processing_error'
+        };
+      }
     },
 
     async createTrialForTenant(tenantId) {
@@ -271,7 +517,7 @@ export const createBillingService = (repository) => {
         throw new AppError('Subscription not found', StatusCodes.NOT_FOUND);
       }
 
-      const cancelled = await repository.updateSubscriptionById(subscription._id, {
+      const cancelled = await repository.updateSubscriptionById(tenantId, subscription._id, {
         status: 'cancelled',
         autoRenew: false
       });

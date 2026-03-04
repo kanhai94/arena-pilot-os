@@ -1,4 +1,5 @@
 import { encryptSecret } from '../../utils/secretCipher.js';
+import { getNotificationQueueStatus } from '../../queues/notification.queue.js';
 
 const maskKey = (value) => {
   if (!value) {
@@ -46,6 +47,10 @@ export const createAdminService = (repository) => {
       });
 
       return this.getRazorpaySettings();
+    },
+
+    async getQueueStatus() {
+      return getNotificationQueueStatus();
     }
   };
 };

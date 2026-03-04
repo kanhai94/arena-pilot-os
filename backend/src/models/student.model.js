@@ -99,8 +99,11 @@ const studentSchema = new mongoose.Schema(
   }
 );
 
+studentSchema.index({ tenantId: 1 });
+studentSchema.index({ tenantId: 1, parentPhone: 1 });
+studentSchema.index({ tenantId: 1, status: 1 });
 studentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 studentSchema.index({ tenantId: 1, normalizedName: 1, normalizedParentPhone: 1, status: 1 });
-studentSchema.index({ name: 'text' });
+studentSchema.index({ tenantId: 1, name: 'text' });
 
 export const Student = mongoose.model('Student', studentSchema);
