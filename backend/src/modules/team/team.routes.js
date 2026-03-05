@@ -3,7 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
-import { roleMiddleware } from '../../middleware/roleMiddleware.js';
+import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { ROLES } from '../../constants/roles.js';
 import { teamRepository } from './team.repository.js';
 import { createTeamService } from './team.service.js';
@@ -16,17 +16,22 @@ const teamController = createTeamController(teamService);
 
 teamRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard);
 
-teamRouter.post('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), teamController.createTeamMember);
-teamRouter.get('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), teamController.listTeamMembers);
+teamRouter.post('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), teamController.createTeamMember);
+teamRouter.get('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), teamController.listTeamMembers);
 teamRouter.patch(
   '/:userId/access',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   teamController.updateTeamMemberAccess
 );
 teamRouter.patch(
   '/:userId/deactivate',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   teamController.deactivateTeamMember
+);
+teamRouter.delete(
+  '/:userId',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  teamController.deleteTeamMember
 );
 
 export { teamRouter };

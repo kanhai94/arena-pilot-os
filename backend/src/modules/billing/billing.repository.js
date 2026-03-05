@@ -5,6 +5,7 @@ import { Student } from '../../models/student.model.js';
 import { User } from '../../models/user.model.js';
 import { Payment } from '../../models/payment.model.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
+import { ROLES } from '../../constants/roles.js';
 
 const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
 
@@ -108,7 +109,7 @@ export const billingRepository = {
     const scopedTenantId = resolveTenantId(tenantId);
     return User.findOne({
       tenantId: scopedTenantId,
-      role: { $in: ['AcademyAdmin', 'SuperAdmin'] },
+      role: { $in: [ROLES.ADMIN, ROLES.SUPER_ADMIN, 'AcademyAdmin', 'SuperAdmin'] },
       isActive: true
     })
       .select('_id')

@@ -3,7 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
-import { roleMiddleware } from '../../middleware/roleMiddleware.js';
+import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { ROLES } from '../../constants/roles.js';
 import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
@@ -18,30 +18,30 @@ const feeController = createFeeController(feeService);
 
 feeRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
-feeRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.createFeePlan);
-feeRouter.get('/plans', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.getFeePlans);
-feeRouter.patch('/plans/:planId', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.updateFeePlan);
+feeRouter.post('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.createFeePlan);
+feeRouter.get('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.getFeePlans);
+feeRouter.patch('/plans/:planId', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.updateFeePlan);
 
 feeRouter.post(
   '/student-fees/assign',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   feeController.assignFeePlan
 );
 feeRouter.get(
   '/student-fees/status',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
   feeController.getStudentFeeStatus
 );
 
-feeRouter.post('/payments', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), feeController.recordPayment);
+feeRouter.post('/payments', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.recordPayment);
 feeRouter.get(
   '/payments/history',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   feeController.paymentHistory
 );
 feeRouter.get(
   '/payments/pending',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   feeController.pendingFeesList
 );
 

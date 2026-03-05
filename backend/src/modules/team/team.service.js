@@ -41,7 +41,9 @@ export const createTeamService = (repository) => {
       }
 
       return {
+        userId: String(member._id),
         id: String(member._id),
+        tenantId: String(member.tenantId),
         fullName: member.fullName,
         title: member.title || '',
         designation: member.designation || '',
@@ -59,7 +61,9 @@ export const createTeamService = (repository) => {
 
       return {
         items: members.map((member) => ({
+          userId: String(member._id),
           id: String(member._id),
+          tenantId: String(member.tenantId),
           fullName: member.fullName,
           title: member.title || '',
           designation: member.designation || '',
@@ -101,7 +105,9 @@ export const createTeamService = (repository) => {
       });
 
       return {
+        userId: String(updated._id),
         id: String(updated._id),
+        tenantId: String(updated.tenantId),
         fullName: updated.fullName,
         title: updated.title || '',
         designation: updated.designation || '',
@@ -123,7 +129,9 @@ export const createTeamService = (repository) => {
       }
 
       return {
+        userId: String(updated._id),
         id: String(updated._id),
+        tenantId: String(updated.tenantId),
         fullName: updated.fullName,
         title: updated.title || '',
         designation: updated.designation || '',
@@ -131,6 +139,27 @@ export const createTeamService = (repository) => {
         role: updated.role,
         permissions: updated.permissions || [],
         isActive: updated.isActive
+      };
+    },
+
+    async deleteTeamMember(userId, actorUserId) {
+      const tenantId = resolveTenantId();
+      if (String(userId) === String(actorUserId)) {
+        throw new AppError('You cannot delete your own admin access', StatusCodes.BAD_REQUEST);
+      }
+
+      const deleted = await repository.deleteTeamMemberById(tenantId, userId);
+      if (!deleted) {
+        throw new AppError('Team member not found', StatusCodes.NOT_FOUND);
+      }
+
+      return {
+        userId: String(deleted._id),
+        id: String(deleted._id),
+        tenantId: String(deleted.tenantId),
+        fullName: deleted.fullName,
+        email: deleted.email,
+        role: deleted.role
       };
     }
   };

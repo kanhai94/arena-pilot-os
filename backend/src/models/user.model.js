@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ALL_ROLES } from '../constants/roles.js';
+import { ALL_ROLES, ROLES } from '../constants/roles.js';
 import { ALL_PERMISSIONS } from '../constants/permissions.js';
 
 const userSchema = new mongoose.Schema(
@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ALL_ROLES,
       required: true,
+      default: ROLES.COACH,
       index: true
     },
     permissions: {

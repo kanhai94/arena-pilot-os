@@ -1,11 +1,14 @@
 import { z } from 'zod';
-import { TEAM_MEMBER_ROLES } from '../constants/roles.js';
+import { TEAM_MEMBER_ROLES, normalizeRole } from '../constants/roles.js';
 import { ALL_PERMISSIONS, ROLE_DEFAULT_PERMISSIONS } from '../constants/permissions.js';
 
 const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 const passwordRule = z.string().min(8).max(72);
 
-const teamRoleEnum = z.enum(TEAM_MEMBER_ROLES);
+const teamRoleSchema = z
+  .string()
+  .transform((value) => normalizeRole(value))
+  .refine((value) => TEAM_MEMBER_ROLES.includes(value), 'Role must be ADMIN, COACH or STAFF');
 const permissionEnum = z.enum(ALL_PERMISSIONS);
 
 const uniquePermissions = (permissions) => [...new Set(permissions)];
@@ -17,7 +20,7 @@ export const createTeamMemberSchema = z
     designation: z.string().min(2).max(120).optional(),
     email: z.string().email(),
     password: passwordRule,
-    role: teamRoleEnum,
+    role: teamRoleSchema,
     permissions: z.array(permissionEnum).optional()
   })
   .superRefine((value, ctx) => {
@@ -36,7 +39,7 @@ export const createTeamMemberSchema = z
 
 export const updateTeamMemberAccessSchema = z
   .object({
-    role: teamRoleEnum.optional(),
+    role: teamRoleSchema.optional(),
     permissions: z.array(permissionEnum).optional(),
     isActive: z.boolean().optional()
   })

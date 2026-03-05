@@ -3,7 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
-import { roleMiddleware } from '../../middleware/roleMiddleware.js';
+import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { ROLES } from '../../constants/roles.js';
 import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
@@ -20,17 +20,17 @@ attendanceRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, 
 
 attendanceRouter.post(
   '/mark',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
   attendanceController.markAttendance
 );
 attendanceRouter.get(
   '/by-date',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
   attendanceController.getAttendanceByDate
 );
 attendanceRouter.get(
   '/student-stats',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
   attendanceController.getStudentAttendanceStats
 );
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
-import { roleMiddleware } from '../../middleware/roleMiddleware.js';
+import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { checkPlanLimit } from '../../middleware/checkPlanLimit.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
@@ -22,38 +22,38 @@ studentRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, ten
 
 studentRouter.post(
   '/',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF),
   checkPlanLimit('student'),
   studentController.createStudent
 );
 
 studentRouter.get(
   '/',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH, ROLES.STAFF),
   studentController.listStudents
 );
 
 studentRouter.get(
   '/:studentId',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH, ROLES.STAFF),
   studentController.getStudentById
 );
 
 studentRouter.put(
   '/:studentId',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF),
   studentController.updateStudent
 );
 
 studentRouter.patch(
   '/:studentId/deactivate',
-  roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   studentController.deactivateStudent
 );
 
 studentRouter.delete(
   '/:studentId',
-  roleMiddleware(ROLES.ACADEMY_ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   studentController.deleteStudent
 );
 

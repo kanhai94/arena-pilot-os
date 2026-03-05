@@ -127,6 +127,8 @@ type TeamMember = {
   isActive: boolean;
 };
 
+type TeamRole = 'ADMIN' | 'COACH' | 'STAFF';
+
 type StudentsListResponse = {
   items: Student[];
   pagination: {
@@ -237,7 +239,8 @@ const leftMenu = [
   'Training Grid',
   'Finance Deck',
   'Alert Center',
-  'Growth Reports'
+  'Growth Reports',
+  'Access Control'
 ] as const;
 type MenuItem = (typeof leftMenu)[number];
 
@@ -252,7 +255,8 @@ const menuToTab: Record<MenuItem, TabId> = {
   'Training Grid': 'pulse',
   'Finance Deck': 'studio',
   'Alert Center': 'automations',
-  'Growth Reports': 'pulse'
+  'Growth Reports': 'pulse',
+  'Access Control': 'academy-pro'
 };
 
 const menuToSectionSlug: Record<MenuItem, string> = {
@@ -262,7 +266,8 @@ const menuToSectionSlug: Record<MenuItem, string> = {
   'Training Grid': 'training-grid',
   'Finance Deck': 'finance-deck',
   'Alert Center': 'alert-center',
-  'Growth Reports': 'growth-reports'
+  'Growth Reports': 'growth-reports',
+  'Access Control': 'academy-pro-coach'
 };
 
 const sectionSlugToMenu: Record<string, MenuItem> = Object.fromEntries(
@@ -324,6 +329,35 @@ const fmtShortUiDate = (value?: string | null) => {
   }).format(date);
 };
 const formatCurrency = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
+const normalizeRole = (role?: string | null) => {
+  switch (String(role || '').trim()) {
+    case 'SUPER_ADMIN':
+    case 'SuperAdmin':
+      return 'SUPER_ADMIN';
+    case 'ADMIN':
+    case 'AcademyAdmin':
+      return 'ADMIN';
+    case 'COACH':
+    case 'Coach':
+      return 'COACH';
+    case 'STAFF':
+    case 'Manager':
+    case 'Accountant':
+    case 'Viewer':
+      return 'STAFF';
+    default:
+      return '';
+  }
+};
+
+const roleLabel = (role?: string | null) => {
+  const normalized = normalizeRole(role);
+  if (normalized === 'SUPER_ADMIN') return 'Super Admin';
+  if (normalized === 'ADMIN') return 'Admin';
+  if (normalized === 'COACH') return 'Coach';
+  if (normalized === 'STAFF') return 'Staff';
+  return role || '';
+};
 const hour12Options = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
 const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
 
@@ -582,6 +616,7 @@ export default function DashboardPage() {
   const [registrationStats, setRegistrationStats] = useState<RegistrationStats | null>(null);
   const [feePlans, setFeePlans] = useState<FeePlan[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [coaches, setCoaches] = useState<TeamMember[]>([]);
 
   const [studentName, setStudentName] = useState('');
@@ -702,8 +737,10 @@ export default function DashboardPage() {
   const [coachEmail, setCoachEmail] = useState('');
   const [coachTitle, setCoachTitle] = useState('');
   const [coachDesignation, setCoachDesignation] = useState('');
+  const [coachRole, setCoachRole] = useState<TeamRole>('COACH');
   const [coachPassword, setCoachPassword] = useState(`Coach@${Math.random().toString(36).slice(-6)}A1`);
   const [coachSubmitAttempted, setCoachSubmitAttempted] = useState(false);
+  const [coachServerError, setCoachServerError] = useState('');
 
   const [broadcastText, setBroadcastText] = useState('Reminder: Recovery drills start 30 minutes early tomorrow.');
   const [debugOutput, setDebugOutput] = useState('');
@@ -752,7 +789,20 @@ export default function DashboardPage() {
     }
   };
 
-  const isSuperAdmin = user?.role === 'SuperAdmin';
+  const normalizedUserRole = normalizeRole(user?.role);
+  const isSuperAdmin = normalizedUserRole === 'SUPER_ADMIN';
+  const isAdmin = normalizedUserRole === 'ADMIN';
+  const isCoach = normalizedUserRole === 'COACH';
+  const isStaff = normalizedUserRole === 'STAFF';
+  const canManageStudents = isSuperAdmin || isAdmin || isStaff;
+  const canDeleteStudents = isAdmin;
+  const canDeleteClassAndAccess = isAdmin;
+  const canManagePlansAndFinance = isSuperAdmin || isAdmin;
+  const canManageUsers = isSuperAdmin || isAdmin;
+  const canManageBatches = isSuperAdmin || isAdmin;
+  const canViewBatches = isSuperAdmin || isAdmin || isCoach;
+  const canMarkAttendance = isSuperAdmin || isAdmin || isCoach;
+  const canSendReminders = isSuperAdmin || isAdmin || isStaff;
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
   const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
@@ -840,12 +890,14 @@ export default function DashboardPage() {
 
     if (!normalizedCoachName) {
       errors.name = 'Coach name is required.';
+    } else if (normalizedCoachName.length < 2) {
+      errors.name = 'Coach name must contain at least 2 characters.';
     } else {
-      const nameExists = coaches.some(
-        (coach) => coach.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
+      const nameExists = teamMembers.some(
+        (member) => member.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
       );
       if (nameExists) {
-        errors.name = 'This coach name already exists. Use a different name.';
+        errors.name = 'This team member name already exists. Use a different name.';
       }
     }
 
@@ -855,12 +907,20 @@ export default function DashboardPage() {
       errors.email = 'Enter a valid coach email address.';
     }
 
-    if (!coachTitle.trim()) errors.title = 'Title is required.';
-    if (!coachDesignation.trim()) errors.designation = 'Designation is required.';
+    if (!coachTitle.trim()) {
+      errors.title = 'Title is required.';
+    } else if (coachTitle.trim().length < 2) {
+      errors.title = 'Title must contain at least 2 characters.';
+    }
+    if (!coachDesignation.trim()) {
+      errors.designation = 'Designation is required.';
+    } else if (coachDesignation.trim().length < 2) {
+      errors.designation = 'Designation must contain at least 2 characters.';
+    }
     if (!coachPassword.trim()) errors.password = 'Temporary password is required.';
 
     return errors;
-  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, coaches]);
+  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, teamMembers]);
   const canSubmitCoachForm = Object.keys(coachValidationErrors).length === 0;
 
   const loadPlatformTenants = async (accessToken: string) => {
@@ -925,7 +985,7 @@ export default function DashboardPage() {
         items: [],
         pagination: { total: 0 }
       }),
-      resolvedUser?.role === 'SuperAdmin'
+      normalizeRole(resolvedUser?.role) === 'SUPER_ADMIN'
         ? safeFetch(() => apiGetWithAuth<RegistrationStats>('/auth/registration-stats', accessToken), null)
         : Promise.resolve(null),
       safeFetch(() => apiGetWithAuth<FeePlan[]>('/fees/plans', accessToken), []),
@@ -937,7 +997,7 @@ export default function DashboardPage() {
           ),
         { items: [], pagination: { total: 0 } }
       ),
-      resolvedUser?.role === 'Coach'
+      ['COACH', 'STAFF'].includes(normalizeRole(resolvedUser?.role))
         ? Promise.resolve({ items: [], total: 0 } as TeamMembersResponse)
         : safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 })
     ]);
@@ -957,7 +1017,9 @@ export default function DashboardPage() {
     setRegistrationStats(regStats);
     setFeePlans(plans);
     setBatches(batchList.items);
-    setCoaches(memberList.items.filter((member) => member.role === 'Coach' && member.isActive));
+    const activeMembers = memberList.items.filter((member) => member.isActive);
+    setTeamMembers(activeMembers);
+    setCoaches(activeMembers.filter((member) => normalizeRole(member.role) === 'COACH'));
 
     const recentDateList = [0, 1, 2].map((offset) => {
       const date = new Date();
@@ -1029,8 +1091,13 @@ export default function DashboardPage() {
       if (academyProNav.some((item) => item.id === sub)) {
         setActiveAcademyPro(sub);
       }
+      if (sub === 'coach') {
+        setActiveAcademyPro('coach');
+        setActiveMenu('Access Control');
+      } else {
+        setActiveMenu('Academy Pro');
+      }
       setAcademyProExpanded(true);
-      setActiveMenu('Academy Pro');
       setActiveTab('academy-pro');
       return;
     }
@@ -1048,7 +1115,7 @@ export default function DashboardPage() {
     const section = new URLSearchParams(window.location.search).get('section') || '';
     const isPlatformSection = section.startsWith('platform-control-');
 
-    if (isPlatformSection && user.role !== 'SuperAdmin') {
+    if (isPlatformSection && normalizeRole(user.role) !== 'SUPER_ADMIN') {
       setActiveTab('studio');
       setActiveMenu('Student Roster');
       setPlatformControlExpanded(false);
@@ -1537,6 +1604,20 @@ export default function DashboardPage() {
       return;
     }
 
+    if (menu === 'Access Control') {
+      setAcademyProExpanded(true);
+      setActiveMenu('Access Control');
+      setActiveTab('academy-pro');
+      setActiveAcademyPro('coach');
+      setShowPlanComposer(false);
+      setShowClassComposer(false);
+      setShowClientComposer(false);
+      setShowCoachComposer(false);
+      setActiveAttendanceBatch(null);
+      router.replace('/dashboard?section=academy-pro-coach');
+      return;
+    }
+
     setShowPlanComposer(false);
     setShowClassComposer(false);
     setShowClientComposer(false);
@@ -1558,7 +1639,7 @@ export default function DashboardPage() {
 
     if (tab === 'academy-pro') {
       setAcademyProExpanded(true);
-      setActiveMenu('Academy Pro');
+      setActiveMenu(activeAcademyPro === 'coach' ? 'Access Control' : 'Academy Pro');
       setActiveTab('academy-pro');
       router.replace(`/dashboard?section=academy-pro-${activeAcademyPro}`);
       return;
@@ -1577,7 +1658,7 @@ export default function DashboardPage() {
 
   const handleAcademyProNavClick = (item: AcademyProItem) => {
     setActiveAcademyPro(item);
-    setActiveMenu('Academy Pro');
+    setActiveMenu(item === 'coach' ? 'Access Control' : 'Academy Pro');
     setActiveTab('academy-pro');
     setAcademyProExpanded(true);
     setShowPlanComposer(false);
@@ -1893,6 +1974,10 @@ export default function DashboardPage() {
   };
 
   const openPlanComposer = () => {
+    if (!canManagePlansAndFinance) {
+      setToast('Only admin can manage plans.');
+      return;
+    }
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('plans');
@@ -1913,6 +1998,10 @@ export default function DashboardPage() {
   };
 
   const openPlanComposerForEdit = (plan: FeePlan) => {
+    if (!canManagePlansAndFinance) {
+      setToast('Only admin can edit plans.');
+      return;
+    }
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('plans');
@@ -1933,6 +2022,10 @@ export default function DashboardPage() {
   };
 
   const openClassComposer = () => {
+    if (!canManageBatches) {
+      setToast('Only admin can create classes.');
+      return;
+    }
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('classes');
@@ -1962,13 +2055,19 @@ export default function DashboardPage() {
   };
 
   const openCoachComposer = () => {
+    if (!canManageUsers) {
+      setToast('Only admin can manage access users.');
+      return;
+    }
     setCoachName('');
     setCoachEmail('');
     setCoachTitle('');
     setCoachDesignation('');
+    setCoachRole('COACH');
     setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
     setCoachSubmitAttempted(false);
-    setActiveMenu('Academy Pro');
+    setCoachServerError('');
+    setActiveMenu('Access Control');
     setActiveTab('academy-pro');
     setActiveAcademyPro('coach');
     setAcademyProExpanded(true);
@@ -1981,6 +2080,10 @@ export default function DashboardPage() {
   };
 
   const openAttendanceMarker = async (batchId: string) => {
+    if (!canMarkAttendance) {
+      setToast('You do not have permission to mark attendance.');
+      return;
+    }
     const targetRow = academyClassRows.find((row) => row.id === batchId);
     if (!targetRow) return;
 
@@ -2023,6 +2126,10 @@ export default function DashboardPage() {
   };
 
   const submitBatchAttendance = async () => {
+    if (!canMarkAttendance) {
+      setToast('You do not have permission to mark attendance.');
+      return;
+    }
     if (!activeAttendanceBatch || attendanceDraftRecords.length === 0) return;
 
     const ok = await runAction(
@@ -2052,6 +2159,10 @@ export default function DashboardPage() {
   };
 
   const openClassEditor = (row: (typeof academyClassRows)[number]) => {
+    if (!canManageBatches) {
+      setToast('Only admin can edit classes.');
+      return;
+    }
     const parsedLevel = row.title.match(/\(([^)]+)\)\s*$/)?.[1] || '';
     const titleWithoutLevel = row.title.replace(/\s*\([^)]+\)\s*$/, '').trim();
     const nameParts = splitBatchAndClass(titleWithoutLevel);
@@ -2086,6 +2197,10 @@ export default function DashboardPage() {
   };
 
   const handleClassStatusToggle = (row: (typeof academyClassRows)[number]) => {
+    if (!canManageBatches) {
+      setToast('Only admin can update class status.');
+      return;
+    }
     runAction(
       () =>
         apiPutWithAuth(
@@ -2100,6 +2215,10 @@ export default function DashboardPage() {
   };
 
   const handleClassCoachAssign = (batchId: string, coachId: string) => {
+    if (!canManageBatches) {
+      setToast('Only admin can assign coach.');
+      return;
+    }
     runAction(
       () =>
         apiPutWithAuth(
@@ -2162,6 +2281,10 @@ export default function DashboardPage() {
   };
 
   const openClientComposerForCreate = () => {
+    if (!canManageStudents) {
+      setToast('You do not have permission to add students.');
+      return;
+    }
     resetClientComposer();
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
@@ -2226,6 +2349,10 @@ export default function DashboardPage() {
   };
 
   const submitClientComposer = async () => {
+    if (!canManageStudents) {
+      setToast('You do not have permission to save student details.');
+      return;
+    }
     setClientSubmitAttempted(true);
     if (!canSubmitClientForm) {
       setToast('Please fill all required student fields correctly.');
@@ -2300,36 +2427,50 @@ export default function DashboardPage() {
   };
 
   const submitCoach = async () => {
+    if (!canManageUsers) {
+      setToast('Only admin can add users.');
+      return;
+    }
     setCoachSubmitAttempted(true);
+    setCoachServerError('');
     if (!canSubmitCoachForm) {
       setToast('Please fix coach form errors.');
       return;
     }
-    const ok = await runAction(
-      () =>
-        apiPostWithAuth(
-          '/team-members',
-          {
-            fullName: coachName.trim(),
-            email: coachEmail.trim().toLowerCase(),
-            title: coachTitle.trim(),
-            designation: coachDesignation.trim(),
-            role: 'Coach',
-            password: coachPassword
-          },
-          token
-        ),
-      'Coach added successfully'
-    );
-
-    if (ok) {
+    setActionLoading(true);
+    setToast('');
+    try {
+      const data = await apiPostWithAuth(
+        '/team-members',
+        {
+          fullName: coachName.trim(),
+          email: coachEmail.trim().toLowerCase(),
+          title: coachTitle.trim(),
+          designation: coachDesignation.trim(),
+          role: coachRole,
+          password: coachPassword
+        },
+        token
+      );
+      setDebugOutput(JSON.stringify(data, null, 2));
+      setToast(`${coachRole} user added successfully`);
+      await loadDashboardData(token);
       setShowCoachComposer(false);
       setCoachName('');
       setCoachEmail('');
       setCoachTitle('');
       setCoachDesignation('');
+      setCoachRole('COACH');
       setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
       setCoachSubmitAttempted(false);
+      setCoachServerError('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add access user.';
+      setToast(message);
+      setCoachServerError(message);
+      setDebugOutput(JSON.stringify({ error: message }, null, 2));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -2407,10 +2548,18 @@ export default function DashboardPage() {
   };
 
   const triggerImportStudents = () => {
+    if (!canManageStudents) {
+      setToast('You do not have permission to import students.');
+      return;
+    }
     importStudentsInputRef.current?.click();
   };
 
   const deleteStudentWithConfirmation = async (student: Student) => {
+    if (!canDeleteStudents) {
+      setToast('Only admin can delete student.');
+      return;
+    }
     const confirmed = window.confirm(
       `Delete student "${student.name}" permanently?\n\nThis action cannot be undone.`
     );
@@ -2427,6 +2576,42 @@ export default function DashboardPage() {
     );
   };
 
+  const deleteClassWithConfirmation = async (classRow: (typeof academyClassRows)[number]) => {
+    if (!canDeleteClassAndAccess) {
+      setToast('Only admin can delete class.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete class "${classRow.title}"?\n\nThis will move class to inactive list.`
+    );
+    if (!confirmed) return;
+
+    await runAction(
+      async () => {
+        await apiPatchWithAuth(`/batches/${classRow.id}/deactivate`, {}, token);
+      },
+      'Class moved to inactive list'
+    );
+  };
+
+  const deleteTeamMemberWithConfirmation = async (member: TeamMember) => {
+    if (!canDeleteClassAndAccess) {
+      setToast('Only admin can delete access user.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete access for "${member.fullName}" (${normalizeRole(member.role) || member.role})?\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    await runAction(
+      async () => {
+        await apiDeleteWithAuth(`/team-members/${member.id}`, token);
+      },
+      'Access user deleted'
+    );
+  };
+
   const importStudentsFromCsv = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -2439,6 +2624,10 @@ export default function DashboardPage() {
 
     if (!token) {
       setToast('Session expired. Please login again.');
+      return;
+    }
+    if (!canManageStudents) {
+      setToast('You do not have permission to import students.');
       return;
     }
 
@@ -2563,7 +2752,7 @@ export default function DashboardPage() {
                             >
                               {sub.label}
                             </button>
-                            {sub.id === 'plans' ? (
+                            {sub.id === 'plans' && canManagePlansAndFinance ? (
                               <button
                                 onClick={openPlanComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
@@ -2572,7 +2761,7 @@ export default function DashboardPage() {
                                 +
                               </button>
                             ) : null}
-                            {sub.id === 'classes' ? (
+                            {sub.id === 'classes' && canManageBatches ? (
                               <button
                                 onClick={openClassComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
@@ -2581,7 +2770,7 @@ export default function DashboardPage() {
                                 +
                               </button>
                             ) : null}
-                            {sub.id === 'coach' ? (
+                            {sub.id === 'coach' && canManageUsers ? (
                               <button
                                 onClick={openCoachComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
@@ -2674,7 +2863,7 @@ export default function DashboardPage() {
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Operator</p>
             <p className="mt-2 text-sm font-bold text-slate-900">{user?.fullName || '...'}</p>
-            <p className="text-xs text-slate-600">{user?.role || ''}</p>
+            <p className="text-xs text-slate-600">{roleLabel(user?.role)}</p>
             <button onClick={logout} className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
               Logout
             </button>
@@ -3007,13 +3196,15 @@ export default function DashboardPage() {
                         <h3 className="text-lg font-bold text-slate-900">Academy Pro Plans</h3>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{feePlans.length} plans</span>
-                          <button
-                            onClick={openPlanComposer}
-                            className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
-                            aria-label="Add new plan"
-                          >
-                            +
-                          </button>
+                          {canManagePlansAndFinance ? (
+                            <button
+                              onClick={openPlanComposer}
+                              className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
+                              aria-label="Add new plan"
+                            >
+                              +
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       <div className="overflow-x-auto">
@@ -3024,13 +3215,13 @@ export default function DashboardPage() {
                               <th className="px-2 py-2 font-semibold">Duration</th>
                               <th className="px-2 py-2 font-semibold">Amount</th>
                               <th className="px-2 py-2 font-semibold">Type</th>
-                              <th className="px-2 py-2 font-semibold">Actions</th>
+                              {canManagePlansAndFinance ? <th className="px-2 py-2 font-semibold">Actions</th> : null}
                             </tr>
                           </thead>
                           <tbody>
                             {feePlans.length === 0 ? (
                               <tr>
-                                <td className="px-2 py-3 text-slate-500" colSpan={5}>
+                                <td className="px-2 py-3 text-slate-500" colSpan={canManagePlansAndFinance ? 5 : 4}>
                                   No plans yet. Click + to create your first plan.
                                 </td>
                               </tr>
@@ -3043,15 +3234,17 @@ export default function DashboardPage() {
                                 <td className="px-2 py-2 text-xs text-slate-500">
                                   {plan.durationMonths > 1 ? 'Subscription' : 'Monthly'}
                                 </td>
-                                <td className="px-2 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openPlanComposerForEdit(plan)}
-                                    className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-                                  >
-                                    Edit
-                                  </button>
-                                </td>
+                                {canManagePlansAndFinance ? (
+                                  <td className="px-2 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openPlanComposerForEdit(plan)}
+                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                    >
+                                      Edit
+                                    </button>
+                                  </td>
+                                ) : null}
                               </tr>
                             ))}
                           </tbody>
@@ -3363,13 +3556,15 @@ export default function DashboardPage() {
                         <h3 className="text-lg font-bold text-slate-900">Class Registry</h3>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{filteredClassRows.length} classes</span>
-                          <button
-                            onClick={openClassComposer}
-                            className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
-                            aria-label="Add new class"
-                          >
-                            +
-                          </button>
+                          {canManageBatches ? (
+                            <button
+                              onClick={openClassComposer}
+                              className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
+                              aria-label="Add new class"
+                            >
+                              +
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -3424,38 +3619,66 @@ export default function DashboardPage() {
                                 <td className="px-2 py-2 text-slate-700">{row.centerName}</td>
                                 <td className="px-2 py-2 text-slate-700">{row.skill}</td>
                                 <td className="px-2 py-2 text-slate-700">
-                                  <select
-                                    value={row.coachId}
-                                    onChange={(e) => handleClassCoachAssign(row.id, e.target.value)}
-                                    className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                                  >
-                                    <option value="">Unassigned</option>
-                                    {coaches.map((coach) => (
-                                      <option key={coach.id} value={coach.id}>
-                                        {coach.fullName}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  {canManageBatches ? (
+                                    <select
+                                      value={row.coachId}
+                                      onChange={(e) => handleClassCoachAssign(row.id, e.target.value)}
+                                      className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                    >
+                                      <option value="">Unassigned</option>
+                                      {coaches.map((coach) => (
+                                        <option key={coach.id} value={coach.id}>
+                                          {coach.fullName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span>{row.coachName || 'Unassigned'}</span>
+                                  )}
                                 </td>
                                 <td className="px-2 py-2 text-slate-700">{row.planName}</td>
                                 <td className="px-2 py-2 text-slate-700">{row.timing}</td>
                                 <td className="px-2 py-2">
-                                  <button
-                                    onClick={() => handleClassStatusToggle(row)}
-                                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                      row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
-                                    }`}
-                                  >
-                                    {row.status}
-                                  </button>
+                                  {canManageBatches ? (
+                                    <button
+                                      onClick={() => handleClassStatusToggle(row)}
+                                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                        row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                                      }`}
+                                    >
+                                      {row.status}
+                                    </button>
+                                  ) : (
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                        row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                                      }`}
+                                    >
+                                      {row.status}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  <button
-                                    onClick={() => openClassEditor(row)}
-                                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                  >
-                                    Edit
-                                  </button>
+                                  {canManageBatches ? (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => openClassEditor(row)}
+                                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        Edit
+                                      </button>
+                                      {canDeleteClassAndAccess ? (
+                                        <button
+                                          onClick={() => deleteClassWithConfirmation(row)}
+                                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                        >
+                                          Delete
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-500">View only</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -3645,16 +3868,20 @@ export default function DashboardPage() {
                             <td className="px-3 py-3 text-slate-700">{row.enrolled}</td>
                             <td className="px-3 py-3 text-slate-700">{row.attendanceText}</td>
                             <td className="px-3 py-3 text-right">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAttendanceMarker(row.id);
-                                }}
-                                className="rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
-                                aria-label={`Mark attendance for ${row.title}`}
-                              >
-                                +
-                              </button>
+                              {canMarkAttendance ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openAttendanceMarker(row.id);
+                                  }}
+                                  className="rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
+                                  aria-label={`Mark attendance for ${row.title}`}
+                                >
+                                  +
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-500">No action</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -4034,19 +4261,21 @@ export default function DashboardPage() {
                             className="hidden"
                             onChange={importStudentsFromCsv}
                           />
-                          <button
-                            type="button"
-                            onClick={triggerImportStudents}
-                            title="Import students CSV"
-                            aria-label="Import students CSV"
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
-                          >
-                            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 21V9" />
-                              <path d="M17 14l-5-5-5 5" />
-                              <path d="M21 21H3" />
-                            </svg>
-                          </button>
+                          {canManageStudents ? (
+                            <button
+                              type="button"
+                              onClick={triggerImportStudents}
+                              title="Import students CSV"
+                              aria-label="Import students CSV"
+                              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                            >
+                              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 21V9" />
+                                <path d="M17 14l-5-5-5 5" />
+                                <path d="M21 21H3" />
+                              </svg>
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={exportClientsCsv}
@@ -4060,12 +4289,14 @@ export default function DashboardPage() {
                               <path d="M4 21h16" />
                             </svg>
                           </button>
-                          <button
-                            onClick={openClientComposerForCreate}
-                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                          >
-                            + Add Student
-                          </button>
+                          {canManageStudents ? (
+                            <button
+                              onClick={openClientComposerForCreate}
+                              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                            >
+                              + Add Student
+                            </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -4099,17 +4330,28 @@ export default function DashboardPage() {
                               return (
                                 <tr key={student._id} className="border-b border-slate-100 hover:bg-slate-50/70">
                                   <td className="px-2 py-2">
-                                    <button
-                                      onClick={() => openClientComposerForEdit(student)}
-                                      className="flex items-center gap-2 text-left"
-                                    >
-                                      <span className="h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-                                        {meta?.photoDataUrl ? (
-                                          <img src={meta.photoDataUrl} alt={student.name} className="h-full w-full object-cover" />
-                                        ) : null}
-                                      </span>
-                                      <span className="font-semibold text-slate-900">{student.name}</span>
-                                    </button>
+                                    {canManageStudents ? (
+                                      <button
+                                        onClick={() => openClientComposerForEdit(student)}
+                                        className="flex items-center gap-2 text-left"
+                                      >
+                                        <span className="h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                                          {meta?.photoDataUrl ? (
+                                            <img src={meta.photoDataUrl} alt={student.name} className="h-full w-full object-cover" />
+                                          ) : null}
+                                        </span>
+                                        <span className="font-semibold text-slate-900">{student.name}</span>
+                                      </button>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                                          {meta?.photoDataUrl ? (
+                                            <img src={meta.photoDataUrl} alt={student.name} className="h-full w-full object-cover" />
+                                          ) : null}
+                                        </span>
+                                        <span className="font-semibold text-slate-900">{student.name}</span>
+                                      </div>
+                                    )}
                                   </td>
                                   <td className="px-2 py-2">
                                     <p className="font-medium text-slate-800">{selectedPlan?.name || '-'}</p>
@@ -4138,13 +4380,15 @@ export default function DashboardPage() {
                                   </td>
                                   <td className="px-2 py-2">
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => openClientComposerForEdit(student)}
-                                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                      >
-                                        Edit
-                                      </button>
-                                      {user?.role === 'AcademyAdmin' ? (
+                                      {canManageStudents ? (
+                                        <button
+                                          onClick={() => openClientComposerForEdit(student)}
+                                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        >
+                                          Edit
+                                        </button>
+                                      ) : null}
+                                      {canDeleteStudents ? (
                                         <button
                                           onClick={() => deleteStudentWithConfirmation(student)}
                                           className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
@@ -4267,16 +4511,18 @@ export default function DashboardPage() {
               {activeAcademyPro === 'coach' ? (
                 <article className="relative rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-900">Coach Directory</h3>
+                    <h3 className="text-lg font-bold text-slate-900">Access Directory</h3>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">{coaches.length} coaches</span>
-                      <button
-                        onClick={openCoachComposer}
-                        className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
-                        aria-label="Add new coach"
-                      >
-                        +
-                      </button>
+                      <span className="text-xs text-slate-500">{teamMembers.length} users</span>
+                      {canManageUsers ? (
+                        <button
+                          onClick={openCoachComposer}
+                          className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
+                          aria-label="Add new access user"
+                        >
+                          +
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -4285,28 +4531,43 @@ export default function DashboardPage() {
                         <tr className="border-b border-slate-200 text-slate-500">
                           <th className="px-2 py-2 font-semibold">Name</th>
                           <th className="px-2 py-2 font-semibold">Email</th>
+                          <th className="px-2 py-2 font-semibold">Role</th>
                           <th className="px-2 py-2 font-semibold">Title</th>
                           <th className="px-2 py-2 font-semibold">Designation</th>
                           <th className="px-2 py-2 font-semibold">Status</th>
+                          {canDeleteClassAndAccess ? <th className="px-2 py-2 font-semibold">Actions</th> : null}
                         </tr>
                       </thead>
                       <tbody>
-                        {coaches.length === 0 ? (
+                        {teamMembers.length === 0 ? (
                           <tr>
-                            <td className="px-2 py-3 text-slate-500" colSpan={5}>
-                              No coach records yet. Click + to add coach.
+                            <td className="px-2 py-3 text-slate-500" colSpan={canDeleteClassAndAccess ? 7 : 6}>
+                              No access users yet. Click + to add ADMIN, COACH, or STAFF.
                             </td>
                           </tr>
                         ) : null}
-                        {coaches.map((coach) => (
-                          <tr key={coach.id} className="border-b border-slate-100">
-                            <td className="px-2 py-2 font-semibold text-slate-900">{coach.fullName}</td>
-                            <td className="px-2 py-2 text-slate-700">{coach.email}</td>
-                            <td className="px-2 py-2 text-slate-700">{coach.title || '-'}</td>
-                            <td className="px-2 py-2 text-slate-700">{coach.designation || '-'}</td>
+                        {teamMembers.map((member) => (
+                          <tr key={member.id} className="border-b border-slate-100">
+                            <td className="px-2 py-2 font-semibold text-slate-900">{member.fullName}</td>
+                            <td className="px-2 py-2 text-slate-700">{member.email}</td>
+                            <td className="px-2 py-2 text-slate-700">{normalizeRole(member.role) || member.role}</td>
+                            <td className="px-2 py-2 text-slate-700">{member.title || '-'}</td>
+                            <td className="px-2 py-2 text-slate-700">{member.designation || '-'}</td>
                             <td className="px-2 py-2">
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">active</span>
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                                active
+                              </span>
                             </td>
+                            {canDeleteClassAndAccess ? (
+                              <td className="px-2 py-2">
+                                <button
+                                  onClick={() => deleteTeamMemberWithConfirmation(member)}
+                                  className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            ) : null}
                           </tr>
                         ))}
                       </tbody>
@@ -4317,7 +4578,7 @@ export default function DashboardPage() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4">
                       <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
                         <div className="mb-3 flex items-center justify-between">
-                          <h4 className="text-lg font-bold text-slate-900">Add Coach</h4>
+                          <h4 className="text-lg font-bold text-slate-900">Add Access User</h4>
                           <button
                             type="button"
                             onClick={() => setShowCoachComposer(false)}
@@ -4330,7 +4591,7 @@ export default function DashboardPage() {
                           <input
                             value={coachName}
                             onChange={(e) => setCoachName(e.target.value)}
-                            placeholder="Coach name"
+                            placeholder="Full name"
                             className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
                           />
                           {coachSubmitAttempted && coachValidationErrors.name ? (
@@ -4339,12 +4600,21 @@ export default function DashboardPage() {
                           <input
                             value={coachEmail}
                             onChange={(e) => setCoachEmail(e.target.value)}
-                            placeholder="Coach email"
+                            placeholder="Email"
                             className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
                           />
                           {coachSubmitAttempted && coachValidationErrors.email ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.email}</p>
                           ) : null}
+                          <select
+                            value={coachRole}
+                            onChange={(e) => setCoachRole(e.target.value as TeamRole)}
+                            className="rounded-xl border border-slate-300 px-3 py-2"
+                          >
+                            <option value="ADMIN">ADMIN</option>
+                            <option value="COACH">COACH</option>
+                            <option value="STAFF">STAFF</option>
+                          </select>
                           <input
                             value={coachTitle}
                             onChange={(e) => setCoachTitle(e.target.value)}
@@ -4386,8 +4656,11 @@ export default function DashboardPage() {
                             disabled={actionLoading}
                             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Saving...' : 'Add Coach'}
+                            {actionLoading ? 'Saving...' : `Add ${coachRole}`}
                           </button>
+                          {coachServerError ? (
+                            <p className="-mt-1 text-xs font-medium text-rose-600">{coachServerError}</p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -4405,12 +4678,14 @@ export default function DashboardPage() {
                     <h3 className="text-2xl font-bold text-slate-900">Student Roster</h3>
                     <p className="text-sm text-slate-600">Manage academy students with clean search, filters and quick actions.</p>
                   </div>
-                  <button
-                    onClick={openClientComposerForCreate}
-                    className="rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
-                  >
-                    + Academy Pro Add Student
-                  </button>
+                  {canManageStudents ? (
+                    <button
+                      onClick={openClientComposerForCreate}
+                      className="rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
+                    >
+                      + Academy Pro Add Student
+                    </button>
+                  ) : null}
                 </div>
               </article>
 
@@ -4512,12 +4787,16 @@ export default function DashboardPage() {
                               </span>
                             </td>
                             <td className="px-3 py-3 text-right">
-                              <button
-                                onClick={() => openClientComposerForEdit(student)}
-                                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                              >
-                                Edit
-                              </button>
+                              {canManageStudents ? (
+                                <button
+                                  onClick={() => openClientComposerForEdit(student)}
+                                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                  Edit
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-500">View only</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -4527,8 +4806,9 @@ export default function DashboardPage() {
                 </div>
               </article>
 
-              <article className="rounded-2xl border border-slate-200 bg-white p-5">
-                <h4 className="text-lg font-bold text-slate-900">Quick Add Student</h4>
+              {canManageStudents ? (
+                <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <h4 className="text-lg font-bold text-slate-900">Quick Add Student</h4>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <input
                     className="rounded-xl border border-slate-300 px-3 py-2"
@@ -4590,7 +4870,8 @@ export default function DashboardPage() {
                 >
                   {actionLoading ? 'Processing...' : 'Create Student'}
                 </button>
-              </article>
+                </article>
+              ) : null}
             </div>
           ) : null}
 
@@ -4605,20 +4886,28 @@ export default function DashboardPage() {
                   onChange={(e) => setBroadcastText(e.target.value)}
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    disabled={actionLoading}
-                    onClick={() => runAction(() => apiPostWithAuth('/notifications/broadcast/send', { messageContent: broadcastText }, token), 'Broadcast queued')}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    Send Broadcast
-                  </button>
-                  <button
-                    disabled={actionLoading}
-                    onClick={() => runAction(() => apiPostWithAuth('/notifications/fee-reminder/trigger', {}, token), 'Fee reminders triggered')}
-                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-                  >
-                    Trigger Fee Reminder
-                  </button>
+                  {canSendReminders ? (
+                    <>
+                      <button
+                        disabled={actionLoading}
+                        onClick={() => runAction(() => apiPostWithAuth('/notifications/broadcast/send', { messageContent: broadcastText }, token), 'Broadcast queued')}
+                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        Send Broadcast
+                      </button>
+                      <button
+                        disabled={actionLoading}
+                        onClick={() => runAction(() => apiPostWithAuth('/notifications/fee-reminder/trigger', {}, token), 'Fee reminders triggered')}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+                      >
+                        Trigger Fee Reminder
+                      </button>
+                    </>
+                  ) : (
+                    <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                      Reminder actions are available for Admin/Staff.
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-4 space-y-2">

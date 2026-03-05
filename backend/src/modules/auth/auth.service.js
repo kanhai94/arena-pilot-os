@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
-import { ROLES } from '../../constants/roles.js';
+import { ROLES, normalizeRole } from '../../constants/roles.js';
 import { ROLE_DEFAULT_PERMISSIONS } from '../../constants/permissions.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
@@ -136,19 +136,24 @@ export const createAuthService = (repository, dependencies = {}) => {
   const buildTokenResponse = async (user, requestMeta = {}) => {
     const userId = String(user._id);
     const tenantId = String(user.tenantId);
+    const normalizedRole = normalizeRole(user.role);
+
+    if (!normalizedRole) {
+      throw new AppError('Unsupported user role', StatusCodes.UNAUTHORIZED);
+    }
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const accessToken = signAccessToken({
         userId,
         tenantId,
-        role: user.role,
+        role: normalizedRole,
         permissions: user.permissions || []
       });
 
       const refreshToken = signRefreshToken({
         userId,
         tenantId,
-        role: user.role,
+        role: normalizedRole,
         permissions: user.permissions || []
       });
 
@@ -178,7 +183,7 @@ export const createAuthService = (repository, dependencies = {}) => {
           tenantId,
           fullName: user.fullName,
           email: user.email,
-          role: user.role,
+          role: normalizedRole,
           permissions: user.permissions || []
         }
       };
@@ -356,8 +361,8 @@ export const createAuthService = (repository, dependencies = {}) => {
           fullName: payload.adminName,
           email: payload.adminEmail,
           passwordHash: adminPasswordHash,
-          role: ROLES.ACADEMY_ADMIN,
-          permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.ACADEMY_ADMIN]
+          role: ROLES.ADMIN,
+          permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.ADMIN]
         });
 
         if (payload.planName === 'Starter') {
@@ -390,7 +395,7 @@ export const createAuthService = (repository, dependencies = {}) => {
             id: String(adminUser._id),
             fullName: adminUser.fullName,
             email: adminUser.email,
-            role: adminUser.role,
+            role: normalizeRole(adminUser.role),
             permissions: adminUser.permissions || []
           }
         };
@@ -480,7 +485,7 @@ export const createAuthService = (repository, dependencies = {}) => {
         academyCode: tenant?.academyCode || null,
         fullName: user.fullName,
         email: user.email,
-        role: user.role,
+        role: normalizeRole(user.role),
         permissions: user.permissions || []
       };
     },

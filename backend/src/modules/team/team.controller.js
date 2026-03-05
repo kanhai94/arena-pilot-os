@@ -47,6 +47,17 @@ export const createTeamController = (teamService) => {
       } catch (error) {
         return next(error);
       }
+    },
+
+    deleteTeamMember: async (req, res, next) => {
+      try {
+        const { userId } = parseOrThrow(teamMemberIdParamSchema, req.params);
+        const actorUserId = req.auth?.userId;
+        const data = await teamService.deleteTeamMember(userId, actorUserId);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
     }
   };
 };

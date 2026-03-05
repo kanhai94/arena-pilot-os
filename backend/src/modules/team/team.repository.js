@@ -44,5 +44,14 @@ export const teamRepository = {
       { $set: updatePayload },
       { new: true, lean: true }
     );
+  },
+
+  deleteTeamMemberById(tenantId, userId) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    return User.findOneAndDelete({
+      _id: userId,
+      tenantId: scopedTenantId,
+      role: { $in: TEAM_MEMBER_ROLES }
+    }).lean();
   }
 };
