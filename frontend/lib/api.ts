@@ -179,3 +179,7 @@ export const apiPutWithAuth = async <T>(path: string, body: unknown, accessToken
 export const apiPatchWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
   return request<T>(path, 'PATCH', body, accessToken, { withAuth: true });
 };
+
+export const apiDeleteWithAuth = async <T>(path: string, accessToken: string): Promise<T> => {
+  return request<T>(path, 'DELETE', undefined, accessToken, { withAuth: true });
+};

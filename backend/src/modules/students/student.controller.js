@@ -59,6 +59,16 @@ export const createStudentController = (studentService) => {
       } catch (error) {
         return next(error);
       }
+    },
+
+    deleteStudent: async (req, res, next) => {
+      try {
+        const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
+        const data = await studentService.hardDeleteStudent(studentId);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
     }
   };
 };

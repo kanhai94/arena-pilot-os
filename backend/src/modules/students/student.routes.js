@@ -51,4 +51,10 @@ studentRouter.patch(
   studentController.deactivateStudent
 );
 
+studentRouter.delete(
+  '/:studentId',
+  roleMiddleware(ROLES.ACADEMY_ADMIN),
+  studentController.deleteStudent
+);
+
 export { studentRouter };

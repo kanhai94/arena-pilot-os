@@ -1,4 +1,8 @@
 import { Student } from '../../models/student.model.js';
+import { StudentFee } from '../../models/studentFee.model.js';
+import { Payment } from '../../models/payment.model.js';
+import { Attendance } from '../../models/attendance.model.js';
+import { Notification } from '../../models/notification.model.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -85,5 +89,22 @@ export const studentRepository = {
       { $set: { status: 'inactive' } },
       { new: true, lean: true }
     );
+  },
+
+  async hardDeleteStudentById(tenantId, studentId) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = { _id: studentId, tenantId: scopedTenantId };
+    const existing = await Student.findOne(filter).lean();
+    if (!existing) return null;
+
+    await Promise.all([
+      StudentFee.deleteMany({ tenantId: scopedTenantId, studentId }),
+      Payment.deleteMany({ tenantId: scopedTenantId, studentId }),
+      Attendance.deleteMany({ tenantId: scopedTenantId, studentId }),
+      Notification.deleteMany({ tenantId: scopedTenantId, studentId })
+    ]);
+
+    await Student.deleteOne(filter);
+    return existing;
   }
 };

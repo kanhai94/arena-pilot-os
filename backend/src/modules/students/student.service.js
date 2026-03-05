@@ -138,6 +138,20 @@ export const createStudentService = (repository, dependencies = {}) => {
       }
 
       return deactivated;
+    },
+
+    async hardDeleteStudent(studentId) {
+      const tenantId = resolveTenantId();
+      const removed = await repository.hardDeleteStudentById(tenantId, studentId);
+      if (!removed) {
+        throw new AppError('Student not found', StatusCodes.NOT_FOUND);
+      }
+
+      if (tenantMetricsService?.adjustTotalStudents && removed.status === 'active') {
+        await tenantMetricsService.adjustTotalStudents(String(tenantId), -1);
+      }
+
+      return removed;
     }
   };
 };

@@ -161,8 +161,8 @@ export default function RegisterPage() {
     if (!detailChecks[2].pass) return 'Valid academy email required.';
     if (!detailChecks[3].pass) return 'Admin name required.';
     if (!detailChecks[4].pass) return 'Valid admin email required.';
-    if (!detailChecks[5].pass) return 'Admin password minimum 8 chars hona chahiye.';
-    if (!detailChecks[6].pass) return 'Password and confirm password match nahi kar rahe.';
+    if (!detailChecks[5].pass) return 'Admin password must be at least 8 characters.';
+    if (!detailChecks[6].pass) return 'Password and confirm password must match.';
     return null;
   }, [detailChecks]);
 
@@ -173,12 +173,12 @@ export default function RegisterPage() {
   const completionPercent = Math.round((completedChecks / detailChecks.length) * 100);
   const fieldErrors = useMemo<Record<FieldKey, string>>(
     () => ({
-      academyName: academyName.trim().length >= 2 ? '' : 'Academy name at least 2 characters hona chahiye.',
-      ownerName: ownerName.trim().length >= 2 ? '' : 'Owner name at least 2 characters hona chahiye.',
+      academyName: academyName.trim().length >= 2 ? '' : 'Academy name must be at least 2 characters.',
+      ownerName: ownerName.trim().length >= 2 ? '' : 'Owner name must be at least 2 characters.',
       academyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(academyEmail.trim()) ? '' : 'Valid academy email required.',
-      adminName: adminName.trim().length >= 2 ? '' : 'Admin name at least 2 characters hona chahiye.',
+      adminName: adminName.trim().length >= 2 ? '' : 'Admin name must be at least 2 characters.',
       adminEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedAdminEmail) ? '' : 'Valid admin email required.',
-      adminPassword: adminPassword.length >= 8 ? '' : 'Password minimum 8 characters hona chahiye.',
+      adminPassword: adminPassword.length >= 8 ? '' : 'Password must be at least 8 characters.',
       confirmPassword:
         adminPassword === confirmPassword && confirmPassword.length > 0 ? '' : 'Password confirmation mismatch.'
     }),
@@ -278,17 +278,17 @@ export default function RegisterPage() {
     const normalizedOtp = otpCode.trim();
 
     if (!otpSent) {
-      setError('Pehle OTP send karo.');
+      setError('Please send OTP first.');
       return;
     }
 
     if (otpSnapshotMismatch) {
-      setError('Details change hue hain. OTP resend karke verify karo.');
+      setError('Details have changed. Please resend OTP and verify again.');
       return;
     }
 
     if (!/^\d{6}$/.test(normalizedOtp)) {
-      setError('OTP 6 digit ka hona chahiye.');
+      setError('OTP must be exactly 6 digits.');
       return;
     }
 
@@ -323,7 +323,7 @@ export default function RegisterPage() {
     }
 
     if (!window.Razorpay) {
-      throw new Error('Razorpay SDK load nahi hua. Page refresh karke retry karo.');
+      throw new Error('Razorpay SDK failed to load. Please refresh the page and try again.');
     }
 
     setPaymentLoading(true);
@@ -390,7 +390,7 @@ export default function RegisterPage() {
     }
 
     if (otpSnapshotMismatch) {
-      setError('Details change hue hain. OTP dobara send and verify karo.');
+      setError('Details have changed. Please resend OTP and verify again.');
       setOtpSent(false);
       setOtpVerified(false);
       setOtpCode('');
@@ -446,7 +446,7 @@ export default function RegisterPage() {
 
   const registerAcademy = async () => {
     if (!otpSent || !otpVerified || !otpCode.trim()) {
-      setError('Pehle OTP verify karo.');
+      setError('Please verify OTP first.');
       return;
     }
 

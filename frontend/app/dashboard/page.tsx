@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
+import { apiDeleteWithAuth, apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
 
 type UserSession = {
   id: string;
@@ -48,6 +48,19 @@ type ClientMeta = {
   subscriptionStartDate?: string;
   subscriptionEndDate?: string;
   subscriptionAutoRenew?: boolean;
+};
+
+type StudentImportRow = {
+  name: string;
+  age: number;
+  gender: 'male' | 'female' | 'other';
+  parentName: string;
+  parentPhone: string;
+  email?: string;
+  batchId?: string | null;
+  feeStatus: 'paid' | 'pending';
+  dob?: string;
+  rollNo?: string;
 };
 
 type NotificationLog = {
@@ -300,6 +313,16 @@ const weekDayOptions = [
 ] as const;
 
 const fmtDate = (value: string) => new Date(value).toLocaleDateString();
+const fmtShortUiDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: '2-digit'
+  }).format(date);
+};
 const formatCurrency = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const hour12Options = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
 const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
@@ -387,6 +410,126 @@ const matchesRenewalWindow = (dueInDays: number, selected: (typeof renewalDueFil
   if (selected === 10) return dueInDays >= 6 && dueInDays <= 10;
   if (selected === 20) return dueInDays >= 11 && dueInDays <= 20;
   return false;
+};
+
+const parseCsvLine = (line: string) => {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+};
+
+const normalizeCsvHeader = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+const parseStudentsImportCsv = (content: string) => {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    throw new Error('CSV is empty. Add header + at least one student row.');
+  }
+
+  const headerParts = parseCsvLine(lines[0]).map(normalizeCsvHeader);
+  const indexOf = (name: string) => headerParts.findIndex((header) => header === name);
+
+  const nameIdx = indexOf('name');
+  const ageIdx = indexOf('age');
+  const genderIdx = indexOf('gender');
+  const parentNameIdx = indexOf('parentname');
+  const parentPhoneIdx = indexOf('parentphone');
+  const emailIdx = indexOf('email');
+  const batchIdIdx = indexOf('batchid');
+  const feeStatusIdx = indexOf('feestatus');
+  const dobIdx = indexOf('dob');
+  const rollNoIdx = indexOf('rollno');
+  const mobileIdx = indexOf('mobile');
+
+  if (nameIdx < 0) {
+    throw new Error('CSV header must include `name`.');
+  }
+  if (parentPhoneIdx < 0 && mobileIdx < 0) {
+    throw new Error('CSV header must include `parentPhone` or `mobile`.');
+  }
+
+  const rows: StudentImportRow[] = [];
+
+  for (let lineNo = 1; lineNo < lines.length; lineNo += 1) {
+    const columns = parseCsvLine(lines[lineNo]);
+    const read = (index: number) => (index >= 0 ? String(columns[index] || '').trim() : '');
+
+    const name = read(nameIdx);
+    if (!name) {
+      throw new Error(`Row ${lineNo + 1}: name is required.`);
+    }
+
+    const rawPhone = read(parentPhoneIdx) || read(mobileIdx);
+    const normalizedPhone = rawPhone.replace(/[^\d+]/g, '');
+    if (!normalizedPhone || normalizedPhone.replace(/[^\d]/g, '').length < 7) {
+      throw new Error(`Row ${lineNo + 1}: valid mobile/parentPhone is required.`);
+    }
+
+    const rawGender = read(genderIdx).toLowerCase();
+    const gender: 'male' | 'female' | 'other' =
+      rawGender === 'female' || rawGender === 'other' ? (rawGender as 'female' | 'other') : 'male';
+
+    const dob = read(dobIdx);
+    const parsedAge = Number.parseInt(read(ageIdx), 10);
+    const ageFromDob = getAgeFromDob(dob || '');
+    const age = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : ageFromDob || 12;
+
+    const email = read(emailIdx).toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(`Row ${lineNo + 1}: email format is invalid.`);
+    }
+
+    const feeStatusRaw = read(feeStatusIdx).toLowerCase();
+    const feeStatus: 'paid' | 'pending' = feeStatusRaw === 'paid' ? 'paid' : 'pending';
+    const parentName = read(parentNameIdx) || name;
+    const batchId = read(batchIdIdx) || null;
+    const rollNo = read(rollNoIdx);
+
+    rows.push({
+      name,
+      age,
+      gender,
+      parentName,
+      parentPhone: normalizedPhone.startsWith('+') ? normalizedPhone : `+91${normalizedPhone.replace(/\D/g, '')}`,
+      ...(email ? { email } : {}),
+      ...(batchId ? { batchId } : {}),
+      feeStatus,
+      ...(dob ? { dob } : {}),
+      ...(rollNo ? { rollNo } : {})
+    });
+  }
+
+  return rows;
 };
 
 const splitBatchAndClass = (value: string) => {
@@ -494,7 +637,7 @@ export default function DashboardPage() {
 
   const [batchFilterCenter, setBatchFilterCenter] = useState('all');
   const [batchFilterSport, setBatchFilterSport] = useState('all');
-  const [batchFilterStatus, setBatchFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
+  const [batchFilterStatus, setBatchFilterStatus] = useState<'active' | 'inactive' | 'all'>('all');
   const [batchSearchText, setBatchSearchText] = useState('');
 
   const [classTitle, setClassTitle] = useState('U13 Evening Beginners');
@@ -553,6 +696,7 @@ export default function DashboardPage() {
   const [subscriptionAutoRenew, setSubscriptionAutoRenew] = useState(false);
   const [clientSubmitAttempted, setClientSubmitAttempted] = useState(false);
   const [clientMetaByStudentId, setClientMetaByStudentId] = useState<Record<string, ClientMeta>>({});
+  const importStudentsInputRef = useRef<HTMLInputElement | null>(null);
   const [renewalDueFilter, setRenewalDueFilter] = useState<(typeof renewalDueFilters)[number]>(5);
   const [coachName, setCoachName] = useState('');
   const [coachEmail, setCoachEmail] = useState('');
@@ -2261,6 +2405,118 @@ export default function DashboardPage() {
     setToast('Student registry exported as CSV');
   };
 
+  const triggerImportStudents = () => {
+    importStudentsInputRef.current?.click();
+  };
+
+  const deleteStudentWithConfirmation = async (student: Student) => {
+    const confirmed = window.confirm(
+      `Delete student "${student.name}" permanently?\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    await runAction(
+      async () => {
+        await apiDeleteWithAuth(`/students/${student._id}`, token);
+        const nextMeta = { ...clientMetaByStudentId };
+        delete nextMeta[student._id];
+        persistClientMeta(nextMeta);
+      },
+      'Student permanently deleted'
+    );
+  };
+
+  const importStudentsFromCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setToast('Please upload a CSV file.');
+      return;
+    }
+
+    if (!token) {
+      setToast('Session expired. Please login again.');
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const importRows = parseStudentsImportCsv(content);
+      if (importRows.length === 0) {
+        setToast('No valid student rows found in CSV.');
+        return;
+      }
+
+      setActionLoading(true);
+      setToast('');
+      const failures: Array<{ row: number; name: string; error: string }> = [];
+      let successCount = 0;
+      const mergedMeta: Record<string, ClientMeta> = { ...clientMetaByStudentId };
+
+      for (let index = 0; index < importRows.length; index += 1) {
+        const row = importRows[index];
+        try {
+          const created = await apiPostWithAuth<Student>(
+            '/students',
+            {
+              name: row.name,
+              age: row.age,
+              gender: row.gender,
+              parentName: row.parentName,
+              parentPhone: row.parentPhone,
+              ...(row.email ? { email: row.email } : {}),
+              ...(row.batchId ? { batchId: row.batchId } : {}),
+              feeStatus: row.feeStatus
+            },
+            token
+          );
+
+          mergedMeta[created._id] = {
+            ...(row.dob ? { dob: row.dob } : {}),
+            ...(row.rollNo ? { rollNo: row.rollNo } : {})
+          };
+          successCount += 1;
+        } catch (error) {
+          failures.push({
+            row: index + 2,
+            name: row.name,
+            error: error instanceof Error ? error.message : 'Import failed'
+          });
+        }
+      }
+
+      persistClientMeta(mergedMeta);
+
+      await loadDashboardData(token);
+
+      if (failures.length > 0) {
+        setDebugOutput(
+          JSON.stringify(
+            {
+              imported: successCount,
+              failed: failures.length,
+              failures
+            },
+            null,
+            2
+          )
+        );
+      }
+
+      setToast(
+        failures.length > 0
+          ? `Imported ${successCount} students, ${failures.length} failed. Check debug output.`
+          : `Successfully imported ${successCount} students.`
+      );
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'CSV import failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-4 py-4 sm:px-6">
       <div className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[280px_1fr]">
@@ -3770,6 +4026,26 @@ export default function DashboardPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
+                          <input
+                            ref={importStudentsInputRef}
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="hidden"
+                            onChange={importStudentsFromCsv}
+                          />
+                          <button
+                            type="button"
+                            onClick={triggerImportStudents}
+                            title="Import students CSV"
+                            aria-label="Import students CSV"
+                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                          >
+                            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 21V9" />
+                              <path d="M17 14l-5-5-5 5" />
+                              <path d="M21 21H3" />
+                            </svg>
+                          </button>
                           <button
                             type="button"
                             onClick={exportClientsCsv}
@@ -3803,7 +4079,7 @@ export default function DashboardPage() {
                               <th className="px-2 py-2 font-semibold">Roll no</th>
                               <th className="px-2 py-2 font-semibold">Level</th>
                               <th className="px-2 py-2 font-semibold">Receivable</th>
-                              <th className="px-2 py-2 font-semibold">Edit Student</th>
+                              <th className="px-2 py-2 font-semibold">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3837,7 +4113,13 @@ export default function DashboardPage() {
                                   <td className="px-2 py-2">
                                     <p className="font-medium text-slate-800">{selectedPlan?.name || '-'}</p>
                                     <p className="text-xs text-slate-500">
-                                      {meta?.subscriptionStartDate || '-'} {meta?.subscriptionEndDate ? `to ${meta.subscriptionEndDate}` : ''}
+                                      {(() => {
+                                        const start = fmtShortUiDate(meta?.subscriptionStartDate);
+                                        const end = fmtShortUiDate(meta?.subscriptionEndDate);
+                                        if (start && end) return `${start} - ${end}`;
+                                        if (start) return start;
+                                        return '-';
+                                      })()}
                                     </p>
                                   </td>
                                   <td className="px-2 py-2 text-slate-700">{selectedClass?.title || '-'}</td>
@@ -3854,12 +4136,22 @@ export default function DashboardPage() {
                                     </span>
                                   </td>
                                   <td className="px-2 py-2">
-                                    <button
-                                      onClick={() => openClientComposerForEdit(student)}
-                                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                    >
-                                      Edit Student
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => openClientComposerForEdit(student)}
+                                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        Edit
+                                      </button>
+                                      {user?.role === 'AcademyAdmin' ? (
+                                        <button
+                                          onClick={() => deleteStudentWithConfirmation(student)}
+                                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                        >
+                                          Delete
+                                        </button>
+                                      ) : null}
+                                    </div>
                                   </td>
                                 </tr>
                               );
