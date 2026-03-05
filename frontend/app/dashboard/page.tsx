@@ -232,6 +232,19 @@ type AdminRazorpaySettings = {
   updatedAt: string | null;
 };
 
+type DashboardOverview = {
+  activeStudents: number;
+  newStudentsThisMonth: number;
+  scheduledClassesToday: number;
+  attendanceMarkedToday: number;
+  pendingAttendance: number;
+  feesCollectedToday: number;
+  pendingFeeCount: number;
+  upcomingRenewals: number;
+  attendanceRate: number;
+  activeBatches: number;
+};
+
 const leftMenu = [
   'Pulse Board',
   'Academy Pro',
@@ -607,6 +620,7 @@ export default function DashboardPage() {
   const [toast, setToast] = useState('');
 
   const [billing, setBilling] = useState<BillingCurrent | null>(null);
+  const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceStudents, setAttendanceStudents] = useState<Student[]>([]);
   const [studentsTotal, setStudentsTotal] = useState(0);
@@ -966,9 +980,11 @@ export default function DashboardPage() {
 
     const resolvedUser = currentUser || user;
 
-    const [me, currentBilling, studentsList, studentsForAttendance, notificationList, pending, regStats, plans, batchList, memberList] = await Promise.all([
+    const [me, currentBilling, overview, studentsList, studentsForAttendance, notificationList, pending, regStats, plans, batchList, memberList] =
+      await Promise.all([
       safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', accessToken), null),
       safeFetch(() => apiGetWithAuth<BillingCurrent>('/billing/current', accessToken), null),
+      safeFetch(() => apiGetWithAuth<DashboardOverview>('/dashboard/overview', accessToken), null),
       safeFetch(() => apiGetWithAuth<StudentsListResponse>('/students?page=1&limit=12', accessToken), {
         items: [],
         pagination: { total: 0 }
@@ -998,7 +1014,7 @@ export default function DashboardPage() {
         { items: [], pagination: { total: 0 } }
       ),
       safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 })
-    ]);
+      ]);
 
     if (me) {
       localStorage.setItem('currentUser', JSON.stringify(me));
@@ -1006,6 +1022,7 @@ export default function DashboardPage() {
     }
 
     setBilling(currentBilling);
+    setDashboardOverview(overview);
     setStudents(studentsList.items);
     setAttendanceStudents(studentsForAttendance.items);
     setStudentsTotal(studentsList.pagination.total);
@@ -1413,8 +1430,24 @@ export default function DashboardPage() {
   }, [trendSeries]);
 
   const todayIsoDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayWeekToken = useMemo(() => {
+    const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+    return dayMap[new Date().getDay()];
+  }, []);
+
+  const scheduledClassesTodayFallback = useMemo(() => {
+    return academyClassRows.filter((row) => row.scheduleDayValues.includes(todayWeekToken)).length;
+  }, [academyClassRows, todayWeekToken]);
+
+  const attendanceMarkedTodayFallback = useMemo(() => {
+    return recentAttendanceEntries.filter((entry) => {
+      const entryDate = entry.date ? new Date(entry.date).toISOString().slice(0, 10) : '';
+      return entryDate === todayIsoDate;
+    }).length;
+  }, [recentAttendanceEntries, todayIsoDate]);
 
   const todayAttendanceRate = useMemo(() => {
+    if (dashboardOverview) return Math.round(dashboardOverview.attendanceRate);
     const todayRows = recentAttendanceEntries.filter((entry) => {
       const entryDate = entry.date ? new Date(entry.date).toISOString().slice(0, 10) : '';
       return entryDate === todayIsoDate;
@@ -1422,17 +1455,52 @@ export default function DashboardPage() {
     if (todayRows.length === 0) return 0;
     const presentCount = todayRows.filter((entry) => entry.status === 'present').length;
     return Math.round((presentCount / todayRows.length) * 100);
-  }, [recentAttendanceEntries, todayIsoDate]);
+  }, [dashboardOverview, recentAttendanceEntries, todayIsoDate]);
 
   const activeStudentsCount = useMemo(
-    () => attendanceStudents.filter((student) => student.status === 'active').length,
-    [attendanceStudents]
+    () => dashboardOverview?.activeStudents ?? attendanceStudents.filter((student) => student.status === 'active').length,
+    [dashboardOverview, attendanceStudents]
   );
 
   const activeBatchesCount = useMemo(
-    () => academyClassRows.filter((row) => row.status === 'active').length,
-    [academyClassRows]
+    () => dashboardOverview?.activeBatches ?? academyClassRows.filter((row) => row.status === 'active').length,
+    [dashboardOverview, academyClassRows]
   );
+
+  const pendingFeeCount = useMemo(() => {
+    if (dashboardOverview) return dashboardOverview.pendingFeeCount;
+    return pendingStudentsCount;
+  }, [dashboardOverview, pendingStudentsCount]);
+
+  const scheduledClassesToday = useMemo(
+    () => dashboardOverview?.scheduledClassesToday ?? scheduledClassesTodayFallback,
+    [dashboardOverview, scheduledClassesTodayFallback]
+  );
+
+  const attendanceMarkedToday = useMemo(
+    () => dashboardOverview?.attendanceMarkedToday ?? attendanceMarkedTodayFallback,
+    [dashboardOverview, attendanceMarkedTodayFallback]
+  );
+
+  const pendingAttendance = useMemo(() => {
+    if (dashboardOverview) return dashboardOverview.pendingAttendance;
+    return Math.max(0, scheduledClassesTodayFallback - attendanceMarkedTodayFallback);
+  }, [dashboardOverview, scheduledClassesTodayFallback, attendanceMarkedTodayFallback]);
+
+  const newStudentsThisMonth = useMemo(() => {
+    if (dashboardOverview) return dashboardOverview.newStudentsThisMonth;
+    return 0;
+  }, [dashboardOverview]);
+
+  const feesCollectedToday = useMemo(() => {
+    if (dashboardOverview) return dashboardOverview.feesCollectedToday;
+    return 0;
+  }, [dashboardOverview]);
+
+  const upcomingRenewals7Days = useMemo(() => {
+    if (dashboardOverview) return dashboardOverview.upcomingRenewals;
+    return renewalCandidates.filter((row) => row.dueInDays >= 0 && row.dueInDays <= 7).length;
+  }, [dashboardOverview, renewalCandidates]);
 
   const feeCollectionRatio = useMemo(() => {
     if (studentsTotal === 0) return 0;
@@ -2933,24 +3001,52 @@ export default function DashboardPage() {
                   <p className="mt-1 text-xs text-slate-500">Learners currently active</p>
                 </article>
                 <article className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-sky-700">Today Attendance Rate</p>
-                  <p className="mt-1 text-3xl font-extrabold text-sky-800">{todayAttendanceRate}%</p>
-                  <p className="mt-1 text-xs text-sky-700">Present ratio today</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-sky-700">Scheduled Classes Today</p>
+                  <p className="mt-1 text-3xl font-extrabold text-sky-800">{scheduledClassesToday}</p>
+                  <p className="mt-1 text-xs text-sky-700">Classes planned for today</p>
                 </article>
                 <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Fee Collection Ratio</p>
-                  <p className="mt-1 text-3xl font-extrabold text-emerald-800">{feeCollectionRatio}%</p>
-                  <p className="mt-1 text-xs text-emerald-700">Current payment health</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Attendance Rate</p>
+                  <p className="mt-1 text-3xl font-extrabold text-emerald-800">{todayAttendanceRate}%</p>
+                  <p className="mt-1 text-xs text-emerald-700">Marked vs scheduled classes</p>
                 </article>
                 <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-amber-700">Pending Fee Count</p>
-                  <p className="mt-1 text-3xl font-extrabold text-amber-800">{pendingStudentsCount}</p>
+                  <p className="mt-1 text-3xl font-extrabold text-amber-800">{pendingFeeCount}</p>
                   <p className="mt-1 text-xs text-amber-700">Needs follow-up</p>
                 </article>
                 <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Active Batches</p>
                   <p className="mt-1 text-3xl font-extrabold text-indigo-800">{activeBatchesCount}</p>
                   <p className="mt-1 text-xs text-indigo-700">Running groups</p>
+                </article>
+              </section>
+
+              <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <article className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-teal-700">Attendance Marked Today</p>
+                  <p className="mt-1 text-3xl font-extrabold text-teal-800">{attendanceMarkedToday}</p>
+                  <p className="mt-1 text-xs text-teal-700">Records marked today</p>
+                </article>
+                <article className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-rose-700">Pending Attendance</p>
+                  <p className="mt-1 text-3xl font-extrabold text-rose-800">{pendingAttendance}</p>
+                  <p className="mt-1 text-xs text-rose-700">Still pending to mark</p>
+                </article>
+                <article className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">New Students This Month</p>
+                  <p className="mt-1 text-3xl font-extrabold text-cyan-800">{newStudentsThisMonth}</p>
+                  <p className="mt-1 text-xs text-cyan-700">Latest enrollments</p>
+                </article>
+                <article className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-green-700">Fees Collected Today</p>
+                  <p className="mt-1 text-3xl font-extrabold text-green-800">{formatCurrency(feesCollectedToday)}</p>
+                  <p className="mt-1 text-xs text-green-700">Today payment intake</p>
+                </article>
+                <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-violet-700">Upcoming Renewals</p>
+                  <p className="mt-1 text-3xl font-extrabold text-violet-800">{upcomingRenewals7Days}</p>
+                  <p className="mt-1 text-xs text-violet-700">Due in next 7 days</p>
                 </article>
               </section>
 

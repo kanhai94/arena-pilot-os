@@ -16,6 +16,7 @@ import { teamRouter } from './modules/team/team.routes.js';
 import { subscriptionRouter } from './modules/subscription/subscription.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { platformRouter } from './modules/platform/platform.routes.js';
+import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -91,6 +92,7 @@ export const createApp = () => {
   app.use('/api/v1/fees', feeRouter);
   app.use('/api/v1/notifications', notificationRouter);
   app.use('/api/v1/team-members', teamRouter);
+  app.use('/api/v1/dashboard', dashboardRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
