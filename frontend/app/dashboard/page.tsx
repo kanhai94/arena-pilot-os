@@ -794,14 +794,14 @@ export default function DashboardPage() {
   const isAdmin = normalizedUserRole === 'ADMIN';
   const isCoach = normalizedUserRole === 'COACH';
   const isStaff = normalizedUserRole === 'STAFF';
-  const canManageStudents = isSuperAdmin || isAdmin || isStaff;
+  const canManageStudents = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canDeleteStudents = isAdmin;
   const canDeleteClassAndAccess = isAdmin;
-  const canManagePlansAndFinance = isSuperAdmin || isAdmin;
-  const canManageUsers = isSuperAdmin || isAdmin;
-  const canManageBatches = isSuperAdmin || isAdmin;
-  const canViewBatches = isSuperAdmin || isAdmin || isCoach;
-  const canMarkAttendance = isSuperAdmin || isAdmin || isCoach;
+  const canManagePlansAndFinance = isSuperAdmin || isAdmin || isStaff || isCoach;
+  const canManageUsers = isSuperAdmin || isAdmin || isStaff || isCoach;
+  const canManageBatches = isSuperAdmin || isAdmin || isStaff || isCoach;
+  const canViewBatches = isSuperAdmin || isAdmin || isStaff || isCoach;
+  const canMarkAttendance = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canSendReminders = isSuperAdmin || isAdmin || isStaff;
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
@@ -997,9 +997,7 @@ export default function DashboardPage() {
           ),
         { items: [], pagination: { total: 0 } }
       ),
-      ['COACH', 'STAFF'].includes(normalizeRole(resolvedUser?.role))
-        ? Promise.resolve({ items: [], total: 0 } as TeamMembersResponse)
-        : safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 })
+      safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 })
     ]);
 
     if (me) {

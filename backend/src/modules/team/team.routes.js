@@ -16,11 +16,11 @@ const teamController = createTeamController(teamService);
 
 teamRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard);
 
-teamRouter.post('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), teamController.createTeamMember);
-teamRouter.get('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), teamController.listTeamMembers);
+teamRouter.post('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), teamController.createTeamMember);
+teamRouter.get('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), teamController.listTeamMembers);
 teamRouter.patch(
   '/:userId/access',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   teamController.updateTeamMemberAccess
 );
 teamRouter.patch(

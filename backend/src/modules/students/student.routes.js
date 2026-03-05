@@ -22,7 +22,7 @@ studentRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, ten
 
 studentRouter.post(
   '/',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   checkPlanLimit('student'),
   studentController.createStudent
 );
@@ -41,7 +41,7 @@ studentRouter.get(
 
 studentRouter.put(
   '/:studentId',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   studentController.updateStudent
 );
 

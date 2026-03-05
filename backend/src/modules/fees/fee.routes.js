@@ -18,18 +18,18 @@ const feeController = createFeeController(feeService);
 
 feeRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
-feeRouter.post('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.createFeePlan);
-feeRouter.get('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.getFeePlans);
-feeRouter.patch('/plans/:planId', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), feeController.updateFeePlan);
+feeRouter.post('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), feeController.createFeePlan);
+feeRouter.get('/plans', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), feeController.getFeePlans);
+feeRouter.patch('/plans/:planId', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), feeController.updateFeePlan);
 
 feeRouter.post(
   '/student-fees/assign',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   feeController.assignFeePlan
 );
 feeRouter.get(
   '/student-fees/status',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   feeController.getStudentFeeStatus
 );
 

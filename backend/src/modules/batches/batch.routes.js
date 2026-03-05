@@ -17,9 +17,9 @@ const batchController = createBatchController(batchService);
 
 batchRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
 
-batchRouter.post('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), batchController.createBatch);
-batchRouter.get('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.COACH), batchController.getBatches);
-batchRouter.put('/:batchId', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN), batchController.updateBatch);
+batchRouter.post('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.STAFF, ROLES.COACH), batchController.createBatch);
+batchRouter.get('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.STAFF, ROLES.COACH), batchController.getBatches);
+batchRouter.put('/:batchId', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.STAFF, ROLES.COACH), batchController.updateBatch);
 batchRouter.patch(
   '/:batchId/deactivate',
   roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),

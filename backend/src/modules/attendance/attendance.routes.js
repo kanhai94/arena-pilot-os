@@ -20,17 +20,17 @@ attendanceRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, 
 
 attendanceRouter.post(
   '/mark',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   attendanceController.markAttendance
 );
 attendanceRouter.get(
   '/by-date',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   attendanceController.getAttendanceByDate
 );
 attendanceRouter.get(
   '/student-stats',
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.COACH),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   attendanceController.getStudentAttendanceStats
 );
 
