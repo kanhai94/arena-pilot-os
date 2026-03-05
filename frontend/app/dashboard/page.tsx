@@ -2254,7 +2254,8 @@ export default function DashboardPage() {
 
         const studentId = clientEditingId || studentResult._id;
 
-        if (subscriptionPlanId && studentId) {
+        const shouldAssignFeePlan = Boolean(subscriptionPlanId && studentId && !clientEditingId);
+        if (shouldAssignFeePlan) {
           await apiPostWithAuth(
             '/fees/student-fees/assign',
             {
