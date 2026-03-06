@@ -449,14 +449,10 @@ const pseudoTime = (index: number) => {
 };
 
 const CLIENT_META_STORAGE_KEY = 'academy-client-meta-v1';
-const renewalDueFilters = [1, 2, 3, 4, 5, 10, 20] as const;
-const matchesRenewalWindow = (dueInDays: number, selected: (typeof renewalDueFilters)[number]) => {
+const renewalDueFilters = [1, 5, 10] as const;
+const matchesRenewalWindow = (dueInDays: number, selected: number) => {
   if (dueInDays <= 0) return false;
-  if (selected <= 4) return dueInDays === selected;
-  if (selected === 5) return dueInDays <= 5;
-  if (selected === 10) return dueInDays >= 6 && dueInDays <= 10;
-  if (selected === 20) return dueInDays >= 11 && dueInDays <= 20;
-  return false;
+  return dueInDays <= selected;
 };
 
 const parseCsvLine = (line: string) => {
@@ -746,7 +742,8 @@ export default function DashboardPage() {
   const [clientSubmitAttempted, setClientSubmitAttempted] = useState(false);
   const [clientMetaByStudentId, setClientMetaByStudentId] = useState<Record<string, ClientMeta>>({});
   const importStudentsInputRef = useRef<HTMLInputElement | null>(null);
-  const [renewalDueFilter, setRenewalDueFilter] = useState<(typeof renewalDueFilters)[number]>(5);
+  const [renewalDueFilter, setRenewalDueFilter] = useState<number>(5);
+  const [renewalCustomDueInput, setRenewalCustomDueInput] = useState('');
   const [coachName, setCoachName] = useState('');
   const [coachEmail, setCoachEmail] = useState('');
   const [coachTitle, setCoachTitle] = useState('');
@@ -4547,6 +4544,39 @@ export default function DashboardPage() {
                           {days} day
                         </button>
                       ))}
+                      <div className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-2 py-1">
+                        <span className="text-xs font-semibold text-slate-500">Custom</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={renewalCustomDueInput}
+                          onChange={(e) => setRenewalCustomDueInput(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            const parsed = Number(renewalCustomDueInput);
+                            if (Number.isFinite(parsed) && parsed > 0) {
+                              setRenewalDueFilter(parsed);
+                            }
+                          }}
+                          className="w-14 border-none bg-transparent text-sm font-semibold text-slate-700 outline-none"
+                          placeholder="days"
+                          aria-label="Custom due window days"
+                        />
+                        <button
+                          onClick={() => {
+                            const parsed = Number(renewalCustomDueInput);
+                            if (Number.isFinite(parsed) && parsed > 0) {
+                              setRenewalDueFilter(parsed);
+                            }
+                          }}
+                          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                      <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                        Showing due in next {renewalDueFilter} day{renewalDueFilter > 1 ? 's' : ''}
+                      </span>
                     </div>
                   </div>
 
