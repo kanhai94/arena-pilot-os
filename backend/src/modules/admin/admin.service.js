@@ -55,6 +55,39 @@ export const createAdminService = (repository) => {
   };
 
   return {
+    async getPlans() {
+      const plans = await repository.listPlans();
+      return plans.map((plan) => ({
+        id: String(plan._id),
+        name: plan.name,
+        priceMonthly: plan.priceMonthly,
+        studentLimit: plan.studentLimit ?? null,
+        status: plan.status,
+        features: plan.features || []
+      }));
+    },
+
+    async updatePlan(planIdentifier, payload) {
+      const plan = await repository.findPlanByIdentifier(planIdentifier);
+      if (!plan) {
+        throw new AppError('Plan not found', StatusCodes.NOT_FOUND);
+      }
+
+      const updated = await repository.updatePlanById(plan._id, payload);
+      if (!updated) {
+        throw new AppError('Plan not found', StatusCodes.NOT_FOUND);
+      }
+
+      return {
+        id: String(updated._id),
+        name: updated.name,
+        priceMonthly: updated.priceMonthly,
+        studentLimit: updated.studentLimit ?? null,
+        status: updated.status,
+        features: updated.features || []
+      };
+    },
+
     async getTenants(query) {
       const { page, limit } = query;
       const { items, total } = await repository.listTenantsWithStudentCount(query);

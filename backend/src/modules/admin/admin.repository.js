@@ -5,10 +5,30 @@ import { Tenant } from '../../models/tenant.model.js';
 import { PlatformSetting } from '../../models/platformSetting.model.js';
 import { RefreshToken } from '../../models/refreshToken.model.js';
 import { User } from '../../models/user.model.js';
+import mongoose from 'mongoose';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const adminRepository = {
+  listPlans() {
+    return Plan.find({}).sort({ createdAt: 1 }).lean();
+  },
+
+  findPlanByIdentifier(identifier) {
+    const isObjectId = mongoose.Types.ObjectId.isValid(identifier);
+    const orConditions = [{ name: { $regex: `^${escapeRegex(identifier)}$`, $options: 'i' } }];
+    if (isObjectId) {
+      orConditions.unshift({ _id: identifier });
+    }
+    return Plan.findOne({
+      $or: orConditions
+    }).lean();
+  },
+
+  updatePlanById(planId, payload) {
+    return Plan.findOneAndUpdate({ _id: planId }, { $set: payload }, { new: true, lean: true });
+  },
+
   async listTenantsWithStudentCount({ plan, status, page, limit }) {
     const match = {
       email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() }

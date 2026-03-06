@@ -15,6 +15,8 @@ const adminController = createAdminController(adminService);
 adminRouter.use(authMiddleware, tenantContextMiddleware, roleMiddleware(ROLES.SUPER_ADMIN));
 
 adminRouter.get('/tenants', adminController.getTenants);
+adminRouter.get('/plans', adminController.getPlans);
+adminRouter.patch('/plans/:id', adminController.updatePlan);
 adminRouter.post('/tenant', adminController.createTenant);
 adminRouter.patch('/tenant/:id', adminController.updateTenant);
 adminRouter.patch('/tenant/:id/status', adminController.updateTenantStatus);

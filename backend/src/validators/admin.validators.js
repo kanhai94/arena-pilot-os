@@ -48,6 +48,25 @@ export const updateRazorpaySettingsSchema = z
   })
   .strict();
 
+export const adminPlanIdParamsSchema = z
+  .object({
+    id: z.string().trim().min(1)
+  })
+  .strict();
+
+export const updateAdminPlanSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80).optional(),
+    priceMonthly: z.number().min(0).optional(),
+    studentLimit: z.number().int().min(1).nullable().optional(),
+    features: z.array(z.string().trim().min(1).max(120)).optional(),
+    status: z.enum(['active', 'inactive']).optional()
+  })
+  .strict()
+  .refine((payload) => Object.keys(payload).length > 0, {
+    message: 'At least one field is required for update'
+  });
+
 export const parseOrThrow = (schema, payload) => {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {

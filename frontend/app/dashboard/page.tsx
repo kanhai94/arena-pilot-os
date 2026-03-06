@@ -977,7 +977,20 @@ export default function DashboardPage() {
 
     const resolvedUser = currentUser || user;
 
-    const [me, currentBilling, overview, studentsList, studentsForAttendance, notificationList, pending, regStats, plans, batchList, memberList] =
+    const [
+      me,
+      currentBilling,
+      overview,
+      studentsList,
+      studentsForAttendance,
+      notificationList,
+      pending,
+      regStats,
+      plans,
+      batchList,
+      memberList,
+      platformPlanList
+    ] =
       await Promise.all([
       safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', accessToken), null),
       safeFetch(() => apiGetWithAuth<BillingCurrent>('/billing/current', accessToken), null),
@@ -1010,7 +1023,10 @@ export default function DashboardPage() {
           ),
         { items: [], pagination: { total: 0 } }
       ),
-      safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 })
+      safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 }),
+      normalizeRole(resolvedUser?.role) === 'SUPER_ADMIN'
+        ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/admin/plans', accessToken), [])
+        : Promise.resolve([])
       ]);
 
     if (me) {
@@ -1032,6 +1048,9 @@ export default function DashboardPage() {
     const activeMembers = memberList.items.filter((member) => member.isActive);
     setTeamMembers(activeMembers);
     setCoaches(activeMembers.filter((member) => normalizeRole(member.role) === 'COACH'));
+    if (platformPlanList.length > 0) {
+      setPlatformPlans(platformPlanList);
+    }
 
     const recentDateList = [0, 1, 2].map((offset) => {
       const date = new Date();

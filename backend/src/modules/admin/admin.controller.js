@@ -1,10 +1,12 @@
 import { StatusCodes } from 'http-status-codes';
 import { apiSuccess } from '../../utils/apiResponse.js';
 import {
+  adminPlanIdParamsSchema,
   adminTenantIdParamsSchema,
   createOrUpdateTenantSchema,
   parseOrThrow,
   superAdminTenantsQuerySchema,
+  updateAdminPlanSchema,
   updateTenantPriceOverrideSchema,
   updateTenantStatusSchema,
   updateRazorpaySettingsSchema
@@ -17,6 +19,26 @@ export const createAdminController = (service) => {
         const query = parseOrThrow(superAdminTenantsQuerySchema, req.query);
         const data = await service.getTenants(query);
         return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    getPlans: async (_req, res, next) => {
+      try {
+        const data = await service.getPlans();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    updatePlan: async (req, res, next) => {
+      try {
+        const { id } = parseOrThrow(adminPlanIdParamsSchema, req.params);
+        const payload = parseOrThrow(updateAdminPlanSchema, req.body);
+        const data = await service.updatePlan(id, payload);
+        return apiSuccess(res, data, StatusCodes.OK);
       } catch (error) {
         return next(error);
       }
