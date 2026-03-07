@@ -599,6 +599,7 @@ const csvEscape = (value: unknown) => {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [token, setToken] = useState('');
   const [user, setUser] = useState<UserSession | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('pulse');
@@ -799,6 +800,13 @@ export default function DashboardPage() {
       return fallback;
     }
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  }, [activeMenu, activeTab, activeAcademyPro, activePlatformControl]);
 
   const normalizedUserRole = normalizeRole(user?.role);
   const isSuperAdmin = normalizedUserRole === 'SUPER_ADMIN';
@@ -2799,9 +2807,53 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-4 py-4 sm:px-6">
+    <div className="relative min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-3 py-3 sm:px-6 sm:py-4">
+      <div className="mx-auto mb-3 flex max-w-[1500px] items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:hidden">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">ArenaPilot OS</p>
+          <p className="text-sm font-semibold text-slate-900">{activeMenu}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700"
+        >
+          {sidebarOpen ? (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7H20M4 12H20M4 17H20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          )}
+          <span>{sidebarOpen ? 'Close' : 'Menu'}</span>
+        </button>
+      </div>
+      {sidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-900/35 lg:hidden"
+        />
+      ) : null}
       <div className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-3xl border border-slate-200/70 bg-white/85 p-4 shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur">
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 w-[88vw] max-w-[330px] overflow-y-auto rounded-r-3xl border border-slate-200/70 bg-white/95 p-4 shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur transition-transform duration-300 lg:static lg:z-auto lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-3xl lg:bg-white/85 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="mb-2 flex items-center justify-between lg:hidden">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Navigation</p>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700"
+            >
+              Close
+            </button>
+          </div>
           <div className="rounded-2xl bg-slate-900 p-4 text-white">
             <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-300">ArenaPilot OS</p>
             <h1 className="mt-2 text-xl font-bold">Command Deck</h1>
