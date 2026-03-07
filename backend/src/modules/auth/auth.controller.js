@@ -13,6 +13,15 @@ import {
 
 export const createAuthController = (authService) => {
   return {
+    getRegistrationPlans: async (_req, res, next) => {
+      try {
+        const data = await authService.getRegistrationPlans();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     createRegistrationOrder: async (req, res, next) => {
       try {
         const payload = parseOrThrow(createRegistrationOrderSchema, req.body);

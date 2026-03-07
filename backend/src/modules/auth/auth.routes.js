@@ -16,6 +16,7 @@ const authService = createAuthService(authRepository, { tenantMetricsService });
 const authController = createAuthController(authService);
 
 authRouter.post('/create-registration-order', authController.createRegistrationOrder);
+authRouter.get('/registration-plans', authController.getRegistrationPlans);
 authRouter.post('/request-signup-otp', authController.requestSignupOtp);
 authRouter.post('/verify-signup-otp', authController.verifySignupOtp);
 authRouter.post('/request-forgot-password-otp', authController.requestForgotPasswordOtp);

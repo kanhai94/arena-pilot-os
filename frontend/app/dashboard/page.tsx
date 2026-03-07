@@ -1644,6 +1644,29 @@ export default function DashboardPage() {
     return billingRows.filter((row) => String(row.status).toLowerCase() === 'failed').length;
   }, [billingRows]);
 
+  const getTenantStatusMeta = (status?: string) => {
+    const normalized = String(status || 'active').toLowerCase();
+    if (normalized === 'blocked') {
+      return {
+        label: 'blocked',
+        pillClass: 'bg-rose-100 text-rose-700 border border-rose-200',
+        dotClass: 'bg-rose-500'
+      };
+    }
+    if (normalized === 'suspended') {
+      return {
+        label: 'suspended',
+        pillClass: 'bg-amber-100 text-amber-700 border border-amber-200',
+        dotClass: 'bg-amber-500'
+      };
+    }
+    return {
+      label: 'active',
+      pillClass: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+      dotClass: 'bg-emerald-500'
+    };
+  };
+
   const runAction = async (action: () => Promise<unknown>, successMessage: string): Promise<boolean> => {
     if (!token) return false;
 
@@ -1905,20 +1928,6 @@ export default function DashboardPage() {
       'Plan created'
     ).then((ok) => {
       if (ok) {
-        setPlatformPlans((prev) => [
-          ...prev,
-          {
-            id: `${newPlatformPlanName.trim().toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-            name: newPlatformPlanName.trim(),
-            priceMonthly: Number(newPlatformPlanPrice),
-            studentLimit: newPlatformPlanLimit.trim() ? Number(newPlatformPlanLimit) : null,
-            status: 'active',
-            features: newPlatformPlanFeatures
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          }
-        ]);
         setNewPlatformPlanName('');
         setNewPlatformPlanPrice('');
         setNewPlatformPlanLimit('');
@@ -5268,9 +5277,14 @@ export default function DashboardPage() {
                                 <td className="px-3 py-3 text-slate-700">{tenant.subscriptionStatus || '-'}</td>
                                 <td className="px-3 py-3 text-slate-700">{tenant.nextPaymentDate ? fmtDate(tenant.nextPaymentDate) : '-'}</td>
                                 <td className="px-3 py-3">
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                                    {tenant.tenantStatus || 'active'}
-                                  </span>
+                                  {(() => {
+                                    const statusMeta = getTenantStatusMeta(tenant.tenantStatus);
+                                    return (
+                                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusMeta.pillClass}`}>
+                                        {statusMeta.label}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex flex-wrap gap-1">
@@ -5501,11 +5515,21 @@ export default function DashboardPage() {
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {platformTenants.map((tenant) => (
                       <div key={`${tenant.id || tenant.academyName}-control`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="font-semibold text-slate-900">{tenant.academyName}</p>
+                        {(() => {
+                          const statusMeta = getTenantStatusMeta(tenant.tenantStatus);
+                          return (
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-slate-900">{tenant.academyName}</p>
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusMeta.pillClass}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
+                                {statusMeta.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         <p className="text-xs text-slate-600">
                           Plan: {tenant.planName || '-'} | Students: {tenant.studentCount}
                         </p>
-                        <p className="mt-1 text-xs text-slate-600">Status: {tenant.tenantStatus || 'active'}</p>
                         <div className="mt-3 flex flex-wrap gap-1">
                           <button
                             onClick={() => tenant.id && runTenantStatusAction(tenant.id, 'active')}

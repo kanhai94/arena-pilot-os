@@ -18,24 +18,40 @@ import {
 import { TenantContext } from '../../core/context/tenantContext.js';
 
 const generateOtpCode = () => String(crypto.randomInt(100000, 999999));
-const PLAN_SIZE_MAP = {
-  Starter: 10,
-  Growth: 50,
-  Pro: null
-};
-const PAID_PLANS = new Set(['Growth', 'Pro']);
 
 export const createAuthService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
 
-  const createRegistrationOrder = async ({ planName, academyEmail, adminEmail }) => {
-    if (!PAID_PLANS.has(planName)) {
-      throw new AppError('Starter plan does not require payment', StatusCodes.BAD_REQUEST);
+  const buildPlanNote = (plan) => {
+    if (plan.priceMonthly <= 0) {
+      return 'No payment required';
     }
 
-    const quote = await billingService.getRegistrationPlanQuote(planName);
+    if (plan.studentLimit === null || plan.studentLimit === undefined) {
+      return 'Unlimited student capacity and scale';
+    }
+
+    return `Up to ${plan.studentLimit} students`;
+  };
+
+  const getPlanQuote = async (planName) => {
+    return billingService.getRegistrationPlanQuote(planName);
+  };
+
+  const getRegistrationPlans = async () => {
+    const plans = await repository.listActiveRegistrationPlans();
+    return plans.map((plan) => ({
+      name: plan.name,
+      studentLimit: plan.studentLimit ?? null,
+      monthlyPrice: plan.priceMonthly,
+      note: buildPlanNote(plan)
+    }));
+  };
+
+  const createRegistrationOrder = async ({ planName, academyEmail, adminEmail }) => {
+    const quote = await getPlanQuote(planName);
     if (quote.amountInPaise <= 0) {
-      throw new AppError('Selected plan has no payable amount', StatusCodes.BAD_REQUEST);
+      throw new AppError('Selected plan does not require payment', StatusCodes.BAD_REQUEST);
     }
 
     const receipt = `reg_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -76,7 +92,8 @@ export const createAuthService = (repository, dependencies = {}) => {
   };
 
   const verifyPaidPlanPayment = async ({ planName, adminEmail, academyEmail, payment }) => {
-    if (!PAID_PLANS.has(planName)) {
+    const quote = await getPlanQuote(planName);
+    if (quote.amountInPaise <= 0) {
       return null;
     }
 
@@ -294,6 +311,7 @@ export const createAuthService = (repository, dependencies = {}) => {
 
   return {
     createRegistrationOrder,
+    getRegistrationPlans,
 
     async requestSignupOtp(email) {
       const existingUser = await repository.findUserByEmail(email);
@@ -329,6 +347,7 @@ export const createAuthService = (repository, dependencies = {}) => {
 
     async registerTenant(payload) {
       let tenant = null;
+      const quote = await getPlanQuote(payload.planName);
 
       const paymentOrderId = await verifyPaidPlanPayment({
         planName: payload.planName,
@@ -343,7 +362,7 @@ export const createAuthService = (repository, dependencies = {}) => {
           name: payload.name,
           academyCode: await generateAcademyCode(),
           ownerName: payload.ownerName,
-          academySize: PLAN_SIZE_MAP[payload.planName] ?? null,
+          academySize: quote.studentLimit ?? null,
           requestedPlanName: payload.planName,
           email: payload.email,
           subscriptionStatus: 'trial',
@@ -365,7 +384,7 @@ export const createAuthService = (repository, dependencies = {}) => {
           permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.ADMIN]
         });
 
-        if (payload.planName === 'Starter') {
+        if (quote.amountInPaise <= 0) {
           await billingService.createTrialForTenant(String(tenant._id));
         } else {
           await billingService.activateTenantPlanByName(String(tenant._id), payload.planName, true);

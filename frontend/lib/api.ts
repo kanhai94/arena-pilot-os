@@ -164,6 +164,10 @@ export const apiPost = async <T>(path: string, body: unknown): Promise<T> => {
   return request<T>(path, 'POST', body);
 };
 
+export const apiGet = async <T>(path: string): Promise<T> => {
+  return request<T>(path, 'GET');
+};
+
 export const apiGetWithAuth = async <T>(path: string, accessToken: string): Promise<T> => {
   return request<T>(path, 'GET', undefined, accessToken, { withAuth: true });
 };

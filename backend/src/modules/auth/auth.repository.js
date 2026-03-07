@@ -4,11 +4,16 @@ import { RefreshToken } from '../../models/refreshToken.model.js';
 import { AuthOtp } from '../../models/authOtp.model.js';
 import { Counter } from '../../models/counter.model.js';
 import { RegistrationPayment } from '../../models/registrationPayment.model.js';
+import { Plan } from '../../models/plan.model.js';
 import { env } from '../../config/env.js';
 
 export const authRepository = {
   createTenant(payload) {
     return Tenant.create(payload);
+  },
+
+  listActiveRegistrationPlans() {
+    return Plan.find({ status: 'active' }).sort({ priceMonthly: 1, createdAt: 1 }).lean();
   },
 
   createRegistrationPayment(payload) {

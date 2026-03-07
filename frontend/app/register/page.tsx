@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { apiPost } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 
 type RegisterResponse = {
   tenant: {
@@ -11,7 +11,7 @@ type RegisterResponse = {
     name: string;
     ownerName: string;
     academySize: number | null;
-    requestedPlanName: 'Starter' | 'Growth' | 'Pro';
+    requestedPlanName: string;
     email: string;
     subscriptionStatus: string;
     createdAt: string;
@@ -47,7 +47,7 @@ type CreateOrderResponse = {
   orderId: string;
   amount: number;
   currency: string;
-  planName: PlanName;
+  planName: string;
 };
 
 type RazorpayPaymentPayload = {
@@ -56,7 +56,13 @@ type RazorpayPaymentPayload = {
   razorpaySignature: string;
 };
 
-type PlanName = 'Starter' | 'Growth' | 'Pro';
+type PlanName = string;
+type RegistrationPlan = {
+  name: string;
+  studentLimit: number | null;
+  monthlyPrice: number;
+  note: string;
+};
 type FieldKey =
   | 'academyName'
   | 'ownerName'
@@ -66,16 +72,10 @@ type FieldKey =
   | 'adminPassword'
   | 'confirmPassword';
 
-const PLAN_OPTIONS: Array<{
-  name: PlanName;
-  label: string;
-  studentLimit: number | null;
-  monthlyPrice: number;
-  note: string;
-}> = [
-  { name: 'Starter', label: 'Starter', studentLimit: 10, monthlyPrice: 0, note: 'Launch with core academy workflows' },
-  { name: 'Growth', label: 'Growth', studentLimit: 50, monthlyPrice: 1999, note: 'Scale with stronger operations' },
-  { name: 'Pro', label: 'Pro', studentLimit: null, monthlyPrice: 4999, note: 'Unlimited student capacity and scale' }
+const DEFAULT_PLAN_OPTIONS: RegistrationPlan[] = [
+  { name: 'Starter', studentLimit: 10, monthlyPrice: 0, note: 'Launch with core academy workflows' },
+  { name: 'Growth', studentLimit: 50, monthlyPrice: 1999, note: 'Scale with stronger operations' },
+  { name: 'Pro', studentLimit: null, monthlyPrice: 4999, note: 'Unlimited student capacity and scale' }
 ];
 
 declare global {
@@ -89,9 +89,10 @@ declare global {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [planOptions, setPlanOptions] = useState<RegistrationPlan[]>(DEFAULT_PLAN_OPTIONS);
 
   const [academyName, setAcademyName] = useState('');
-  const [planName, setPlanName] = useState<PlanName>('Starter');
+  const [planName, setPlanName] = useState<PlanName>(DEFAULT_PLAN_OPTIONS[0].name);
   const [ownerName, setOwnerName] = useState('');
   const [academyEmail, setAcademyEmail] = useState('');
   const [adminName, setAdminName] = useState('');
@@ -123,8 +124,8 @@ export default function RegisterPage() {
 
   const normalizedAdminEmail = useMemo(() => adminEmail.trim().toLowerCase(), [adminEmail]);
   const selectedPlan = useMemo(
-    () => PLAN_OPTIONS.find((plan) => plan.name === planName) || PLAN_OPTIONS[0],
-    [planName]
+    () => planOptions.find((plan) => plan.name === planName) || planOptions[0] || DEFAULT_PLAN_OPTIONS[0],
+    [planName, planOptions]
   );
 
   const detailsSnapshot = useMemo(
@@ -212,6 +213,28 @@ export default function RegisterPage() {
           ? 'border-emerald-300 focus:border-emerald-500'
           : 'border-slate-300 focus:border-indigo-500'
     }`;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRegistrationPlans = async () => {
+      try {
+        const plans = await apiGet<RegistrationPlan[]>('/auth/registration-plans');
+        if (!mounted || !plans?.length) {
+          return;
+        }
+
+        setPlanOptions(plans);
+        setPlanName((prev) => (plans.some((plan) => plan.name === prev) ? prev : plans[0].name));
+      } catch {
+        // Keep default fallback plans if API load fails.
+      }
+    };
+
+    loadRegistrationPlans();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const scriptId = 'razorpay-checkout-js';
@@ -488,14 +511,14 @@ export default function RegisterPage() {
             </div>
 
             <div className="mt-6 space-y-2">
-              {PLAN_OPTIONS.map((plan) => (
+              {planOptions.map((plan) => (
                 <div
                   key={plan.name}
                   className={`rounded-xl px-3 py-2 text-sm ${
                     planName === plan.name ? 'bg-white/25 text-white' : 'bg-white/10 text-slate-200'
                   }`}
                 >
-                  {plan.label} - {plan.studentLimit === null ? 'Unlimited Students' : `Up to ${plan.studentLimit} Students`}
+                  {plan.name} - {plan.studentLimit === null ? 'Unlimited Students' : `Up to ${plan.studentLimit} Students`}
                 </div>
               ))}
             </div>
@@ -518,7 +541,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            {PLAN_OPTIONS.map((plan) => (
+            {planOptions.map((plan) => (
               <button
                 key={plan.name}
                 type="button"
@@ -529,7 +552,7 @@ export default function RegisterPage() {
                     : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
-                <p className="text-sm font-semibold text-slate-900">{plan.label}</p>
+                <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
                 <p className="mt-1 text-xs text-slate-600">
                   {plan.studentLimit === null ? 'Unlimited students' : `${plan.studentLimit} students`}
                 </p>
@@ -541,7 +564,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-700">
-            Selected Plan: <span className="font-semibold">{selectedPlan.label}</span> - {selectedPlan.note}
+            Selected Plan: <span className="font-semibold">{selectedPlan.name}</span> - {selectedPlan.note}
           </div>
 
           <div className="mb-4 grid gap-3 sm:grid-cols-[120px_1fr]">
@@ -572,7 +595,7 @@ export default function RegisterPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
               <div>
                 <p className="font-semibold text-slate-900">Plan Payment Required</p>
-                <p className="text-slate-700">Pay INR {selectedPlan.monthlyPrice} to continue with {selectedPlan.label}.</p>
+                <p className="text-slate-700">Pay INR {selectedPlan.monthlyPrice} to continue with {selectedPlan.name}.</p>
               </div>
               <button
                 type="button"
@@ -581,7 +604,7 @@ export default function RegisterPage() {
                   setMessage('');
                   try {
                     await handlePlanPayment();
-                    setMessage('Payment successful. OTP verify karte hi academy auto-create ho jayegi.');
+                    setMessage('Payment successful. Verify OTP to automatically create your academy.');
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'Payment failed');
                   }

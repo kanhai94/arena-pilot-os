@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const passwordRule = z.string().min(8).max(72);
 const otpCodeRule = z.string().regex(/^\d{6}$/, 'OTP must be 6 digits');
-const planNameRule = z.enum(['Starter', 'Growth', 'Pro']);
+const planNameRule = z.string().trim().min(2).max(120);
 
 export const registerTenantSchema = z.object({
   name: z.string().min(2).max(120),
