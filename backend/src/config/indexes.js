@@ -5,12 +5,14 @@ import { Payment } from '../models/payment.model.js';
 import { Notification } from '../models/notification.model.js';
 import { Tenant } from '../models/tenant.model.js';
 import { User } from '../models/user.model.js';
+import { AutomationLog } from '../modules/automations/automation.model.js';
 
 const INDEX_MODELS = [
   { name: 'Student', model: Student },
   { name: 'Attendance', model: Attendance },
   { name: 'Payment', model: Payment },
   { name: 'Notification', model: Notification },
+  { name: 'AutomationLog', model: AutomationLog },
   { name: 'Tenant', model: Tenant },
   { name: 'User', model: User }
 ];
@@ -45,4 +47,3 @@ export const ensureIndexes = async () => {
     );
   });
 };
-

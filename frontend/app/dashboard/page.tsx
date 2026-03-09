@@ -181,6 +181,20 @@ type AttendanceEntry = {
   date: string;
 };
 
+type AutomationType = 'feeReminder' | 'absenceAlert' | 'broadcast';
+type AutomationChannel = 'email' | 'whatsapp' | 'both';
+
+type AutomationStudentRow = {
+  studentId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  class?: string;
+  dueAmount?: number;
+  dueDate?: string;
+  lastAttendanceDate?: string;
+};
+
 type AttendanceByDateResponse = {
   items: AttendanceEntry[];
   pagination: {
@@ -755,6 +769,21 @@ export default function DashboardPage() {
   const [coachServerError, setCoachServerError] = useState('');
 
   const [broadcastText, setBroadcastText] = useState('Reminder: Recovery drills start 30 minutes early tomorrow.');
+  const [automationStep, setAutomationStep] = useState(1);
+  const [automationType, setAutomationType] = useState<AutomationType>('feeReminder');
+  const [automationDueDays, setAutomationDueDays] = useState('1');
+  const [automationCustomDueDays, setAutomationCustomDueDays] = useState('');
+  const [automationAbsenceMode, setAutomationAbsenceMode] = useState<'today' | 'streak'>('today');
+  const [automationAbsenceDays, setAutomationAbsenceDays] = useState('2');
+  const [automationClassFilter, setAutomationClassFilter] = useState<'all' | 'select'>('all');
+  const [automationSelectedClasses, setAutomationSelectedClasses] = useState<string[]>([]);
+  const [automationPreview, setAutomationPreview] = useState<AutomationStudentRow[]>([]);
+  const [automationSelectedStudents, setAutomationSelectedStudents] = useState<string[]>([]);
+  const [automationChannel, setAutomationChannel] = useState<AutomationChannel>('whatsapp');
+  const [automationMessage, setAutomationMessage] = useState(
+    'Hello {{studentName}}, your fee of ₹{{amount}} is due on {{dueDate}}. Please complete payment.'
+  );
+  const [automationLoading, setAutomationLoading] = useState(false);
   const [debugOutput, setDebugOutput] = useState('');
   const [adminTenantPlanFilter, setAdminTenantPlanFilter] = useState('all');
   const [adminTenantStatusFilter, setAdminTenantStatusFilter] = useState('all');
@@ -1740,6 +1769,444 @@ export default function DashboardPage() {
     setActiveTab(menuToTab[menu]);
     router.replace(`/dashboard?section=${menuToSectionSlug[menu]}`);
   };
+
+  const automationDuePresets = ['1', '5', '10'];
+  const automationDueDaysValue = useMemo(() => {
+    const raw = automationCustomDueDays.trim() ? automationCustomDueDays.trim() : automationDueDays.trim();
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.min(365, Math.floor(numeric));
+  }, [automationCustomDueDays, automationDueDays]);
+
+  const resetAutomationSelection = () => {
+    setAutomationPreview([]);
+    setAutomationSelectedStudents([]);
+  };
+
+  const setAutomationTemplateForType = (type: AutomationType) => {
+    if (type === 'feeReminder') {
+      setAutomationMessage('Hello {{studentName}}, your fee of ₹{{amount}} is due on {{dueDate}}. Please complete payment.');
+    } else if (type === 'absenceAlert') {
+      setAutomationMessage("Hello {{studentName}}, you were absent from today's class. Please attend next session.");
+    } else {
+      setAutomationMessage('Hello {{studentName}}, {{academyName}} has an update for you.');
+    }
+  };
+
+  const handleAutomationTypeChange = (type: AutomationType) => {
+    setAutomationType(type);
+    setAutomationStep(2);
+    resetAutomationSelection();
+    setAutomationTemplateForType(type);
+  };
+
+  const handleAutomationPreview = async () => {
+    if (!token) return;
+    setAutomationLoading(true);
+    resetAutomationSelection();
+
+    try {
+      if (automationType === 'feeReminder') {
+        if (!automationDueDaysValue) {
+          setToast('Enter a valid due window in days.');
+          return;
+        }
+
+        const response = await apiPostWithAuth<{ items: AutomationStudentRow[] }>(
+          '/automations/fee-reminder/preview',
+          {
+            dueInDays: automationDueDaysValue,
+            classIds: automationClassFilter === 'select' ? automationSelectedClasses : []
+          },
+          token
+        );
+        setAutomationPreview(response.items || []);
+      } else if (automationType === 'absenceAlert') {
+        const response = await apiPostWithAuth<{ items: AutomationStudentRow[] }>(
+          '/automations/absence-alert/preview',
+          {
+            mode: automationAbsenceMode,
+            days: automationAbsenceMode === 'streak' ? Number(automationAbsenceDays) : undefined,
+            classIds: automationClassFilter === 'select' ? automationSelectedClasses : []
+          },
+          token
+        );
+        setAutomationPreview(response.items || []);
+      } else {
+        const response = await apiPostWithAuth<{ items: AutomationStudentRow[] }>(
+          '/automations/broadcast/preview',
+          {
+            studentIds: []
+          },
+          token
+        );
+        setAutomationPreview(response.items || []);
+      }
+
+      setAutomationStep(4);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Failed to preview students');
+    } finally {
+      setAutomationLoading(false);
+    }
+  };
+
+  const handleAutomationSend = async () => {
+    if (!token) return;
+    if (automationPreview.length === 0) {
+      setToast('Preview students before sending automation.');
+      return;
+    }
+
+    const selectedIds = automationSelectedStudents.length > 0
+      ? automationSelectedStudents
+      : automationPreview.map((row) => row.studentId);
+
+    if (selectedIds.length === 0) {
+      setToast('Select at least one student.');
+      return;
+    }
+
+    if (!automationMessage.trim()) {
+      setToast('Message template is required.');
+      return;
+    }
+
+    setAutomationLoading(true);
+    try {
+      const payload = {
+        automationType,
+        channel: automationChannel,
+        messageTemplate: automationMessage.trim(),
+        studentIds: selectedIds,
+        dueInDays: automationType === 'feeReminder' ? automationDueDaysValue : undefined,
+        absenceMode: automationType === 'absenceAlert' ? automationAbsenceMode : undefined,
+        absenceDays: automationType === 'absenceAlert' && automationAbsenceMode === 'streak' ? Number(automationAbsenceDays) : undefined,
+        classIds: automationClassFilter === 'select' ? automationSelectedClasses : []
+      };
+
+      await runAction(() => apiPostWithAuth('/automations/send', payload, token), 'Automation queued successfully');
+      setAutomationStep(6);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Failed to send automation');
+    } finally {
+      setAutomationLoading(false);
+    }
+  };
+
+  const AutomationTypeSelector = () => (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 1 · Automation Type</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        {([
+          { id: 'feeReminder', title: 'Fee Reminder', desc: 'Target upcoming dues by window.' },
+          { id: 'absenceAlert', title: 'Absence Alert', desc: 'Notify absentees by class.' },
+          { id: 'broadcast', title: 'Broadcast', desc: 'Message selected learners.' }
+        ] as Array<{ id: AutomationType; title: string; desc: string }>).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => handleAutomationTypeChange(item.id)}
+            className={`rounded-2xl border px-4 py-3 text-left transition ${
+              automationType === item.id
+                ? 'border-indigo-500 bg-white text-indigo-900 shadow-sm'
+                : 'border-slate-200 bg-white/70 text-slate-700 hover:border-indigo-300'
+            }`}
+          >
+            <p className="text-sm font-semibold">{item.title}</p>
+            <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const AutomationFilterPanel = () => (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2 · Filters</p>
+
+      {automationType === 'feeReminder' ? (
+        <div className="mt-3 space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-600">Due in Days</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {automationDuePresets.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => {
+                    setAutomationCustomDueDays('');
+                    setAutomationDueDays(day);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    automationCustomDueDays.trim() === '' && automationDueDays === day
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 text-slate-600 hover:border-indigo-200'
+                  }`}
+                >
+                  {day} day
+                </button>
+              ))}
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1">
+                <span className="text-xs text-slate-500">Custom</span>
+                <input
+                  value={automationCustomDueDays}
+                  onChange={(e) => setAutomationCustomDueDays(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Days"
+                  className="w-14 border-0 bg-transparent text-xs font-semibold text-slate-700 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-600">Class Selection</p>
+            <div className="mt-2 flex gap-2">
+              {['all', 'select'].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setAutomationClassFilter(mode as 'all' | 'select')}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    automationClassFilter === mode
+                      ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {mode === 'all' ? 'All Classes' : 'Select Classes'}
+                </button>
+              ))}
+            </div>
+            {automationClassFilter === 'select' ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {academyClassRows.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() =>
+                      setAutomationSelectedClasses((prev) =>
+                        prev.includes(row.id) ? prev.filter((id) => id !== row.id) : [...prev, row.id]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      automationSelectedClasses.includes(row.id)
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {row.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {automationType === 'absenceAlert' ? (
+        <div className="mt-3 space-y-3">
+          <div className="flex gap-2">
+            {['today', 'streak'].map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAutomationAbsenceMode(mode as 'today' | 'streak')}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  automationAbsenceMode === mode
+                    ? 'border-rose-400 bg-rose-50 text-rose-700'
+                    : 'border-slate-200 text-slate-600'
+                }`}
+              >
+                {mode === 'today' ? 'Absent Today' : 'Absent X Days'}
+              </button>
+            ))}
+          </div>
+          {automationAbsenceMode === 'streak' ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Days</span>
+              <input
+                value={automationAbsenceDays}
+                onChange={(e) => setAutomationAbsenceDays(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold"
+              />
+            </div>
+          ) : null}
+          <div>
+            <p className="text-xs font-semibold text-slate-600">Class Selection</p>
+            <div className="mt-2 flex gap-2">
+              {['all', 'select'].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setAutomationClassFilter(mode as 'all' | 'select')}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    automationClassFilter === mode
+                      ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {mode === 'all' ? 'All Classes' : 'Select Classes'}
+                </button>
+              ))}
+            </div>
+            {automationClassFilter === 'select' ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {academyClassRows.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() =>
+                      setAutomationSelectedClasses((prev) =>
+                        prev.includes(row.id) ? prev.filter((id) => id !== row.id) : [...prev, row.id]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      automationSelectedClasses.includes(row.id)
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {row.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {automationType === 'broadcast' ? (
+        <div className="mt-3 text-xs text-slate-500">
+          Broadcast sends to all active students. You can deselect specific students in the preview step.
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={handleAutomationPreview}
+        disabled={automationLoading}
+        className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {automationLoading ? 'Loading students...' : 'Preview Students'}
+      </button>
+    </div>
+  );
+
+  const AutomationSendPanel = () => (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3 · Message</p>
+      <textarea
+        className="mt-3 h-36 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        value={automationMessage}
+        onChange={(e) => setAutomationMessage(e.target.value)}
+      />
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(['whatsapp', 'email', 'both'] as AutomationChannel[]).map((channel) => (
+          <button
+            key={channel}
+            type="button"
+            onClick={() => setAutomationChannel(channel)}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+              automationChannel === channel
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                : 'border-slate-200 text-slate-600'
+            }`}
+          >
+            {channel === 'both' ? 'Email + WhatsApp' : channel.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const StudentSelectionTable = () => (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4 · Students</p>
+          <p className="text-sm font-semibold text-slate-900">{automationPreview.length} matched</p>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setAutomationSelectedStudents(
+              automationSelectedStudents.length === automationPreview.length
+                ? []
+                : automationPreview.map((row) => row.studentId)
+            )
+          }
+          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold"
+        >
+          {automationSelectedStudents.length === automationPreview.length ? 'Clear All' : 'Select All'}
+        </button>
+      </div>
+
+      {automationPreview.length === 0 ? (
+        <p className="mt-3 text-xs text-slate-500">No students matched the current filters.</p>
+      ) : (
+        <div className="mt-3 max-h-[280px] overflow-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Select</th>
+                <th className="px-3 py-2">Student</th>
+                <th className="px-3 py-2">Class</th>
+                <th className="px-3 py-2">Due</th>
+                <th className="px-3 py-2">Contact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {automationPreview.map((row) => {
+                const isSelected = automationSelectedStudents.includes(row.studentId);
+                return (
+                  <tr key={row.studentId} className="border-t border-slate-100">
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() =>
+                          setAutomationSelectedStudents((prev) =>
+                            prev.includes(row.studentId)
+                              ? prev.filter((id) => id !== row.studentId)
+                              : [...prev, row.studentId]
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <p className="font-semibold text-slate-800">{row.name}</p>
+                      <p className="text-[11px] text-slate-500">{row.email || 'No email'}</p>
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{row.class || 'Unassigned'}</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {row.dueAmount !== undefined ? `₹${row.dueAmount}` : '-'}
+                      {row.dueDate ? <div className="text-[11px] text-slate-500">{row.dueDate}</div> : null}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{row.phone || '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {canSendReminders ? (
+        <button
+          type="button"
+          onClick={handleAutomationSend}
+          disabled={automationLoading || automationPreview.length === 0}
+          className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {automationLoading ? 'Sending...' : 'Send Automation'}
+        </button>
+      ) : (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+          Reminder actions are available for Admin or Staff.
+        </div>
+      )}
+    </div>
+  );
 
   const handleTabClick = (tab: TabId) => {
     if (tab === 'platform-control') {
@@ -5082,36 +5549,16 @@ export default function DashboardPage() {
           {!loading && activeTab === 'automations' ? (
             <div className="grid gap-4 xl:grid-cols-3">
               <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-2">
-                <h3 className="text-lg font-bold text-slate-900">Communication Automation Hub</h3>
-                <p className="mt-1 text-sm text-slate-600">Trigger fee reminders and broadcast messages directly from command deck.</p>
-                <textarea
-                  className="mt-3 h-24 w-full rounded-xl border border-slate-300 px-3 py-2"
-                  value={broadcastText}
-                  onChange={(e) => setBroadcastText(e.target.value)}
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {canSendReminders ? (
-                    <>
-                      <button
-                        disabled={actionLoading}
-                        onClick={() => runAction(() => apiPostWithAuth('/notifications/broadcast/send', { messageContent: broadcastText }, token), 'Broadcast queued')}
-                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                      >
-                        Send Broadcast
-                      </button>
-                      <button
-                        disabled={actionLoading}
-                        onClick={() => runAction(() => apiPostWithAuth('/notifications/fee-reminder/trigger', {}, token), 'Fee reminders triggered')}
-                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-                      >
-                        Trigger Fee Reminder
-                      </button>
-                    </>
-                  ) : (
-                    <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
-                      Reminder actions are available for Admin/Staff.
-                    </span>
-                  )}
+                <h3 className="text-lg font-bold text-slate-900">Automation Command Flow</h3>
+                <p className="mt-1 text-sm text-slate-600">Configure fee reminders, absence alerts, or broadcast outreach with targeted student selection.</p>
+
+                <div className="mt-4 space-y-4">
+                  <AutomationTypeSelector />
+                  <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                    <AutomationFilterPanel />
+                    <AutomationSendPanel />
+                  </div>
+                  <StudentSelectionTable />
                 </div>
 
                 <div className="mt-4 space-y-2">

@@ -145,3 +145,62 @@ export const sendOtpEmail = async ({ to, otpCode, purpose, expiryMinutes }) => {
   logger.warn({ to, purpose }, 'Email delivery failed for both SMTP and Brevo API');
   return { sent: false };
 };
+
+export const sendAutomationEmail = async ({ to, subject, text, html }) => {
+  const mailer = getTransporter();
+
+  if (mailer) {
+    try {
+      const sendMailPromise = mailer.sendMail({
+        from: env.EMAIL_FROM,
+        to,
+        subject,
+        text,
+        html
+      });
+      await withTimeout(sendMailPromise, SMTP_TIMEOUT_MS, `SMTP send timeout after ${SMTP_TIMEOUT_MS}ms`);
+      return { sent: true };
+    } catch (smtpError) {
+      logger.error({ err: smtpError, to }, 'SMTP email delivery failed; attempting Brevo API fallback');
+    }
+  }
+
+  if (!hasBrevoApiConfig) {
+    logger.warn({ to }, 'Email delivery failed (no Brevo API config)');
+    return { sent: false };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(env.BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'api-key': env.BREVO_API_KEY
+      },
+      body: JSON.stringify({
+        sender: {
+          name: env.EMAIL_FROM_NAME,
+          email: env.EMAIL_FROM
+        },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      logger.error({ statusCode: response.status, body, to }, 'Brevo API email delivery failed');
+      return { sent: false };
+    }
+
+    return { sent: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+};

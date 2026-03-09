@@ -26,6 +26,9 @@ export const createNotificationService = ({ repository, enqueueJob, whatsappAdap
   };
 
   return {
+    async sendCustomNotification({ tenantId, studentId = null, phoneNumber, messageType, messageContent }) {
+      return queueNotification({ tenantId, studentId, phoneNumber, messageType, messageContent });
+    },
     async triggerFeeReminderEvent(payload = {}) {
       const tenantId = resolveTenantId();
       const asOfDate = payload.asOfDate ? normalizeToUTCDate(payload.asOfDate) : new Date();
