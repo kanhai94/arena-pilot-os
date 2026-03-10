@@ -6,6 +6,7 @@ import { Notification } from '../models/notification.model.js';
 import { Tenant } from '../models/tenant.model.js';
 import { User } from '../models/user.model.js';
 import { AutomationLog } from '../modules/automations/automation.model.js';
+import { TenantIntegration } from '../modules/integrations/integration.model.js';
 
 const INDEX_MODELS = [
   { name: 'Student', model: Student },
@@ -13,6 +14,7 @@ const INDEX_MODELS = [
   { name: 'Payment', model: Payment },
   { name: 'Notification', model: Notification },
   { name: 'AutomationLog', model: AutomationLog },
+  { name: 'TenantIntegration', model: TenantIntegration },
   { name: 'Tenant', model: Tenant },
   { name: 'User', model: User }
 ];

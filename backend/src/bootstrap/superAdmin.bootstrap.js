@@ -21,6 +21,23 @@ export const ensureSuperAdminBootstrap = async () => {
     return;
   }
 
+  // Ensure only the configured SUPER_ADMIN_EMAIL retains SuperAdmin role.
+  const demotionResult = await User.updateMany(
+    { role: ROLES.SUPER_ADMIN, email: { $ne: email } },
+    {
+      $set: {
+        role: ROLES.ADMIN,
+        permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.ADMIN]
+      }
+    }
+  );
+  if (demotionResult?.modifiedCount) {
+    logger.info(
+      { demotedCount: demotionResult.modifiedCount, superAdminEmail: email },
+      'Demoted stale SuperAdmin accounts'
+    );
+  }
+
   const existingUser = await User.findOne({ email }).select('+passwordHash').lean();
   if (existingUser) {
     if (existingUser.role !== ROLES.SUPER_ADMIN) {

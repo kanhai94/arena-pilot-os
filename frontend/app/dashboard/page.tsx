@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiDeleteWithAuth, apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
+import { IntegrationsPage } from './components/integrations/IntegrationsPage';
+import type { EmailIntegrationForm } from './components/integrations/EmailIntegrationCard';
+import type { SmsIntegrationForm } from './components/integrations/SmsIntegrationCard';
+import type { WhatsappIntegrationForm } from './components/integrations/WhatsappIntegrationCard';
+import type { RazorpayIntegrationForm } from './components/integrations/RazorpayIntegrationCard';
 
 type UserSession = {
   id: string;
@@ -246,6 +251,15 @@ type AdminRazorpaySettings = {
   updatedAt: string | null;
 };
 
+type IntegrationStatus = 'connected' | 'not_configured';
+
+type TenantIntegrationStatus = {
+  email: IntegrationStatus;
+  sms: IntegrationStatus;
+  whatsapp: IntegrationStatus;
+  razorpay: IntegrationStatus;
+};
+
 type DashboardOverview = {
   activeStudents: number;
   newStudentsThisMonth: number;
@@ -267,7 +281,8 @@ const leftMenu = [
   'Finance Deck',
   'Alert Center',
   'Growth Reports',
-  'Access Control'
+  'Access Control',
+  'Integrations'
 ] as const;
 type MenuItem = (typeof leftMenu)[number];
 
@@ -283,7 +298,8 @@ const menuToTab: Record<MenuItem, TabId> = {
   'Finance Deck': 'studio',
   'Alert Center': 'automations',
   'Growth Reports': 'pulse',
-  'Access Control': 'academy-pro'
+  'Access Control': 'academy-pro',
+  Integrations: 'academy-pro'
 };
 
 const menuToSectionSlug: Record<MenuItem, string> = {
@@ -294,7 +310,8 @@ const menuToSectionSlug: Record<MenuItem, string> = {
   'Finance Deck': 'finance-deck',
   'Alert Center': 'alert-center',
   'Growth Reports': 'growth-reports',
-  'Access Control': 'academy-pro-coach'
+  'Access Control': 'academy-pro-coach',
+  Integrations: 'integrations'
 };
 
 const sectionSlugToMenu: Record<string, MenuItem> = Object.fromEntries(
@@ -821,6 +838,32 @@ export default function DashboardPage() {
   const [integrationSmtpUser, setIntegrationSmtpUser] = useState('');
   const [integrationSmtpPass, setIntegrationSmtpPass] = useState('');
   const [integrationSmtpFrom, setIntegrationSmtpFrom] = useState('');
+  const [tenantIntegrationEmail, setTenantIntegrationEmail] = useState<EmailIntegrationForm>({
+    type: 'smtp',
+    smtp: { host: '', port: '587', user: '', password: '', fromEmail: '' },
+    api: { endpoint: '', apiKey: '', headers: '', exampleCurl: '' }
+  });
+  const [tenantIntegrationSms, setTenantIntegrationSms] = useState<SmsIntegrationForm>({
+    type: 'api',
+    api: { endpoint: '', apiKey: '', headers: '' },
+    curlTemplate: ''
+  });
+  const [tenantIntegrationWhatsapp, setTenantIntegrationWhatsapp] = useState<WhatsappIntegrationForm>({
+    type: 'api',
+    api: { endpoint: '', apiKey: '', headers: '' },
+    curlTemplate: ''
+  });
+  const [tenantIntegrationRazorpay, setTenantIntegrationRazorpay] = useState<RazorpayIntegrationForm>({
+    keyId: '',
+    secret: ''
+  });
+  const [tenantIntegrationStatus, setTenantIntegrationStatus] = useState<TenantIntegrationStatus>({
+    email: 'not_configured',
+    sms: 'not_configured',
+    whatsapp: 'not_configured',
+    razorpay: 'not_configured'
+  });
+  const [tenantIntegrationLoading, setTenantIntegrationLoading] = useState(false);
 
   const safeFetch = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try {
@@ -851,6 +894,7 @@ export default function DashboardPage() {
   const canViewBatches = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canMarkAttendance = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canSendReminders = isSuperAdmin || isAdmin || isStaff;
+  const canManageIntegrations = isAdmin;
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
   const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
@@ -1007,6 +1051,62 @@ export default function DashboardPage() {
     );
     if (!data) return;
     setIntegrationRazorpayKeyId(data.keyIdMasked || '');
+  };
+
+  const loadTenantIntegrations = async (accessToken: string) => {
+    if (!isAdmin) return;
+    setTenantIntegrationLoading(true);
+    const data = await safeFetch<any>(
+      () => apiGetWithAuth('/integrations', accessToken),
+      null
+    );
+    if (data) {
+      setTenantIntegrationEmail({
+        type: data.email?.type === 'api' ? 'api' : 'smtp',
+        smtp: {
+          host: data.email?.smtp?.host || '',
+          port: data.email?.smtp?.port ? String(data.email.smtp.port) : '587',
+          user: data.email?.smtp?.user || '',
+          password: '',
+          fromEmail: data.email?.smtp?.fromEmail || ''
+        },
+        api: {
+          endpoint: data.email?.api?.endpoint || '',
+          apiKey: '',
+          headers: '',
+          exampleCurl: data.email?.api?.exampleCurl || ''
+        }
+      });
+      setTenantIntegrationSms({
+        type: data.sms?.type === 'curl' ? 'curl' : 'api',
+        api: {
+          endpoint: data.sms?.api?.endpoint || '',
+          apiKey: '',
+          headers: ''
+        },
+        curlTemplate: ''
+      });
+      setTenantIntegrationWhatsapp({
+        type: data.whatsapp?.type === 'curl' ? 'curl' : 'api',
+        api: {
+          endpoint: data.whatsapp?.api?.endpoint || '',
+          apiKey: '',
+          headers: ''
+        },
+        curlTemplate: ''
+      });
+      setTenantIntegrationRazorpay({
+        keyId: data.razorpay?.keyId || '',
+        secret: ''
+      });
+      setTenantIntegrationStatus({
+        email: data.status?.email || 'not_configured',
+        sms: data.status?.sms || 'not_configured',
+        whatsapp: data.status?.whatsapp || 'not_configured',
+        razorpay: data.status?.razorpay || 'not_configured'
+      });
+    }
+    setTenantIntegrationLoading(false);
   };
 
   const loadDashboardData = async (accessToken: string, currentUser?: UserSession | null) => {
@@ -1189,6 +1289,12 @@ export default function DashboardPage() {
       setPlatformControlExpanded(false);
       router.replace('/dashboard?section=student-roster');
     }
+
+    if (section === 'integrations' && normalizeRole(user.role) !== 'ADMIN') {
+      setActiveTab('studio');
+      setActiveMenu('Student Roster');
+      router.replace('/dashboard?section=student-roster');
+    }
   }, [router, user]);
 
   useEffect(() => {
@@ -1203,6 +1309,13 @@ export default function DashboardPage() {
     loadRazorpaySettings(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isSuperAdmin, adminTenantPlanFilter, adminTenantStatusFilter]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    if (activeMenu !== 'Integrations') return;
+    loadTenantIntegrations(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAdmin, activeMenu]);
 
   useEffect(() => {
     if (!token) return;
@@ -1757,6 +1870,23 @@ export default function DashboardPage() {
       setShowCoachComposer(false);
       setActiveAttendanceBatch(null);
       router.replace('/dashboard?section=academy-pro-coach');
+      return;
+    }
+
+    if (menu === 'Integrations') {
+      if (!canManageIntegrations) {
+        setToast('Only admin can manage integrations.');
+        return;
+      }
+      setAcademyProExpanded(false);
+      setActiveMenu('Integrations');
+      setActiveTab('academy-pro');
+      setShowPlanComposer(false);
+      setShowClassComposer(false);
+      setShowClientComposer(false);
+      setShowCoachComposer(false);
+      setActiveAttendanceBatch(null);
+      router.replace('/dashboard?section=integrations');
       return;
     }
 
@@ -2537,6 +2667,67 @@ export default function DashboardPage() {
       },
       'Integration settings saved'
     );
+  };
+
+  const saveTenantIntegrations = () => {
+    if (!canManageIntegrations) {
+      setToast('Only admin can manage integrations.');
+      return;
+    }
+
+    const payload: Record<string, any> = {};
+
+    payload.email = { type: tenantIntegrationEmail.type };
+    if (tenantIntegrationEmail.type === 'smtp') {
+      const smtp: Record<string, any> = {};
+      if (tenantIntegrationEmail.smtp.host.trim()) smtp.host = tenantIntegrationEmail.smtp.host.trim();
+      if (tenantIntegrationEmail.smtp.port.trim()) smtp.port = Number(tenantIntegrationEmail.smtp.port.trim());
+      if (tenantIntegrationEmail.smtp.user.trim()) smtp.user = tenantIntegrationEmail.smtp.user.trim();
+      if (tenantIntegrationEmail.smtp.password.trim()) smtp.password = tenantIntegrationEmail.smtp.password.trim();
+      if (tenantIntegrationEmail.smtp.fromEmail.trim()) smtp.fromEmail = tenantIntegrationEmail.smtp.fromEmail.trim();
+      if (Object.keys(smtp).length > 0) payload.email.smtp = smtp;
+    } else {
+      const api: Record<string, any> = {};
+      if (tenantIntegrationEmail.api.endpoint.trim()) api.endpoint = tenantIntegrationEmail.api.endpoint.trim();
+      if (tenantIntegrationEmail.api.apiKey.trim()) api.apiKey = tenantIntegrationEmail.api.apiKey.trim();
+      if (tenantIntegrationEmail.api.headers.trim()) api.headers = tenantIntegrationEmail.api.headers.trim();
+      if (tenantIntegrationEmail.api.exampleCurl.trim()) api.exampleCurl = tenantIntegrationEmail.api.exampleCurl.trim();
+      if (Object.keys(api).length > 0) payload.email.api = api;
+    }
+
+    payload.sms = { type: tenantIntegrationSms.type };
+    if (tenantIntegrationSms.type === 'api') {
+      const api: Record<string, any> = {};
+      if (tenantIntegrationSms.api.endpoint.trim()) api.endpoint = tenantIntegrationSms.api.endpoint.trim();
+      if (tenantIntegrationSms.api.apiKey.trim()) api.apiKey = tenantIntegrationSms.api.apiKey.trim();
+      if (tenantIntegrationSms.api.headers.trim()) api.headers = tenantIntegrationSms.api.headers.trim();
+      if (Object.keys(api).length > 0) payload.sms.api = api;
+    } else if (tenantIntegrationSms.curlTemplate.trim()) {
+      payload.sms.curlTemplate = tenantIntegrationSms.curlTemplate.trim();
+    }
+
+    payload.whatsapp = { type: tenantIntegrationWhatsapp.type };
+    if (tenantIntegrationWhatsapp.type === 'api') {
+      const api: Record<string, any> = {};
+      if (tenantIntegrationWhatsapp.api.endpoint.trim()) api.endpoint = tenantIntegrationWhatsapp.api.endpoint.trim();
+      if (tenantIntegrationWhatsapp.api.apiKey.trim()) api.apiKey = tenantIntegrationWhatsapp.api.apiKey.trim();
+      if (tenantIntegrationWhatsapp.api.headers.trim()) api.headers = tenantIntegrationWhatsapp.api.headers.trim();
+      if (Object.keys(api).length > 0) payload.whatsapp.api = api;
+    } else if (tenantIntegrationWhatsapp.curlTemplate.trim()) {
+      payload.whatsapp.curlTemplate = tenantIntegrationWhatsapp.curlTemplate.trim();
+    }
+
+    if (tenantIntegrationRazorpay.keyId.trim() || tenantIntegrationRazorpay.secret.trim()) {
+      payload.razorpay = {};
+      if (tenantIntegrationRazorpay.keyId.trim()) payload.razorpay.keyId = tenantIntegrationRazorpay.keyId.trim();
+      if (tenantIntegrationRazorpay.secret.trim()) payload.razorpay.secret = tenantIntegrationRazorpay.secret.trim();
+    }
+
+    runAction(() => apiPutWithAuth('/integrations', payload, token), 'Integrations saved').then((ok) => {
+      if (ok) {
+        loadTenantIntegrations(token);
+      }
+    });
   };
 
   const openPlanComposer = () => {
@@ -3329,6 +3520,9 @@ export default function DashboardPage() {
 
           <div className="mt-4 space-y-1.5">
             {leftMenu.map((item) => {
+              if (item === 'Integrations' && !canManageIntegrations) {
+                return null;
+              }
               if (item === 'Academy Pro') {
                 return (
                   <div key={item} className="rounded-xl border border-slate-200 bg-slate-50/80 p-1.5">
@@ -3700,8 +3894,27 @@ export default function DashboardPage() {
           ) : null}
 
           {!loading && activeTab === 'academy-pro' ? (
-            <div className="grid gap-4 xl:grid-cols-12">
-              {activeAcademyPro === 'plans' ? (
+            activeMenu === 'Integrations' ? (
+              <div className="grid gap-4 xl:grid-cols-12">
+                <div className="xl:col-span-12">
+                  <IntegrationsPage
+                    email={tenantIntegrationEmail}
+                    sms={tenantIntegrationSms}
+                    whatsapp={tenantIntegrationWhatsapp}
+                    razorpay={tenantIntegrationRazorpay}
+                    status={tenantIntegrationStatus}
+                    onEmailChange={setTenantIntegrationEmail}
+                    onSmsChange={setTenantIntegrationSms}
+                    onWhatsappChange={setTenantIntegrationWhatsapp}
+                    onRazorpayChange={setTenantIntegrationRazorpay}
+                    onSave={saveTenantIntegrations}
+                    saving={actionLoading || tenantIntegrationLoading}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-12">
+                {activeAcademyPro === 'plans' ? (
                 <>
                   {showPlanComposer ? (
                     <article className="rounded-2xl border border-slate-200 bg-white p-6 xl:col-span-12">
@@ -5339,7 +5552,8 @@ export default function DashboardPage() {
                 </article>
               ) : null}
             </div>
-          ) : null}
+          )
+        ) : null}
 
           {!loading && activeTab === 'studio' ? (
             <div className="space-y-4">

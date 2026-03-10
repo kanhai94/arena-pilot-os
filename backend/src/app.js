@@ -13,6 +13,7 @@ import { attendanceRouter } from './modules/attendance/attendance.routes.js';
 import { feeRouter } from './modules/fees/fee.routes.js';
 import { notificationRouter } from './modules/notifications/notification.routes.js';
 import { automationRouter } from './modules/automations/automation.routes.js';
+import { integrationRouter } from './modules/integrations/integration.routes.js';
 import { teamRouter } from './modules/team/team.routes.js';
 import { subscriptionRouter } from './modules/subscription/subscription.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
@@ -93,6 +94,7 @@ export const createApp = () => {
   app.use('/api/v1/fees', feeRouter);
   app.use('/api/v1/notifications', notificationRouter);
   app.use('/api/v1/automations', automationRouter);
+  app.use('/api/v1/integrations', integrationRouter);
   app.use('/api/v1/team-members', teamRouter);
   app.use('/api/v1/dashboard', dashboardRouter);
 

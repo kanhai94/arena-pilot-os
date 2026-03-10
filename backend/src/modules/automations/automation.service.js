@@ -23,7 +23,7 @@ const renderTemplate = (template, variables) => {
   }, template);
 };
 
-export const createAutomationService = ({ repository, notificationService }) => {
+export const createAutomationService = ({ repository, notificationService, integrationService }) => {
   const resolveTenantId = () => TenantContext.requireTenantId();
 
   const buildFeeReminderRows = async ({ dueInDays, studentIds = [], classIds = [] }) => {
@@ -102,12 +102,24 @@ export const createAutomationService = ({ repository, notificationService }) => 
 
   const sendWhatsapp = async ({ tenantId, studentId, phoneNumber, messageType, messageContent }) => {
     if (!phoneNumber) return { sent: false };
+    if (integrationService?.sendWhatsappWithFallback) {
+      return integrationService.sendWhatsappWithFallback({
+        tenantId,
+        studentId,
+        phoneNumber,
+        messageType,
+        messageContent
+      });
+    }
     await notificationService.sendCustomNotification({ tenantId, studentId, phoneNumber, messageType, messageContent });
     return { sent: true };
   };
 
-  const sendEmail = async ({ to, subject, text, html }) => {
+  const sendEmail = async ({ tenantId, to, subject, text, html }) => {
     if (!to) return { sent: false };
+    if (integrationService?.sendEmailWithFallback) {
+      return integrationService.sendEmailWithFallback({ tenantId, to, subject, text, html });
+    }
     return sendAutomationEmail({ to, subject, text, html });
   };
 
@@ -237,7 +249,7 @@ export const createAutomationService = ({ repository, notificationService }) => 
             const subject = `${academyName} update`;
             const text = message;
             const html = `<div style="font-family: Arial, sans-serif; color: #0f172a;">${message.replaceAll('\n', '<br/>')}</div>`;
-            const sent = await sendEmail({ to: student.email, subject, text, html });
+            const sent = await sendEmail({ tenantId, to: student.email, subject, text, html });
             if (sent?.sent) {
               results.email += 1;
             } else {

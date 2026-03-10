@@ -10,9 +10,14 @@ import { createAutomationController } from './automation.controller.js';
 import { createAutomationService } from './automation.service.js';
 import { automationRepository } from './automation.repository.js';
 import { notificationService } from '../notifications/notification.container.js';
+import { integrationService } from '../integrations/integration.container.js';
 
 const automationRouter = Router();
-const service = createAutomationService({ repository: automationRepository, notificationService });
+const service = createAutomationService({
+  repository: automationRepository,
+  notificationService,
+  integrationService
+});
 const controller = createAutomationController(service);
 
 automationRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
