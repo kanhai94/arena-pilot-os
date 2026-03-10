@@ -4577,12 +4577,12 @@ export default function DashboardPage() {
                       <select
                         value={scheduleBatchFilter}
                         onChange={(e) => setScheduleBatchFilter(e.target.value)}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 truncate"
                       >
                         <option value="all">All classes</option>
                         {academyClassRows.map((row) => (
                           <option key={row.id} value={row.id}>
-                            {row.title}
+                            {row.title.length > 42 ? `${row.title.slice(0, 42)}…` : row.title}
                           </option>
                         ))}
                       </select>
@@ -4610,7 +4610,11 @@ export default function DashboardPage() {
                         ) : null}
                         {scheduleRows.map((row) => (
                           <tr key={row.id} className="border-b border-slate-100">
-                            <td className="px-2 py-2 font-semibold text-slate-900">{row.title}</td>
+                            <td className="px-2 py-2 font-semibold text-slate-900">
+                              <span className="block max-w-[320px] truncate" title={row.title}>
+                                {row.title}
+                              </span>
+                            </td>
                             <td className="px-2 py-2 text-slate-700">{row.scheduleDays}</td>
                             <td className="px-2 py-2 text-slate-700">{row.timing}</td>
                             <td className="px-2 py-2 text-slate-700">{row.coachName}</td>
