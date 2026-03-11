@@ -61,7 +61,8 @@ const whatsappSchema = z
 const razorpaySchema = z
   .object({
     keyId: z.string().min(4).optional(),
-    secret: z.string().min(4).optional()
+    secret: z.string().min(4).optional(),
+    webhookSecret: z.string().min(4).optional()
   })
   .strict()
   .optional();

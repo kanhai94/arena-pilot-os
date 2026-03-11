@@ -3,6 +3,7 @@ import React from 'react';
 export type RazorpayIntegrationForm = {
   keyId: string;
   secret: string;
+  webhookSecret: string;
 };
 
 type Status = 'connected' | 'not_configured';
@@ -43,6 +44,13 @@ export const RazorpayIntegrationCard: React.FC<Props> = ({ value, status, onChan
           placeholder="Razorpay Secret (leave blank to keep current)"
           type="password"
           className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={value.webhookSecret}
+          onChange={(e) => onChange({ ...value, webhookSecret: e.target.value })}
+          placeholder="Webhook Secret (leave blank to keep current)"
+          type="password"
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
         />
       </div>
     </section>

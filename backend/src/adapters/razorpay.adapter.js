@@ -98,15 +98,16 @@ export const createTenantOrder = async ({ tenantId, amount, currency, receipt, n
   });
 };
 
-export const verifyRazorpayWebhookSignature = ({ rawBody, signature }) => {
-  if (!env.RAZORPAY_WEBHOOK_SECRET) {
+const computeWebhookSignature = (secret, rawBody) =>
+  crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex');
+
+export const verifyRazorpayWebhookSignature = ({ rawBody, signature, secret }) => {
+  const secretToUse = secret || env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secretToUse) {
     throw new AppError('Razorpay webhook secret is not configured', 503);
   }
 
-  const expected = crypto
-    .createHmac('sha256', env.RAZORPAY_WEBHOOK_SECRET)
-    .update(rawBody || '')
-    .digest('hex');
+  const expected = computeWebhookSignature(secretToUse, rawBody);
 
   if (!signature || expected.length !== signature.length) {
     return false;

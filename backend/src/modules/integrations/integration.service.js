@@ -142,7 +142,8 @@ const buildMaskedResponse = (record) => {
     },
     razorpay: {
       keyId: record.razorpay?.keyId || null,
-      secret: mask(record.razorpay?.secretEnc)
+      secret: mask(record.razorpay?.secretEnc),
+      webhookSecret: mask(record.razorpay?.webhookSecretEnc)
     },
     status: {
       email: isEmailConfigured(record.email) ? 'connected' : 'not_configured',
@@ -234,6 +235,9 @@ const buildIntegrationPayload = (existing, payload) => {
     if (payload.razorpay.keyId) razorpay.keyId = safeTrim(payload.razorpay.keyId);
     if (payload.razorpay.secret) {
       razorpay.secretEnc = encryptSecret(safeTrim(payload.razorpay.secret));
+    }
+    if (payload.razorpay.webhookSecret) {
+      razorpay.webhookSecretEnc = encryptSecret(safeTrim(payload.razorpay.webhookSecret));
     }
     next.razorpay = razorpay;
   }
@@ -328,6 +332,13 @@ export const createIntegrationService = (repository, dependencies = {}) => {
         decoded.razorpay.secret = decryptSecret(decoded.razorpay.secretEnc);
       } catch {
         decoded.razorpay.secret = '';
+      }
+    }
+    if (decoded.razorpay?.webhookSecretEnc) {
+      try {
+        decoded.razorpay.webhookSecret = decryptSecret(decoded.razorpay.webhookSecretEnc);
+      } catch {
+        decoded.razorpay.webhookSecret = '';
       }
     }
 

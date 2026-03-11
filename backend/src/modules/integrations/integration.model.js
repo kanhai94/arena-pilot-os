@@ -61,7 +61,8 @@ const whatsappIntegrationSchema = new mongoose.Schema(
 const razorpayIntegrationSchema = new mongoose.Schema(
   {
     keyId: { type: String, default: '' },
-    secretEnc: { type: String, default: '' }
+    secretEnc: { type: String, default: '' },
+    webhookSecretEnc: { type: String, default: '' }
   },
   { _id: false }
 );

@@ -855,7 +855,8 @@ export default function DashboardPage() {
   });
   const [tenantIntegrationRazorpay, setTenantIntegrationRazorpay] = useState<RazorpayIntegrationForm>({
     keyId: '',
-    secret: ''
+    secret: '',
+    webhookSecret: ''
   });
   const [tenantIntegrationStatus, setTenantIntegrationStatus] = useState<TenantIntegrationStatus>({
     email: 'not_configured',
@@ -1097,7 +1098,8 @@ export default function DashboardPage() {
       });
       setTenantIntegrationRazorpay({
         keyId: data.razorpay?.keyId || '',
-        secret: ''
+        secret: '',
+        webhookSecret: ''
       });
       setTenantIntegrationStatus({
         email: data.status?.email || 'not_configured',
@@ -2717,10 +2719,17 @@ export default function DashboardPage() {
       payload.whatsapp.curlTemplate = tenantIntegrationWhatsapp.curlTemplate.trim();
     }
 
-    if (tenantIntegrationRazorpay.keyId.trim() || tenantIntegrationRazorpay.secret.trim()) {
+    if (
+      tenantIntegrationRazorpay.keyId.trim() ||
+      tenantIntegrationRazorpay.secret.trim() ||
+      tenantIntegrationRazorpay.webhookSecret.trim()
+    ) {
       payload.razorpay = {};
       if (tenantIntegrationRazorpay.keyId.trim()) payload.razorpay.keyId = tenantIntegrationRazorpay.keyId.trim();
       if (tenantIntegrationRazorpay.secret.trim()) payload.razorpay.secret = tenantIntegrationRazorpay.secret.trim();
+      if (tenantIntegrationRazorpay.webhookSecret.trim()) {
+        payload.razorpay.webhookSecret = tenantIntegrationRazorpay.webhookSecret.trim();
+      }
     }
 
     runAction(() => apiPutWithAuth('/integrations', payload, token), 'Integrations saved').then((ok) => {
