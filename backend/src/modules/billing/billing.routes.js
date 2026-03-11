@@ -16,6 +16,11 @@ billingRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware);
 
 billingRouter.post('/plans', roleMiddleware(ROLES.SUPER_ADMIN), billingController.createPlan);
 billingRouter.post(
+  '/orders',
+  roleMiddleware(ROLES.ADMIN, ROLES.STAFF),
+  billingController.createTenantOrder
+);
+billingRouter.post(
   '/subscribe',
   roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN),
   billingController.subscribeTenant

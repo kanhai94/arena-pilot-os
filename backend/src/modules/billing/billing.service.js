@@ -1,8 +1,14 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { paymentLogger, webhookLogger } from '../../config/logger.js';
-import { verifyRazorpayWebhookSignature } from '../../adapters/razorpay.adapter.js';
+import {
+  createTenantOrder as createTenantRazorpayOrder,
+  getRazorpayPublicKeyId,
+  verifyRazorpayWebhookSignature
+} from '../../adapters/razorpay.adapter.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
+import { TenantIntegration } from '../integrations/integration.model.js';
+import { decryptSecret } from '../../utils/secretCipher.js';
 
 const PLAN_LIMIT_ERROR_CODE = 'PLAN_LIMIT_REACHED';
 const PLAN_LIMIT_MESSAGE = 'Student limit reached. Upgrade your plan.';
@@ -147,6 +153,38 @@ export const createBillingService = (repository, dependencies = {}) => {
       }
     },
 
+    async createTenantOrder(payload) {
+      const tenantId = resolveTenantId();
+      const amountInPaise = Math.round(payload.amount * 100);
+      if (!Number.isFinite(amountInPaise) || amountInPaise <= 0) {
+        throw new AppError('Invalid amount', StatusCodes.BAD_REQUEST);
+      }
+
+      const currency = payload.currency || 'INR';
+      const notes = {
+        ...(payload.notes || {}),
+        tenantId
+      };
+      const receipt = payload.receipt || `tenant-${tenantId}-${Date.now()}`;
+      const order = await createTenantRazorpayOrder({
+        tenantId,
+        amount: amountInPaise,
+        currency,
+        receipt,
+        notes
+      });
+      const keyId = await getRazorpayPublicKeyId({ tenantId, preferTenant: true });
+
+      return {
+        orderId: order.id,
+        amount: amountInPaise,
+        currency,
+        receipt,
+        keyId,
+        notes
+      };
+    },
+
     async getRegistrationPlanQuote(planName) {
       await ensureDefaultPlans();
 
@@ -173,7 +211,25 @@ export const createBillingService = (repository, dependencies = {}) => {
       const tenantIdFromNotes = notes.tenantId || notes.tenant_id || null;
 
       try {
-        const signatureValid = verifyRazorpayWebhookSignature({ rawBody, signature });
+        let tenantWebhookSecret = null;
+        if (tenantIdFromNotes) {
+          const record = await TenantIntegration.findOne({ tenantId: tenantIdFromNotes })
+            .select({ 'razorpay.webhookSecretEnc': 1 })
+            .lean();
+          if (record?.razorpay?.webhookSecretEnc) {
+            try {
+              tenantWebhookSecret = decryptSecret(record.razorpay.webhookSecretEnc);
+            } catch {
+              tenantWebhookSecret = null;
+            }
+          }
+        }
+
+        const signatureValid = verifyRazorpayWebhookSignature({
+          rawBody,
+          signature,
+          secret: tenantWebhookSecret || undefined
+        });
         if (!signatureValid) {
           webhookLogger.warn(
             {
@@ -206,7 +262,7 @@ export const createBillingService = (repository, dependencies = {}) => {
       }
 
       try {
-        if (eventType !== 'payment.captured') {
+        if (!['payment.captured', 'payment.failed'].includes(eventType)) {
           webhookLogger.info(
             {
               tenantId: null,
@@ -234,6 +290,29 @@ export const createBillingService = (repository, dependencies = {}) => {
           return {
             accepted: true,
             status: 'processing_error'
+          };
+        }
+
+        if (eventType === 'payment.failed') {
+          webhookLogger.info(
+            {
+              tenantId: tenantIdFromNotes || null,
+              eventType,
+              razorpayPaymentId,
+              status: 'failed'
+            },
+            'Razorpay payment failed webhook received'
+          );
+
+          if (tenantIdFromNotes) {
+            await repository.updateTenantPaymentSnapshot(tenantIdFromNotes, {
+              paymentStatus: 'failed'
+            });
+          }
+
+          return {
+            accepted: true,
+            status: 'failed'
           };
         }
 

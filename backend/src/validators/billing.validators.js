@@ -38,6 +38,23 @@ export const upgradePlanSchema = z
   })
   .strict();
 
+export const createTenantOrderSchema = z
+  .object({
+    amount: z.coerce.number().positive(),
+    currency: z.string().min(3).max(5).default('INR'),
+    receipt: z.string().min(3).max(64).optional(),
+    notes: z
+      .object({
+        studentId: z.string().regex(objectIdRegex, 'Invalid studentId').optional(),
+        subscriptionId: z.string().regex(objectIdRegex, 'Invalid subscriptionId').optional(),
+        planId: z.string().regex(objectIdRegex, 'Invalid planId').optional(),
+        purpose: z.string().max(100).optional()
+      })
+      .partial()
+      .optional()
+  })
+  .strict();
+
 export const parseOrThrow = (schema, payload) => {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {

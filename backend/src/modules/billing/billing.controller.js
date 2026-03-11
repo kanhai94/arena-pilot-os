@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { apiSuccess } from '../../utils/apiResponse.js';
 import {
   createPlanSchema,
+  createTenantOrderSchema,
   parseOrThrow,
   subscribeTenantSchema,
   upgradePlanSchema
@@ -26,6 +27,16 @@ export const createBillingController = (service) => {
       try {
         const payload = parseOrThrow(createPlanSchema, req.body);
         const data = await service.createPlan(payload);
+        return apiSuccess(res, data, StatusCodes.CREATED);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    createTenantOrder: async (req, res, next) => {
+      try {
+        const payload = parseOrThrow(createTenantOrderSchema, req.body);
+        const data = await service.createTenantOrder(payload);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
