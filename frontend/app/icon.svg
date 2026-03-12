@@ -35,12 +35,12 @@
 
   <rect width="512" height="512" rx="104" fill="url(#bg)"/>
   <g filter="url(#softShadow)">
-    <rect x="44" y="44" width="424" height="424" rx="64" stroke="url(#frame)" stroke-opacity="0.72" stroke-width="3.5"/>
-    <path d="M58 430C66 404 84 378 118 360" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"/>
-    <path d="M50 450C62 414 86 382 132 352" stroke="url(#accent)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+    <rect x="28" y="28" width="456" height="456" rx="72" stroke="url(#frame)" stroke-opacity="0.74" stroke-width="4"/>
+    <path d="M42 446C54 406 78 372 132 340" stroke="url(#accent)" stroke-width="16" stroke-linecap="round"/>
+    <path d="M34 470C50 424 78 386 146 344" stroke="url(#accent)" stroke-width="8" stroke-linecap="round" opacity="0.92"/>
   </g>
 
-  <g transform="translate(48 108)">
+  <g transform="translate(24 76) scale(1.18)">
     <circle cx="124" cy="124" r="108" fill="#F5FAFF"/>
     <circle cx="124" cy="124" r="108" fill="url(#bg)" opacity="0.08"/>
     <path d="M124 56L162 82L150 128H98L86 82L124 56Z" fill="#0F172A"/>
@@ -52,11 +52,12 @@
     <circle cx="124" cy="124" r="106.5" stroke="#2BDFFF" stroke-opacity="0.42" stroke-width="3"/>
   </g>
 
-  <g transform="translate(296 120)">
-    <path d="M6 222H170" stroke="url(#accent)" stroke-width="7" stroke-linecap="round" opacity="0.72"/>
-    <rect x="26" y="118" width="32" height="104" rx="6" fill="url(#bar1)"/>
-    <rect x="98" y="64" width="54" height="158" rx="7" fill="url(#bar2)"/>
-    <path d="M6 112L66 66L94 84L164 12" stroke="#EFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" filter="url(#greenGlow)"/>
-    <path d="M140 18L164 12L156 36" stroke="#F8FAFC" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(300 96) scale(1.06)">
+    <path d="M6 222H170" stroke="url(#accent)" stroke-width="8" stroke-linecap="round" opacity="0.78"/>
+    <rect x="14" y="122" width="34" height="100" rx="6" fill="url(#bar1)"/>
+    <rect x="70" y="86" width="40" height="136" rx="7" fill="url(#bar1)"/>
+    <rect x="124" y="34" width="56" height="188" rx="7" fill="url(#bar2)"/>
+    <path d="M6 118L68 68L96 86L176 6" stroke="#EFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" filter="url(#greenGlow)"/>
+    <path d="M148 14L176 6L166 34" stroke="#F8FAFC" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>
