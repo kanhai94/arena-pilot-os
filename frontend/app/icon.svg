@@ -1,0 +1,63 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fieldStroke" x1="48" y1="56" x2="464" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2BE8FF"/>
+      <stop offset="1" stop-color="#57FF58"/>
+    </linearGradient>
+    <linearGradient id="barA" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#2BE8FF"/>
+      <stop offset="1" stop-color="#0B91D6"/>
+    </linearGradient>
+    <linearGradient id="barB" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#3AF2FF"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <linearGradient id="barC" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#B7FF7A"/>
+      <stop offset="1" stop-color="#3BEA59"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(430 84) rotate(131.634) scale(416.798)">
+      <stop stop-color="#12325B"/>
+      <stop offset="1" stop-color="#020611"/>
+    </radialGradient>
+    <filter id="softGlow" x="8" y="16" width="496" height="480" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="8" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#bgGlow)"/>
+  <g filter="url(#softGlow)">
+    <rect x="32" y="32" width="448" height="448" rx="48" stroke="url(#fieldStroke)" stroke-width="12"/>
+    <path d="M32 120H88C114.51 120 136 98.5097 136 72V32" stroke="url(#fieldStroke)" stroke-width="8"/>
+    <path d="M32 392H88C114.51 392 136 413.49 136 440V480" stroke="url(#fieldStroke)" stroke-width="8"/>
+    <path d="M480 120H424C397.49 120 376 98.5097 376 72V32" stroke="url(#fieldStroke)" stroke-width="8" opacity=".12"/>
+    <path d="M480 392H424C397.49 392 376 413.49 376 440V480" stroke="url(#fieldStroke)" stroke-width="8"/>
+    <path d="M256 32V480" stroke="url(#fieldStroke)" stroke-width="8"/>
+    <path d="M32 256H480" stroke="url(#fieldStroke)" stroke-width="8" opacity=".72"/>
+    <circle cx="256" cy="256" r="58" stroke="url(#fieldStroke)" stroke-width="8" opacity=".92"/>
+    <circle cx="256" cy="256" r="10" fill="#1BE7FF"/>
+
+    <g transform="translate(92 128)">
+      <circle cx="72" cy="72" r="72" fill="#EAF6FF"/>
+      <circle cx="72" cy="72" r="72" fill="url(#bgGlow)" opacity=".1"/>
+      <path d="M72 30L97 48L89 78H55L47 48L72 30Z" fill="#0F172A"/>
+      <path d="M47 48L27 62L33 96L55 78L47 48Z" fill="#F8FAFC"/>
+      <path d="M97 48L117 62L111 96L89 78L97 48Z" fill="#F8FAFC"/>
+      <path d="M55 78L33 96L40 122L64 128L72 110L55 78Z" fill="#F8FAFC"/>
+      <path d="M89 78L111 96L104 122L80 128L72 110L89 78Z" fill="#F8FAFC"/>
+      <path d="M64 128L72 110L80 128L72 150L64 128Z" fill="#0F172A"/>
+      <circle cx="72" cy="72" r="71" stroke="#1FCFFF" stroke-width="2.5" opacity=".5"/>
+    </g>
+
+    <g transform="translate(286 188)">
+      <path d="M0 156H172" stroke="url(#fieldStroke)" stroke-width="6" opacity=".55"/>
+      <rect x="10" y="104" width="28" height="52" rx="4" fill="url(#barA)"/>
+      <rect x="60" y="64" width="36" height="92" rx="4" fill="url(#barA)"/>
+      <rect x="118" y="28" width="40" height="128" rx="4" fill="url(#barC)"/>
+      <path d="M0 112L56 58L86 78L170 0" stroke="#F8FAFC" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M146 2L170 0L164 24" stroke="#F8FAFC" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
