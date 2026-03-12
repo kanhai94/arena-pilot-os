@@ -90,6 +90,8 @@ type BillingCurrent = {
   };
 };
 
+type VisualMode = 'system' | 'light' | 'dark';
+
 type FeePlan = {
   _id: string;
   name: string;
@@ -864,6 +866,16 @@ export default function DashboardPage() {
     whatsapp: 'not_configured',
     razorpay: 'not_configured'
   });
+  const [visualMode, setVisualMode] = useState<VisualMode>(() => {
+    if (typeof window === 'undefined') return 'system';
+    const stored = window.localStorage.getItem('ap-visual-mode') as VisualMode | null;
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+      return stored;
+    }
+    return 'system';
+  });
+  const [visualMenuOpen, setVisualMenuOpen] = useState(false);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const [tenantIntegrationLoading, setTenantIntegrationLoading] = useState(false);
 
   const safeFetch = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
@@ -1277,6 +1289,34 @@ export default function DashboardPage() {
     setActiveMenu(menu);
     setActiveTab(menuToTab[menu]);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('ap-visual-mode') as VisualMode | null;
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+      setVisualMode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    setSystemPrefersDark(media.matches);
+    if (media.addEventListener) {
+      media.addEventListener('change', handleChange);
+      return () => media.removeEventListener('change', handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('ap-visual-mode', visualMode);
+    const shouldDark = visualMode === 'dark';
+    document.body.classList.toggle('theme-dark', shouldDark);
+  }, [visualMode, systemPrefersDark]);
 
   useEffect(() => {
     if (!user) return;
@@ -1766,6 +1806,22 @@ export default function DashboardPage() {
     };
   }, [growthPulseSeries]);
 
+  const studioShellCopy = useMemo(() => {
+    if (activeMenu === 'Finance Deck') {
+      return {
+        title: 'Finance Deck',
+        description: 'Track student fee status, pending balances, and quick finance actions.',
+        cta: '+ Add Student'
+      };
+    }
+
+    return {
+      title: 'Student Roster',
+      description: 'Manage academy students with clean search, filters and quick actions.',
+      cta: '+ Academy Pro Add Student'
+    };
+  }, [activeMenu]);
+
   const platformPlanPriceByName = useMemo(() => {
     return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
   }, [platformPlans]);
@@ -2039,14 +2095,15 @@ export default function DashboardPage() {
             key={item.id}
             type="button"
             onClick={() => handleAutomationTypeChange(item.id)}
-            className={`rounded-2xl border px-4 py-3 text-left transition ${
+            aria-pressed={automationType === item.id}
+            className={`automation-type-card rounded-2xl border px-4 py-3 text-left transition ${
               automationType === item.id
-                ? 'border-indigo-500 bg-white text-indigo-900 shadow-sm'
-                : 'border-slate-200 bg-white/70 text-slate-700 hover:border-indigo-300'
+                ? 'automation-type-card-active border-indigo-500 bg-white text-indigo-900 shadow-sm'
+                : 'automation-type-card-inactive border-slate-200 bg-white/70 text-slate-700 hover:border-indigo-300'
             }`}
           >
             <p className="text-sm font-semibold">{item.title}</p>
-            <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
+            <p className="automation-type-card-desc mt-1 text-xs text-slate-500">{item.desc}</p>
           </button>
         ))}
       </div>
@@ -3474,7 +3531,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-3 py-3 sm:px-6 sm:py-4">
+    <div className="dashboard-shell relative min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-3 py-3 sm:px-6 sm:py-4">
       <div className="mx-auto mb-3 flex max-w-[1500px] items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:hidden">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">ArenaPilot OS</p>
@@ -3534,11 +3591,16 @@ export default function DashboardPage() {
               }
               if (item === 'Academy Pro') {
                 return (
-                  <div key={item} className="rounded-xl border border-slate-200 bg-slate-50/80 p-1.5">
+                  <div
+                    key={item}
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 p-1.5 dark-nav-container dark:border-slate-700 dark:bg-slate-900/70"
+                  >
                     <button
                       onClick={handleAcademyProToggle}
                       className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm font-medium ${
-                        activeMenu === 'Academy Pro' ? 'bg-indigo-100 text-indigo-900' : 'text-slate-700 hover:bg-slate-100'
+                        activeMenu === 'Academy Pro'
+                          ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                          : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                       }`}
                     >
                       <span>AcademyPRO</span>
@@ -3559,8 +3621,8 @@ export default function DashboardPage() {
                               onClick={() => handleAcademyProNavClick(sub.id)}
                               className={`flex-1 rounded-lg px-2.5 py-1.5 text-left text-sm ${
                                 activeAcademyPro === sub.id && activeMenu === 'Academy Pro'
-                                  ? 'bg-white text-indigo-700'
-                                  : 'text-slate-600 hover:bg-white'
+                                  ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                                  : 'text-slate-600 hover:bg-white dark-nav-hover dark:text-slate-300'
                               }`}
                             >
                               {sub.label}
@@ -3568,7 +3630,7 @@ export default function DashboardPage() {
                             {sub.id === 'plans' && canManagePlansAndFinance ? (
                               <button
                                 onClick={openPlanComposer}
-                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
+                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
                                 aria-label="Add new plan"
                               >
                                 +
@@ -3577,7 +3639,7 @@ export default function DashboardPage() {
                             {sub.id === 'classes' && canManageBatches ? (
                               <button
                                 onClick={openClassComposer}
-                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
+                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
                                 aria-label="Add new class"
                               >
                                 +
@@ -3586,7 +3648,7 @@ export default function DashboardPage() {
                             {sub.id === 'coach' && canManageUsers ? (
                               <button
                                 onClick={openCoachComposer}
-                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white"
+                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
                                 aria-label="Add new coach"
                               >
                                 +
@@ -3606,8 +3668,8 @@ export default function DashboardPage() {
                   onClick={() => handleMenuClick(item)}
                   className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium ${
                     activeMenu === item
-                      ? 'bg-emerald-100 text-emerald-900'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                      : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                   }`}
                 >
                   {item}
@@ -3617,11 +3679,13 @@ export default function DashboardPage() {
           </div>
 
           {isSuperAdmin ? (
-            <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/70 p-1.5">
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-1.5 dark-nav-container">
               <button
                 onClick={handlePlatformControlToggle}
                 className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm font-medium ${
-                  activeTab === 'platform-control' ? 'bg-indigo-600 text-white' : 'text-indigo-900 hover:bg-white'
+                  activeTab === 'platform-control'
+                    ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                    : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                 }`}
               >
                 <span>Platform Control</span>
@@ -3642,8 +3706,8 @@ export default function DashboardPage() {
                         onClick={() => handlePlatformControlNavClick(item.id)}
                         className={`flex-1 rounded-lg px-2.5 py-1.5 text-left text-sm ${
                           activeTab === 'platform-control' && activePlatformControl === item.id
-                            ? 'bg-white text-indigo-700'
-                            : 'text-indigo-900/80 hover:bg-white'
+                            ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                            : 'text-slate-600 hover:bg-white dark-nav-hover dark:text-slate-300'
                         }`}
                       >
                         {item.label}
@@ -3698,11 +3762,56 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1e293b_45%,#065f46)] p-4 text-white">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-200">Current Plan</p>
-                <p className="mt-2 text-xl font-bold">{billing?.plan?.name || 'Trial Window'}</p>
-                <p className="mt-1 text-xs text-slate-200">
-                  {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-200">Current Plan</p>
+                    <p className="mt-2 text-xl font-bold">{billing?.plan?.name || 'Trial Window'}</p>
+                    <p className="mt-1 text-xs text-slate-200">
+                      {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setVisualMenuOpen((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
+                      aria-label="Visual mode settings"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="3.25" />
+                        <path d="M19.4 15a7.97 7.97 0 0 0 .02-6l2.05-1.6-2-3.46-2.46 1a8.08 8.08 0 0 0-5.2-3L11 1H7l-.41 3a8.08 8.08 0 0 0-4.8 3l-2.46-1-2 3.46 2.05 1.6a7.97 7.97 0 0 0 0 6L-1 16.6l2 3.46 2.46-1a8.08 8.08 0 0 0 4.8 3L7 23h4l.41-3a8.08 8.08 0 0 0 5.2-3l2.46 1 2-3.46L19.4 15Z" />
+                      </svg>
+                    </button>
+                    {visualMenuOpen ? (
+                      <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:bg-slate-900/95 dark:text-slate-100 dark:border-slate-700">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Visual mode <span className="text-slate-400">(beta)</span>
+                        </p>
+                        <div className="mt-3 space-y-2 text-sm">
+                          {([
+                            { value: 'system', label: 'Browser default' },
+                            { value: 'light', label: 'Light' },
+                            { value: 'dark', label: 'Dark' }
+                          ] as const).map((option) => (
+                            <label key={option.value} className="flex cursor-pointer items-center gap-2">
+                              <input
+                                type="radio"
+                                name="visual-mode"
+                                checked={visualMode === option.value}
+                                onChange={() => {
+                                  setVisualMode(option.value);
+                                  setVisualMenuOpen(false);
+                                }}
+                                className="h-4 w-4 accent-slate-900"
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <button
                     onClick={() => token && loadDashboardData(token)}
@@ -3742,27 +3851,27 @@ export default function DashboardPage() {
           {!loading && activeTab === 'pulse' ? (
             <div className="space-y-4">
               <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <article className="rounded-2xl border border-slate-200 bg-white p-4">
+                <article className="growth-metric-card growth-metric-card-neutral rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Active Students</p>
                   <p className="mt-1 text-3xl font-extrabold text-slate-900">{activeStudentsCount}</p>
                   <p className="mt-1 text-xs text-slate-500">Learners currently active</p>
                 </article>
-                <article className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                <article className="growth-metric-card growth-metric-card-sky rounded-2xl border border-sky-200 bg-sky-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-sky-700">Scheduled Classes Today</p>
                   <p className="mt-1 text-3xl font-extrabold text-sky-800">{scheduledClassesToday}</p>
                   <p className="mt-1 text-xs text-sky-700">Classes planned for today</p>
                 </article>
-                <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <article className="growth-metric-card growth-metric-card-emerald rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Attendance Rate</p>
                   <p className="mt-1 text-3xl font-extrabold text-emerald-800">{todayAttendanceRate}%</p>
                   <p className="mt-1 text-xs text-emerald-700">Marked vs scheduled classes</p>
                 </article>
-                <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <article className="growth-metric-card growth-metric-card-amber rounded-2xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-amber-700">Pending Fee Count</p>
                   <p className="mt-1 text-3xl font-extrabold text-amber-800">{pendingFeeCount}</p>
                   <p className="mt-1 text-xs text-amber-700">Needs follow-up</p>
                 </article>
-                <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                <article className="growth-metric-card growth-metric-card-indigo rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Active Batches</p>
                   <p className="mt-1 text-3xl font-extrabold text-indigo-800">{activeBatchesCount}</p>
                   <p className="mt-1 text-xs text-indigo-700">Running groups</p>
@@ -3770,59 +3879,59 @@ export default function DashboardPage() {
               </section>
 
               <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <article className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                <article className="growth-metric-card growth-metric-card-teal rounded-2xl border border-teal-200 bg-teal-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-teal-700">Attendance Marked Today</p>
                   <p className="mt-1 text-3xl font-extrabold text-teal-800">{attendanceMarkedToday}</p>
                   <p className="mt-1 text-xs text-teal-700">Records marked today</p>
                 </article>
-                <article className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                <article className="growth-metric-card growth-metric-card-rose rounded-2xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-rose-700">Pending Attendance</p>
                   <p className="mt-1 text-3xl font-extrabold text-rose-800">{pendingAttendance}</p>
                   <p className="mt-1 text-xs text-rose-700">Still pending to mark</p>
                 </article>
-                <article className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                <article className="growth-metric-card growth-metric-card-cyan rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">New Students This Month</p>
                   <p className="mt-1 text-3xl font-extrabold text-cyan-800">{newStudentsThisMonth}</p>
                   <p className="mt-1 text-xs text-cyan-700">Latest enrollments</p>
                 </article>
-                <article className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                <article className="growth-metric-card growth-metric-card-green rounded-2xl border border-green-200 bg-green-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-green-700">Fees Collected Today</p>
                   <p className="mt-1 text-3xl font-extrabold text-green-800">{formatCurrency(feesCollectedToday)}</p>
                   <p className="mt-1 text-xs text-green-700">Today payment intake</p>
                 </article>
-                <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                <article className="growth-metric-card growth-metric-card-violet rounded-2xl border border-violet-200 bg-violet-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-violet-700">Upcoming Renewals</p>
                   <p className="mt-1 text-3xl font-extrabold text-violet-800">{upcomingRenewals7Days}</p>
                   <p className="mt-1 text-xs text-violet-700">Due in next 7 days</p>
                 </article>
               </section>
 
-              <section className="rounded-2xl border border-rose-200 bg-white p-5">
+              <section className="growth-panel growth-panel-attention rounded-2xl border border-rose-200 bg-white p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-slate-900">Attention Needed</h3>
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">High Priority</span>
+                  <span className="growth-badge rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">High Priority</span>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <article className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                  <article className="growth-subcard growth-subcard-rose rounded-xl border border-rose-200 bg-rose-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">Absent 3+ Days</p>
                     <p className="mt-1 text-2xl font-bold text-rose-800">{absent3PlusStudents.length}</p>
                     <p className="mt-1 text-xs text-rose-700">
                       {absent3PlusStudents.slice(0, 2).map((student) => student.name).join(', ') || 'No repeated absentee risk'}
                     </p>
                   </article>
-                  <article className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <article className="growth-subcard growth-subcard-amber rounded-xl border border-amber-200 bg-amber-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Overdue Fees</p>
                     <p className="mt-1 text-2xl font-bold text-amber-800">{pendingStudentsCount}</p>
                     <p className="mt-1 text-xs text-amber-700">Students with pending receivables</p>
                   </article>
-                  <article className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                  <article className="growth-subcard growth-subcard-orange rounded-xl border border-orange-200 bg-orange-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Full Capacity Batches</p>
                     <p className="mt-1 text-2xl font-bold text-orange-800">{fullCapacityBatchRows.length}</p>
                     <p className="mt-1 text-xs text-orange-700">
                       {fullCapacityBatchRows.slice(0, 1).map((row) => row.title).join(', ') || 'Capacity under control'}
                     </p>
                   </article>
-                  <article className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                  <article className="growth-subcard growth-subcard-rose rounded-xl border border-rose-200 bg-rose-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">Failed Notifications</p>
                     <p className="mt-1 text-2xl font-bold text-rose-800">{automationPulse.failedMessages}</p>
                     <p className="mt-1 text-xs text-rose-700">Delivery retries required</p>
@@ -3831,11 +3940,11 @@ export default function DashboardPage() {
               </section>
 
               <section className="grid gap-4 xl:grid-cols-12">
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-6">
+                <article className="growth-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-6">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Revenue Pulse</h3>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      className={`growth-badge rounded-full px-2 py-0.5 text-xs font-semibold ${
                         revenuePulse.trendPercent < 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
                       }`}
                     >
@@ -3844,36 +3953,36 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="growth-subcard growth-subcard-neutral rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs text-slate-500">Monthly Expected Revenue</p>
                       <p className="text-2xl font-bold text-slate-900">{formatCurrency(revenuePulse.expectedRevenue)}</p>
                     </div>
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="growth-subcard growth-subcard-emerald rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                       <p className="text-xs text-emerald-700">Collected Amount</p>
                       <p className="text-2xl font-bold text-emerald-800">{formatCurrency(revenuePulse.collectedAmount)}</p>
                     </div>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 sm:col-span-2">
+                    <div className="growth-subcard growth-subcard-amber rounded-xl border border-amber-200 bg-amber-50 p-3 sm:col-span-2">
                       <p className="text-xs text-amber-700">Collection Gap</p>
                       <p className="text-2xl font-bold text-amber-800">{formatCurrency(revenuePulse.collectionGap)}</p>
                     </div>
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-6">
+                <article className="growth-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-6">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Automation Status</h3>
                     <span className="text-xs text-slate-500">Read-only</span>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="growth-subcard growth-subcard-emerald rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                       <p className="text-xs text-emerald-700">Reminders Sent Today</p>
                       <p className="text-2xl font-bold text-emerald-800">{automationPulse.remindersSentToday}</p>
                     </div>
-                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <div className="growth-subcard growth-subcard-sky rounded-xl border border-sky-200 bg-sky-50 p-3">
                       <p className="text-xs text-sky-700">Queued Notifications</p>
                       <p className="text-2xl font-bold text-sky-800">{automationPulse.queuedNotifications}</p>
                     </div>
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                    <div className="growth-subcard growth-subcard-rose rounded-xl border border-rose-200 bg-rose-50 p-3">
                       <p className="text-xs text-rose-700">Failed Messages</p>
                       <p className="text-2xl font-bold text-rose-800">{automationPulse.failedMessages}</p>
                     </div>
@@ -3881,12 +3990,12 @@ export default function DashboardPage() {
                 </article>
               </section>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <section className="growth-panel rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-slate-900">Academy Growth Pulse</h3>
                   <span className="text-xs text-slate-500">Student, attendance, batch activity</span>
                 </div>
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="growth-chart-shell overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <svg viewBox="0 0 520 190" className="h-[190px] w-full min-w-[460px]">
                     <polyline points={growthPulseChart.student} fill="none" stroke="#4f46e5" strokeWidth="3" />
                     <polyline points={growthPulseChart.attendance} fill="none" stroke="#0ea5e9" strokeWidth="3" />
@@ -4396,13 +4505,13 @@ export default function DashboardPage() {
                                 setShowClassComposer(false);
                               }
                             }}
-                            className="rounded-2xl bg-slate-900 px-8 py-3 text-2xl font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+                            className="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 px-8 py-3 text-2xl font-bold text-white shadow-[0_18px_30px_-18px_rgba(79,70,229,0.7)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_36px_-18px_rgba(99,102,241,0.75)] active:translate-y-0 disabled:opacity-60"
                           >
                             {actionLoading ? 'Processing...' : classEditBatchId ? 'Update Class' : 'Create Class'}
                           </button>
                           <button
                             onClick={() => setShowClassComposer(false)}
-                            className="rounded-2xl border border-slate-300 px-6 py-3 text-lg font-semibold text-slate-700 hover:bg-slate-50"
+                            className="rounded-2xl border border-slate-300 px-6 py-3 text-lg font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm"
                           >
                             Cancel
                           </button>
@@ -4551,7 +4660,7 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'class-schedule' ? (
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
+                <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Class Schedule</h3>
                     <span className="text-xs text-slate-500">{scheduleRows.length} classes</span>
@@ -4563,7 +4672,7 @@ export default function DashboardPage() {
                         type="date"
                         value={scheduleDate}
                         onChange={(e) => setScheduleDate(e.target.value)}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+                        className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
                       />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -4571,7 +4680,7 @@ export default function DashboardPage() {
                       <select
                         value={scheduleCenterFilter}
                         onChange={(e) => setScheduleCenterFilter(e.target.value)}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+                        className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
                       >
                         <option value="all">All centers</option>
                         {Array.from(new Set(academyClassRows.map((row) => row.centerName))).map((centerName) => (
@@ -4586,7 +4695,7 @@ export default function DashboardPage() {
                       <select
                         value={scheduleBatchFilter}
                         onChange={(e) => setScheduleBatchFilter(e.target.value)}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 truncate"
+                        className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 truncate"
                       >
                         <option value="all">All classes</option>
                         {academyClassRows.map((row) => (
@@ -4642,7 +4751,7 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'attendance' ? (
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
+                <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-xl font-bold text-slate-900">Attendance</h3>
@@ -4653,7 +4762,7 @@ export default function DashboardPage() {
                         type="date"
                         value={academyAttendanceDate}
                         onChange={(e) => setAcademyAttendanceDate(e.target.value)}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+                        className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
                       />
                     </div>
                   </div>
@@ -4668,7 +4777,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedAttendanceClassId('')}
-                        className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="ops-chip-button rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
                         Clear selection
                       </button>
@@ -4676,21 +4785,21 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="ops-stat-card ops-stat-card-neutral rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Scheduled Classes</p>
                       <p className="mt-1 text-2xl font-extrabold text-slate-900">{selectedAttendanceSummary.scheduledClasses}</p>
                     </div>
-                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                    <div className="ops-stat-card ops-stat-card-indigo rounded-xl border border-indigo-200 bg-indigo-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-indigo-700">Total Students</p>
                       <p className="mt-1 text-2xl font-extrabold text-indigo-800">{selectedAttendanceSummary.totalStudents}</p>
                     </div>
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="ops-stat-card ops-stat-card-emerald rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-emerald-700">Present</p>
                       <p className="mt-1 text-2xl font-extrabold text-emerald-800">
                         {selectedAttendanceSummary.presentCount}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                    <div className="ops-stat-card ops-stat-card-rose rounded-xl border border-rose-200 bg-rose-50 p-3">
                       <p className="text-xs uppercase tracking-[0.12em] text-rose-700">Absent</p>
                       <p className="mt-1 text-2xl font-extrabold text-rose-800">
                         {selectedAttendanceSummary.absentCount}
@@ -4698,7 +4807,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <div className="ops-table-shell overflow-x-auto rounded-2xl border border-slate-200">
                     <table className="min-w-full text-left text-sm">
                       <thead className="bg-slate-50">
                         <tr className="border-b border-slate-200 text-slate-600">
@@ -4722,8 +4831,8 @@ export default function DashboardPage() {
                           <tr
                             key={row.id}
                             onClick={() => setSelectedAttendanceClassId((prev) => (prev === row.id ? '' : row.id))}
-                            className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50/70 ${
-                              selectedAttendanceClassId === row.id ? 'bg-indigo-50/70' : ''
+                            className={`ops-table-row cursor-pointer border-b border-slate-100 hover:bg-slate-50/70 ${
+                              selectedAttendanceClassId === row.id ? 'ops-table-row-selected bg-indigo-50/70' : ''
                             }`}
                           >
                             <td className="px-3 py-3 font-semibold text-slate-900">{row.title}</td>
@@ -4738,7 +4847,7 @@ export default function DashboardPage() {
                                     e.stopPropagation();
                                     openAttendanceMarker(row.id);
                                   }}
-                                  className="rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
+                                  className="ops-icon-button rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
                                   aria-label={`Mark attendance for ${row.title}`}
                                 >
                                   +
@@ -4755,7 +4864,7 @@ export default function DashboardPage() {
 
                   {activeAttendanceBatch ? (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4">
-                      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                      <div className="ops-panel w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
                         <div className="mb-4 flex items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xl font-bold text-slate-900">Mark Attendance</h4>
@@ -4768,13 +4877,13 @@ export default function DashboardPage() {
                               setActiveAttendanceBatch(null);
                               setAttendanceDraftRecords([]);
                             }}
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                            className="registry-action-button rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                           >
                             Close
                           </button>
                         </div>
 
-                        <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-200">
+                        <div className="ops-table-shell max-h-[420px] overflow-y-auto rounded-xl border border-slate-200">
                           {attendanceDraftRecords.length === 0 ? (
                             <div className="px-4 py-5 text-sm text-slate-500">No students assigned to this class.</div>
                           ) : null}
@@ -4818,7 +4927,7 @@ export default function DashboardPage() {
               {activeAcademyPro === 'clients' ? (
                 <>
                   {showClientComposer ? (
-                    <article className="rounded-2xl border border-slate-200 bg-white p-6 xl:col-span-12">
+                    <article className="rounded-2xl border border-slate-200 bg-white p-6 xl:col-span-12 dark:border-white/15 dark:bg-black">
                       <div className="mx-auto max-w-5xl">
                         <div className="mb-5 flex items-start justify-between gap-3">
                           <div>
@@ -4839,15 +4948,17 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="grid gap-4">
-                          <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
-                            <h4 className="text-lg font-bold text-slate-900">Student Profile</h4>
+                          <section className="student-profile-card rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 dark:border-white/20 dark:bg-black dark:from-black dark:to-black">
+                            <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Student Profile</h4>
                             <div className="mt-4 grid gap-4 lg:grid-cols-[200px_1fr] lg:items-start">
-                              <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white p-4 lg:mx-0">
-                                <label className="group flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-indigo-200 bg-white shadow-sm">
+                              <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white p-4 lg:mx-0 dark:border-white/25 dark:bg-black dark:from-black dark:to-black">
+                                <label className="group flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-indigo-200 bg-white shadow-sm dark:border-white/30 dark:bg-black">
                                   {clientPhotoDataUrl ? (
                                     <img src={clientPhotoDataUrl} alt="Client" className="h-full w-full object-cover" />
                                   ) : (
-                                    <span className="text-xs font-semibold text-slate-500 group-hover:text-indigo-700">Upload Photo</span>
+                                    <span className="text-xs font-semibold text-slate-500 group-hover:text-indigo-700 dark:text-slate-300 dark:group-hover:text-emerald-200">
+                                      Upload Photo
+                                    </span>
                                   )}
                                   <input
                                     type="file"
@@ -4857,15 +4968,15 @@ export default function DashboardPage() {
                                   />
                                 </label>
                                 <div className="text-center">
-                                  <p className="text-xs font-semibold text-slate-700">Student Photo</p>
-                                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Student Photo</p>
+                                  <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-300">
                                     {clientPhotoFileName || 'JPG/PNG up to 5MB'}
                                   </p>
                                 </div>
                               </div>
 
                               <div className="grid gap-3 md:grid-cols-2">
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Full name
                                   <input
                                     value={clientFullName}
@@ -4877,7 +4988,7 @@ export default function DashboardPage() {
                                     <span className="text-xs font-medium text-rose-600">{clientValidationErrors.fullName}</span>
                                   ) : null}
                                 </label>
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   DOB
                                   <input
                                     type="date"
@@ -4887,7 +4998,7 @@ export default function DashboardPage() {
                                     className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                                   />
                                 </label>
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Roll no
                                   <input
                                     value={clientRollNo}
@@ -4896,7 +5007,7 @@ export default function DashboardPage() {
                                     className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                                   />
                                 </label>
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Gender
                                   <select
                                     value={clientGender}
@@ -4908,7 +5019,7 @@ export default function DashboardPage() {
                                     <option value="other">Other</option>
                                   </select>
                                 </label>
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Email
                                   <input
                                     value={clientEmail}
@@ -4920,7 +5031,7 @@ export default function DashboardPage() {
                                     <span className="text-xs font-medium text-rose-600">{clientValidationErrors.email}</span>
                                   ) : null}
                                 </label>
-                                <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Mobile
                                   <div className="grid grid-cols-[110px_1fr] gap-2">
                                     <select
@@ -5091,7 +5202,7 @@ export default function DashboardPage() {
                           </section>
                         </div>
 
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
+                          <div className="student-action-wrap mt-5 flex flex-wrap items-center gap-3 rounded-2xl p-2 dark:border dark:border-white/40 dark:bg-black/40">
                           <button
                             onClick={submitClientComposer}
                             disabled={actionLoading}
@@ -5131,7 +5242,7 @@ export default function DashboardPage() {
                               onClick={triggerImportStudents}
                               title="Import students CSV"
                               aria-label="Import students CSV"
-                              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                              className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
                             >
                               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 21V9" />
@@ -5145,7 +5256,7 @@ export default function DashboardPage() {
                             onClick={exportClientsCsv}
                             title="Export students"
                             aria-label="Export students"
-                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                            className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
                           >
                             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M12 3v12" />
@@ -5192,7 +5303,7 @@ export default function DashboardPage() {
                               const selectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
                               const receivable = Math.max(0, Number(meta?.invoiceAmount || 0) - (student.feeStatus === 'paid' ? Number(meta?.invoiceAmount || 0) : 0));
                               return (
-                                <tr key={student._id} className="border-b border-slate-100 hover:bg-slate-50/70">
+                                <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
                                   <td className="px-2 py-2">
                                     {canManageStudents ? (
                                       <button
@@ -5247,7 +5358,7 @@ export default function DashboardPage() {
                                       {canManageStudents ? (
                                         <button
                                           onClick={() => openClientComposerForEdit(student)}
-                                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                          className="registry-action-button rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                         >
                                           Edit
                                         </button>
@@ -5255,7 +5366,7 @@ export default function DashboardPage() {
                                       {canDeleteStudents ? (
                                         <button
                                           onClick={() => deleteStudentWithConfirmation(student)}
-                                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                          className="registry-danger-button rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                                         >
                                           Delete
                                         </button>
@@ -5274,51 +5385,61 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'renewals' ? (
-                <article className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-5 xl:col-span-12">
-                  <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <article className="renewal-shell ops-panel rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-5 xl:col-span-12 dark:border-white/25 dark:bg-black dark:from-black dark:to-black dark:shadow-none">
+                  <div className="renewal-card ops-panel mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/30 dark:bg-black dark:shadow-none">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900">Renewal Desk</h3>
-                        <p className="text-sm text-slate-600">Track upcoming due payments with smart due windows.</p>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Renewal Desk</h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                          Track upcoming due payments with smart due windows.
+                        </p>
                       </div>
-                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                      <span className="ops-info-pill rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
                         Showing {renewalRows.length} clients
                       </span>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Due Tomorrow</p>
-                        <p className="mt-1 text-2xl font-extrabold text-slate-900">{renewalStats.dueToday}</p>
+                      <div className="ops-stat-card ops-stat-card-neutral rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/30 dark:bg-black">
+                        <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Due Tomorrow</p>
+                        <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+                          {renewalStats.dueToday}
+                        </p>
                       </div>
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                        <p className="text-xs uppercase tracking-[0.14em] text-amber-700">Due in 5 Days</p>
-                        <p className="mt-1 text-2xl font-extrabold text-amber-800">{renewalStats.dueNext5}</p>
+                      <div className="ops-stat-card ops-stat-card-amber rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-white/30 dark:bg-black">
+                        <p className="text-xs uppercase tracking-[0.14em] text-amber-700 dark:text-amber-200">Due in 5 Days</p>
+                        <p className="mt-1 text-2xl font-extrabold text-amber-800 dark:text-amber-100">
+                          {renewalStats.dueNext5}
+                        </p>
                       </div>
-                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-                        <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Due in 20 Days</p>
-                        <p className="mt-1 text-2xl font-extrabold text-indigo-800">{renewalStats.dueNext20}</p>
+                      <div className="ops-stat-card ops-stat-card-indigo rounded-xl border border-indigo-200 bg-indigo-50 p-3 dark:border-white/30 dark:bg-black">
+                        <p className="text-xs uppercase tracking-[0.14em] text-indigo-700 dark:text-indigo-200">Due in 20 Days</p>
+                        <p className="mt-1 text-2xl font-extrabold text-indigo-800 dark:text-indigo-100">
+                          {renewalStats.dueNext20}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Due Window Filters</div>
+                  <div className="renewal-filters ops-panel mb-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/30 dark:bg-black">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
+                      Due Window Filters
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {renewalDueFilters.map((days) => (
                         <button
                           key={days}
                           onClick={() => setRenewalDueFilter(days)}
-                          className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                          className={`ops-chip-button rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                             renewalDueFilter === days
                               ? 'bg-indigo-600 text-white shadow-sm'
-                              : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                              : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800'
                           }`}
                         >
                           {days} day
                         </button>
                       ))}
-                      <div className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-2 py-1">
-                        <span className="text-xs font-semibold text-slate-500">Custom</span>
+                      <div className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-2 py-1 dark:border-white/30 dark:bg-black">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">Custom</span>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -5331,7 +5452,7 @@ export default function DashboardPage() {
                               setRenewalDueFilter(parsed);
                             }
                           }}
-                          className="w-14 border-none bg-transparent text-sm font-semibold text-slate-700 outline-none"
+                          className="ops-inline-control w-14 border-none bg-transparent text-sm font-semibold text-slate-700 outline-none dark:text-slate-200"
                           placeholder="days"
                           aria-label="Custom due window days"
                         />
@@ -5342,21 +5463,21 @@ export default function DashboardPage() {
                               setRenewalDueFilter(parsed);
                             }
                           }}
-                          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                          className="ops-chip-button rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20"
                         >
                           Apply
                         </button>
                       </div>
-                      <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                      <span className="ops-info-pill rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
                         Showing due in next {renewalDueFilter} day{renewalDueFilter > 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                  <div className="renewal-table ops-table-shell overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-white/30 dark:bg-black">
                     <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50">
-                        <tr className="border-b border-slate-200 text-slate-600">
+                      <thead className="bg-slate-50 dark:bg-black">
+                        <tr className="border-b border-slate-200 text-slate-600 dark:border-white/20 dark:text-slate-200">
                           <th className="px-3 py-3 font-semibold">Client Name</th>
                           <th className="px-3 py-3 font-semibold">Batch</th>
                           <th className="px-3 py-3 font-semibold">Center</th>
@@ -5376,14 +5497,17 @@ export default function DashboardPage() {
                           </tr>
                         ) : null}
                         {renewalRows.map((row) => (
-                          <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/70">
-                            <td className="px-3 py-3 font-semibold text-slate-900">{row.name}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.batchName}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.centerName}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.email}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.mobile}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.paymentDate}</td>
-                            <td className="px-3 py-3 text-slate-700">{row.dueDate}</td>
+                          <tr
+                            key={row.id}
+                            className="ops-table-row border-b border-slate-100 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/60"
+                          >
+                            <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{row.name}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.batchName}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.centerName}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.email}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.mobile}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.paymentDate}</td>
+                            <td className="px-3 py-3 text-slate-700 dark:text-slate-200">{row.dueDate}</td>
                             <td className="px-3 py-3">
                               <span
                                 className={`rounded-full px-2 py-1 text-xs font-semibold ${
@@ -5570,41 +5694,41 @@ export default function DashboardPage() {
 
           {!loading && activeTab === 'studio' ? (
             <div className="space-y-4">
-              <article className="rounded-2xl border border-slate-200 bg-white p-5">
+              <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-2xl font-bold text-slate-900">Student Roster</h3>
-                    <p className="text-sm text-slate-600">Manage academy students with clean search, filters and quick actions.</p>
+                    <h3 className="text-2xl font-bold text-slate-900">{studioShellCopy.title}</h3>
+                    <p className="text-sm text-slate-600">{studioShellCopy.description}</p>
                   </div>
                   {canManageStudents ? (
                     <button
                       onClick={openClientComposerForCreate}
-                      className="rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
+                      className="ops-primary-button rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
                     >
-                      + Academy Pro Add Student
+                      {studioShellCopy.cta}
                     </button>
                   ) : null}
                 </div>
               </article>
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <article className="rounded-2xl border border-slate-200 bg-white p-4">
+                <article className="ops-stat-card ops-stat-card-neutral rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Total Students</p>
                   <p className="mt-1 text-3xl font-extrabold text-slate-900">{attendanceStudents.length}</p>
                 </article>
-                <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <article className="ops-stat-card ops-stat-card-emerald rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Active</p>
                   <p className="mt-1 text-3xl font-extrabold text-emerald-800">
                     {attendanceStudents.filter((s) => s.status === 'active').length}
                   </p>
                 </article>
-                <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                <article className="ops-stat-card ops-stat-card-indigo rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Paid</p>
                   <p className="mt-1 text-3xl font-extrabold text-indigo-800">
                     {attendanceStudents.filter((s) => s.feeStatus === 'paid').length}
                   </p>
                 </article>
-                <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <article className="ops-stat-card ops-stat-card-amber rounded-2xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs uppercase tracking-[0.14em] text-amber-700">Pending</p>
                   <p className="mt-1 text-3xl font-extrabold text-amber-800">
                     {attendanceStudents.filter((s) => s.feeStatus === 'pending').length}
@@ -5612,18 +5736,18 @@ export default function DashboardPage() {
                 </article>
               </div>
 
-              <article className="rounded-2xl border border-slate-200 bg-white p-5">
+              <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="grid gap-3 md:grid-cols-[1fr_170px_170px]">
                   <input
                     value={rosterSearchText}
                     onChange={(e) => setRosterSearchText(e.target.value)}
                     placeholder="Search name, parent, mobile, email, class, center"
-                    className="rounded-xl border border-slate-300 px-4 py-2.5"
+                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
                   />
                   <select
                     value={rosterStatusFilter}
                     onChange={(e) => setRosterStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                    className="rounded-xl border border-slate-300 px-4 py-2.5"
+                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
                   >
                     <option value="all">All Status</option>
                     <option value="active">Active</option>
@@ -5632,7 +5756,7 @@ export default function DashboardPage() {
                   <select
                     value={rosterFeeFilter}
                     onChange={(e) => setRosterFeeFilter(e.target.value as 'all' | 'paid' | 'pending')}
-                    className="rounded-xl border border-slate-300 px-4 py-2.5"
+                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
                   >
                     <option value="all">All Fee Status</option>
                     <option value="paid">Paid</option>
@@ -5640,7 +5764,7 @@ export default function DashboardPage() {
                   </select>
                 </div>
 
-                <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <div className="ops-table-shell mt-4 overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-200 text-slate-600">
@@ -5667,7 +5791,7 @@ export default function DashboardPage() {
                         const batchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
                         const classInfo = academyClassRows.find((row) => row.id === batchId);
                         return (
-                          <tr key={student._id} className="border-b border-slate-100 hover:bg-slate-50/70">
+                          <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
                             <td className="px-3 py-3 font-semibold text-slate-900">{student.name}</td>
                             <td className="px-3 py-3 text-slate-700">{student.parentName}</td>
                             <td className="px-3 py-3 text-slate-700">{student.parentPhone}</td>
@@ -5688,7 +5812,7 @@ export default function DashboardPage() {
                               {canManageStudents ? (
                                 <button
                                   onClick={() => openClientComposerForEdit(student)}
-                                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  className="registry-action-button rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                 >
                                   Edit
                                 </button>
@@ -5705,34 +5829,34 @@ export default function DashboardPage() {
               </article>
 
               {canManageStudents ? (
-                <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                   <h4 className="text-lg font-bold text-slate-900">Quick Add Student</h4>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                     value={studentName}
                     onChange={(e) => setStudentName(e.target.value)}
                     placeholder="Student name"
                   />
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                     value={studentAge}
                     onChange={(e) => setStudentAge(e.target.value)}
                     placeholder="Age"
                   />
-                  <select className="rounded-xl border border-slate-300 px-3 py-2" value={studentGender} onChange={(e) => setStudentGender(e.target.value)}>
+                  <select className="ops-control rounded-xl border border-slate-300 px-3 py-2" value={studentGender} onChange={(e) => setStudentGender(e.target.value)}>
                     <option value="male">male</option>
                     <option value="female">female</option>
                     <option value="other">other</option>
                   </select>
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                     value={parentName}
                     onChange={(e) => setParentName(e.target.value)}
                     placeholder="Parent name"
                   />
                   <input
-                    className="rounded-xl border border-slate-300 px-3 py-2"
+                    className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                     value={parentPhone}
                     onChange={(e) => setParentPhone(e.target.value)}
                     placeholder="Parent phone"
@@ -5764,7 +5888,7 @@ export default function DashboardPage() {
                       setParentPhone('');
                     }
                   }}
-                  className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  className="ops-primary-button mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {actionLoading ? 'Processing...' : 'Create Student'}
                 </button>
@@ -5887,18 +6011,18 @@ export default function DashboardPage() {
                           value={tenantAcademyName}
                           onChange={(e) => setTenantAcademyName(e.target.value)}
                           placeholder="Academy name"
-                          className="rounded-xl border border-slate-300 px-3 py-2"
+                          className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                         />
                         <input
                           value={tenantOwnerName}
                           onChange={(e) => setTenantOwnerName(e.target.value)}
                           placeholder="Owner name"
-                          className="rounded-xl border border-slate-300 px-3 py-2"
+                          className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                         />
                         <select
                           value={tenantPlanName}
                           onChange={(e) => setTenantPlanName(e.target.value)}
-                          className="rounded-xl border border-slate-300 px-3 py-2"
+                          className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                         >
                           <option value="Starter">Starter</option>
                           <option value="Growth">Growth</option>
@@ -6039,23 +6163,23 @@ export default function DashboardPage() {
               {activePlatformControl === 'plans-pricing' ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                    <article className="ops-stat-card ops-stat-card-indigo rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Total Plans</p>
                       <p className="mt-1 text-3xl font-extrabold text-indigo-900">{platformPlans.length}</p>
                     </article>
-                    <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <article className="ops-stat-card ops-stat-card-emerald rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Active Plans</p>
                       <p className="mt-1 text-3xl font-extrabold text-emerald-800">
                         {platformPlans.filter((plan) => plan.status === 'active').length}
                       </p>
                     </article>
-                    <article className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                    <article className="ops-stat-card ops-stat-card-sky rounded-2xl border border-sky-200 bg-sky-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-sky-700">Starter Price</p>
                       <p className="mt-1 text-3xl font-extrabold text-sky-800">
                         {formatCurrency(platformPlans.find((plan) => plan.name.toLowerCase() === 'starter')?.priceMonthly || 0)}
                       </p>
                     </article>
-                    <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <article className="ops-stat-card ops-stat-card-violet rounded-2xl border border-violet-200 bg-violet-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-violet-700">Highest Plan</p>
                       <p className="mt-1 text-xl font-extrabold text-violet-900">
                         {platformPlans.reduce((max, row) => (row.priceMonthly > max.priceMonthly ? row : max), platformPlans[0])?.name || '-'}
@@ -6064,7 +6188,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="grid gap-4 xl:grid-cols-12">
-                    <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-8">
+                    <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-8">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
                           <h3 className="text-2xl font-bold text-slate-900">Plans & Pricing</h3>
@@ -6072,14 +6196,14 @@ export default function DashboardPage() {
                         </div>
                         <button
                           onClick={openPlatformPlanComposerForCreate}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl font-semibold leading-none text-white hover:bg-indigo-500"
+                          className="ops-primary-button inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl font-semibold leading-none text-white hover:bg-indigo-500"
                           aria-label="Add plan"
                         >
                           +
                         </button>
                       </div>
 
-                      <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                      <div className="ops-table-shell overflow-x-auto rounded-2xl border border-slate-200">
                         <table className="min-w-full text-left text-sm">
                           <thead className="bg-slate-50">
                             <tr className="border-b border-slate-200 text-slate-600">
@@ -6092,7 +6216,7 @@ export default function DashboardPage() {
                           </thead>
                           <tbody>
                             {platformPlans.map((plan) => (
-                              <tr key={plan.id} className="border-b border-slate-100">
+                              <tr key={plan.id} className="ops-table-row border-b border-slate-100">
                                 <td className="px-3 py-3 font-semibold text-slate-900">{plan.name}</td>
                                 <td className="px-3 py-3 text-slate-700">{formatCurrency(plan.priceMonthly)}</td>
                                 <td className="px-3 py-3 text-slate-700">{plan.studentLimit === null ? 'Unlimited' : plan.studentLimit}</td>
@@ -6105,19 +6229,19 @@ export default function DashboardPage() {
                                   <div className="flex flex-wrap gap-1">
                                     <button
                                       onClick={() => updatePlanPrice(plan.id, plan.priceMonthly, plan.studentLimit)}
-                                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      className="registry-action-button rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                     >
                                       Update Price
                                     </button>
                                     <button
                                       onClick={() => openPlatformPlanComposerForEdit(plan)}
-                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                      className="registry-action-button rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
                                     >
                                       Edit
                                     </button>
                                     <button
                                       onClick={() => updatePlanStatus(plan.id, plan.status === 'active' ? 'inactive' : 'active')}
-                                      className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                      className="registry-action-button rounded-lg border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
                                     >
                                       {plan.status === 'active' ? 'Deactivate' : 'Activate'}
                                     </button>
@@ -6131,7 +6255,7 @@ export default function DashboardPage() {
                     </article>
 
                     <div className="space-y-4 xl:col-span-4">
-                      <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                         <div className="mb-3 flex items-center justify-between">
                           <h4 className="text-lg font-bold text-slate-900">{editingPlanId ? 'Edit Plan' : 'Create Plan'}</h4>
                           {showPlatformPlanComposer ? (
@@ -6141,14 +6265,14 @@ export default function DashboardPage() {
                                 setShowPlatformPlanComposer(false);
                                 setEditingPlanId('');
                               }}
-                              className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                              className="registry-action-button rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50"
                             >
                               Close
                             </button>
                           ) : (
                             <button
                               onClick={openPlatformPlanComposerForCreate}
-                              className="rounded-lg border border-indigo-300 px-2.5 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                              className="registry-action-button rounded-lg border border-indigo-300 px-2.5 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
                             >
                               Open
                             </button>
@@ -6161,33 +6285,33 @@ export default function DashboardPage() {
                                 value={newPlatformPlanName}
                                 onChange={(e) => setNewPlatformPlanName(e.target.value)}
                                 placeholder="Plan name"
-                                className="rounded-xl border border-slate-300 px-3 py-2"
+                                className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                               />
                               <input
                                 value={newPlatformPlanPrice}
                                 onChange={(e) => setNewPlatformPlanPrice(e.target.value)}
                                 placeholder="Monthly price (INR)"
                                 type="number"
-                                className="rounded-xl border border-slate-300 px-3 py-2"
+                                className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                               />
                               <input
                                 value={newPlatformPlanLimit}
                                 onChange={(e) => setNewPlatformPlanLimit(e.target.value)}
                                 placeholder="Student limit (blank for unlimited)"
                                 type="number"
-                                className="rounded-xl border border-slate-300 px-3 py-2"
+                                className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                               />
                               <input
                                 value={newPlatformPlanFeatures}
                                 onChange={(e) => setNewPlatformPlanFeatures(e.target.value)}
                                 placeholder="Features (comma separated)"
-                                className="rounded-xl border border-slate-300 px-3 py-2"
+                                className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                               />
                             </div>
                             <button
                               onClick={savePlatformPlan}
                               disabled={actionLoading || !newPlatformPlanName.trim() || !newPlatformPlanPrice.trim()}
-                              className="mt-3 w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                              className="ops-primary-button mt-3 w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
                             >
                               {editingPlanId ? 'Update plan' : 'Create plan'}
                             </button>
@@ -6197,14 +6321,14 @@ export default function DashboardPage() {
                         )}
                       </article>
 
-                      <article className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                         <h4 className="text-lg font-bold text-slate-900">Price Override</h4>
                         <p className="mt-1 text-sm text-slate-600">Set tenant-specific override over default pricing.</p>
                         <div className="mt-3 grid gap-2">
                           <select
                             value={selectedTenantId}
                             onChange={(e) => setSelectedTenantId(e.target.value)}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            className="ops-control rounded-lg border border-slate-300 px-3 py-2 text-sm"
                           >
                             <option value="">Select tenant</option>
                             {platformTenants.map((tenant) => (
@@ -6218,12 +6342,12 @@ export default function DashboardPage() {
                             value={platformPriceOverride}
                             onChange={(e) => setPlatformPriceOverride(e.target.value)}
                             placeholder="Override amount (INR)"
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            className="ops-control rounded-lg border border-slate-300 px-3 py-2 text-sm"
                           />
                           <button
                             onClick={savePriceOverride}
                             disabled={actionLoading || !selectedTenantId || !platformPriceOverride.trim()}
-                            className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                            className="ops-primary-button rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
                           >
                             Save override
                           </button>
