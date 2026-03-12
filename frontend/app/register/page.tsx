@@ -109,7 +109,8 @@ export default function RegisterPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [touchedFields, setTouchedFields] = useState<Record<FieldKey, boolean>>({
@@ -188,6 +189,8 @@ export default function RegisterPage() {
   const touchedInvalidCount = (Object.keys(touchedFields) as FieldKey[]).filter(
     (key) => touchedFields[key] && fieldErrors[key]
   ).length;
+  const otpBusy = sendingOtp || verifyingOtp;
+  const otpDigitsEntered = otpCode.trim().length;
 
   const markTouched = (field: FieldKey) => {
     setTouchedFields((prev) => ({ ...prev, [field]: true }));
@@ -273,7 +276,7 @@ export default function RegisterPage() {
 
     setError('');
     setMessage('');
-    setOtpLoading(true);
+    setSendingOtp(true);
 
     try {
       const data = await apiPost<OtpResponse>('/auth/request-signup-otp', {
@@ -293,7 +296,7 @@ export default function RegisterPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send OTP');
     } finally {
-      setOtpLoading(false);
+      setSendingOtp(false);
     }
   };
 
@@ -317,7 +320,7 @@ export default function RegisterPage() {
 
     setError('');
     setMessage('');
-    setOtpLoading(true);
+    setVerifyingOtp(true);
 
     try {
       await apiPost('/auth/verify-signup-otp', {
@@ -332,7 +335,7 @@ export default function RegisterPage() {
       setOtpVerified(false);
       setError(err instanceof Error ? err.message : 'OTP verification failed');
     } finally {
-      setOtpLoading(false);
+      setVerifyingOtp(false);
     }
   };
 
@@ -734,28 +737,60 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={sendOtp}
-                disabled={otpLoading || !detailsReady}
+                disabled={sendingOtp || verifyingOtp || !detailsReady}
                 className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {otpLoading ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                {sendingOtp ? 'Sending OTP...' : otpSent ? 'Resend OTP' : 'Send OTP'}
               </button>
             </div>
             <p className="mt-1 text-sm text-slate-600">OTP will be sent to admin email: {normalizedAdminEmail || '-'}</p>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-              <input
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6 digit OTP"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 tracking-[0.2em] outline-none focus:border-slate-500"
-              />
+            <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Validate OTP</p>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      otpVerified
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : otpSent
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {otpVerified ? 'Verified' : otpSent ? 'Awaiting code' : 'Send first'}
+                  </span>
+                </div>
+                <input
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="Enter 6 digit OTP"
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-lg tracking-[0.35em] outline-none transition ${
+                    otpVerified
+                      ? 'border-emerald-300 focus:border-emerald-500'
+                      : otpDigitsEntered === 6
+                        ? 'border-indigo-300 focus:border-indigo-500'
+                        : 'border-slate-300 focus:border-slate-500'
+                  }`}
+                />
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <p className="text-slate-500">
+                    {otpSent ? 'Use the 6-digit code sent to the admin email.' : 'Send OTP after all required details are complete.'}
+                  </p>
+                  <p className={`font-semibold ${otpDigitsEntered === 6 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {otpDigitsEntered}/6
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={verifyOtp}
-                disabled={otpLoading || !otpSent || otpCode.length !== 6}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={otpBusy || !otpSent || otpCode.length !== 6 || otpVerified}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {otpLoading ? 'Verifying...' : 'Verify OTP'}
+                {verifyingOtp ? 'Verifying OTP...' : otpVerified ? 'OTP Verified' : 'Verify OTP'}
               </button>
             </div>
 
