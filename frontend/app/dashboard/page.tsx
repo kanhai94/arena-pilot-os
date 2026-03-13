@@ -1824,6 +1824,7 @@ export default function DashboardPage() {
 
   const compactSelectLabel = (label: string, max = 26) =>
     label.length > max ? `${label.slice(0, max - 1)}...` : label;
+  const compactPhoneCodeLabel = (label: string) => label.replace('IND', 'IN');
 
   const platformPlanPriceByName = useMemo(() => {
     return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
@@ -4301,7 +4302,7 @@ export default function DashboardPage() {
                           <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                             Class Status
                             <select
-                              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
+                              className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
                               value={classStatus}
                               onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
                             >
@@ -4310,26 +4311,26 @@ export default function DashboardPage() {
                             </select>
                           </label>
                           <select
-                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
+                            className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
                           >
-                            <option value="">No coach assigned (optional)</option>
+                            <option value="">No coach assigned</option>
                             {coaches.map((coach) => (
                               <option key={coach.id} value={coach.id}>
-                                {coach.fullName}
+                                {compactSelectLabel(coach.fullName, 22)}
                               </option>
                             ))}
                           </select>
                           <select
-                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
+                            className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
                             value={classFeePlanId}
                             onChange={(e) => setClassFeePlanId(e.target.value)}
                           >
-                            <option value="">Attach plan (optional)</option>
+                            <option value="">Attach plan</option>
                             {feePlans.map((plan) => (
                               <option key={plan._id} value={plan._id}>
-                                {plan.name} - {formatCurrency(plan.amount)}
+                                {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 22)}
                               </option>
                             ))}
                           </select>
@@ -5018,7 +5019,7 @@ export default function DashboardPage() {
                                   <select
                                     value={clientGender}
                                     onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
-                                    className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
+                                    className={`w-full min-w-0 max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
                                   >
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
@@ -5043,11 +5044,11 @@ export default function DashboardPage() {
                                     <select
                                       value={clientMobileCode}
                                       onChange={(e) => setClientMobileCode(e.target.value)}
-                                      className="rounded-2xl border border-slate-300 px-3 py-3 font-normal"
+                                      className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
                                     >
-                                      <option value="+91">IND +91</option>
-                                      <option value="+1">US +1</option>
-                                      <option value="+44">UK +44</option>
+                                      <option value="+91">{compactPhoneCodeLabel('IND +91')}</option>
+                                      <option value="+1">{compactPhoneCodeLabel('US +1')}</option>
+                                      <option value="+44">{compactPhoneCodeLabel('UK +44')}</option>
                                     </select>
                                     <input
                                       value={clientMobile}
@@ -5149,12 +5150,12 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
-                                  className="w-full min-w-0 rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium"
                                 >
                                   <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
                                     <option key={plan._id} value={plan._id}>
-                                      {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 24)}
+                                      {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 20)}
                                     </option>
                                   ))}
                                 </select>
@@ -5164,12 +5165,12 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionClassId}
                                   onChange={(e) => setSubscriptionClassId(e.target.value)}
-                                  className="w-full min-w-0 rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium"
                                 >
                                   <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
                                     <option key={row.id} value={row.id}>
-                                      {compactSelectLabel(row.title, 24)}
+                                      {compactSelectLabel(row.title, 20)}
                                     </option>
                                   ))}
                                 </select>
