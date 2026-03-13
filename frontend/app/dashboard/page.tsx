@@ -4264,7 +4264,7 @@ export default function DashboardPage() {
                             onChange={(e) => setClassTitle(e.target.value)}
                             placeholder="Class title (optional)"
                           />
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             <input
                               className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
                               value={classSkill}
@@ -4279,12 +4279,12 @@ export default function DashboardPage() {
                             />
                           </div>
                           {classSubmitAttempted && (classRequiredFieldErrors.skill || classRequiredFieldErrors.center) ? (
-                            <div className="-mt-2 grid gap-1 text-sm font-medium text-rose-600 md:grid-cols-2">
+                            <div className="-mt-2 grid gap-1 text-sm font-medium text-rose-600 xl:grid-cols-2">
                               <p>{classRequiredFieldErrors.skill || ''}</p>
                               <p>{classRequiredFieldErrors.center || ''}</p>
                             </div>
                           ) : null}
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             <input
                               className="rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
                               value={classLevel}
@@ -4333,7 +4333,7 @@ export default function DashboardPage() {
                               </option>
                             ))}
                           </select>
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             <div className="rounded-2xl border border-slate-300 p-3">
                               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Start Time</p>
                               <div className="grid grid-cols-3 gap-2">
@@ -4443,7 +4443,7 @@ export default function DashboardPage() {
                             <p className="text-sm font-medium text-rose-600">{classCapacityError}</p>
                           ) : null}
 
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                             <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
                               <input
                                 type="radio"
@@ -4981,7 +4981,7 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="grid gap-3 xl:grid-cols-2">
                                 <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Full name
                                   <input
@@ -5066,7 +5066,7 @@ export default function DashboardPage() {
 
                           <section className="rounded-3xl border border-slate-200 bg-white p-5">
                             <h4 className="text-lg font-bold text-slate-900">Invoice Details</h4>
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <div className="mt-3 grid gap-3 xl:grid-cols-2">
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Invoice date
                                 <input
@@ -5116,7 +5116,7 @@ export default function DashboardPage() {
 
                           <section className="rounded-3xl border border-slate-200 bg-white p-5">
                             <h4 className="text-lg font-bold text-slate-900">Subscription Details</h4>
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <div className="mt-3 grid gap-3 xl:grid-cols-2">
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Level
                                 <input
@@ -5126,8 +5126,8 @@ export default function DashboardPage() {
                                   className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                                 />
                               </label>
-                              <div className="flex items-center gap-2 rounded-2xl border border-slate-300 px-3 py-2">
-                                <label className="flex items-center gap-2 text-sm">
+                              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-300 px-3 py-2">
+                                <label className="flex min-w-0 items-center gap-2 text-sm">
                                   <input
                                     type="radio"
                                     checked={subscriptionType === 'subscription'}
@@ -5135,7 +5135,7 @@ export default function DashboardPage() {
                                   />
                                   Subscription
                                 </label>
-                                <label className="flex items-center gap-2 text-sm">
+                                <label className="flex min-w-0 items-center gap-2 text-sm">
                                   <input
                                     type="radio"
                                     checked={subscriptionType === 'trial'}
@@ -5149,7 +5149,7 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
-                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  className="w-full min-w-0 rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                                 >
                                   <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
@@ -5164,7 +5164,7 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionClassId}
                                   onChange={(e) => setSubscriptionClassId(e.target.value)}
-                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                  className="w-full min-w-0 rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                                 >
                                   <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
