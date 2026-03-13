@@ -1822,6 +1822,9 @@ export default function DashboardPage() {
     };
   }, [activeMenu]);
 
+  const compactSelectLabel = (label: string, max = 26) =>
+    label.length > max ? `${label.slice(0, max - 1)}...` : label;
+
   const platformPlanPriceByName = useMemo(() => {
     return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
   }, [platformPlans]);
@@ -4283,28 +4286,31 @@ export default function DashboardPage() {
                           ) : null}
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                             <input
-                              className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
+                              className="rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
                               value={classLevel}
                               onChange={(e) => setClassLevel(e.target.value)}
                               placeholder="Level (Beginner/Advanced)"
                             />
                             <input
-                              className="rounded-2xl border border-slate-300 px-5 py-4 text-xl"
+                              className="rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
                               value={classCapacity}
                               onChange={(e) => setClassCapacity(e.target.value.replace(/\D/g, ''))}
                               placeholder="Class capacity"
                             />
                           </div>
+                          <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                            Class Status
+                            <select
+                              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
+                              value={classStatus}
+                              onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
+                            >
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                          </label>
                           <select
-                            className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl"
-                            value={classStatus}
-                            onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
-                          >
-                            <option value="active">Status: Active</option>
-                            <option value="inactive">Status: Inactive</option>
-                          </select>
-                          <select
-                            className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl"
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
                           >
@@ -4316,7 +4322,7 @@ export default function DashboardPage() {
                             ))}
                           </select>
                           <select
-                            className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl"
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:px-5 sm:py-4 sm:text-xl"
                             value={classFeePlanId}
                             onChange={(e) => setClassFeePlanId(e.target.value)}
                           >
@@ -4459,7 +4465,7 @@ export default function DashboardPage() {
                           </div>
 
                           <textarea
-                            className="h-28 w-full rounded-2xl border border-slate-300 px-4 py-3 text-lg"
+                            className="h-28 w-full rounded-2xl border border-slate-300 px-4 py-3 text-base sm:text-lg"
                             value={classInfo}
                             onChange={(e) => setClassInfo(e.target.value)}
                             placeholder="Class information"
@@ -5033,7 +5039,7 @@ export default function DashboardPage() {
                                 </label>
                                 <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                                   Mobile
-                                  <div className="grid grid-cols-[110px_1fr] gap-2">
+                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[96px_1fr]">
                                     <select
                                       value={clientMobileCode}
                                       onChange={(e) => setClientMobileCode(e.target.value)}
@@ -5148,7 +5154,7 @@ export default function DashboardPage() {
                                   <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
                                     <option key={plan._id} value={plan._id}>
-                                      {plan.name} - {formatCurrency(plan.amount)}
+                                      {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 24)}
                                     </option>
                                   ))}
                                 </select>
@@ -5163,7 +5169,7 @@ export default function DashboardPage() {
                                   <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
                                     <option key={row.id} value={row.id}>
-                                      {row.title}
+                                      {compactSelectLabel(row.title, 24)}
                                     </option>
                                   ))}
                                 </select>
