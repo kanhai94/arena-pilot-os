@@ -1,9 +1,4 @@
-const rawApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!rawApiBaseUrl) {
-  throw new Error('NEXT_PUBLIC_API_BASE_URL is not set. Please configure frontend/.env');
-}
-
+const rawApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 const API_BASE_URL = rawApiBaseUrl.replace(/\/$/, '');
 
 type ApiResponse<T> = {
