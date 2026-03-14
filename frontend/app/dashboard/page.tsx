@@ -4340,7 +4340,9 @@ export default function DashboardPage() {
                             ))}
                           </select>
                           {classCoachId ? (
-                            <p className="-mt-2 text-xs font-medium text-slate-500">{getCoachSelectLabel(classCoachId)}</p>
+                            <p className="-mt-2 text-xs font-medium text-slate-500">
+                              Selected coach: <span className="text-slate-700">{getCoachSelectLabel(classCoachId)}</span>
+                            </p>
                           ) : null}
                           <select
                             className={composerLongSelectClassName}
@@ -4355,7 +4357,9 @@ export default function DashboardPage() {
                             ))}
                           </select>
                           {classFeePlanId ? (
-                            <p className="-mt-2 text-xs font-medium text-slate-500">{getFeePlanSelectLabel(classFeePlanId, 'Attach plan')}</p>
+                            <p className="-mt-2 text-xs font-medium text-slate-500">
+                              Selected plan: <span className="text-slate-700">{getFeePlanSelectLabel(classFeePlanId, 'Attach plan')}</span>
+                            </p>
                           ) : null}
                           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             <div className="rounded-2xl border border-slate-300 p-3">
@@ -5183,7 +5187,9 @@ export default function DashboardPage() {
                                   ))}
                                 </select>
                                 {subscriptionPlanId ? (
-                                  <p className="text-xs font-medium text-slate-500">{getFeePlanSelectLabel(subscriptionPlanId)}</p>
+                                  <p className="text-xs font-medium text-slate-500">
+                                    Selected plan: <span className="text-slate-700">{getFeePlanSelectLabel(subscriptionPlanId)}</span>
+                                  </p>
                                 ) : null}
                               </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -5201,7 +5207,9 @@ export default function DashboardPage() {
                                   ))}
                                 </select>
                                 {subscriptionClassId ? (
-                                  <p className="text-xs font-medium text-slate-500">{getClassSelectLabel(subscriptionClassId)}</p>
+                                  <p className="text-xs font-medium text-slate-500">
+                                    Selected class: <span className="text-slate-700">{getClassSelectLabel(subscriptionClassId)}</span>
+                                  </p>
                                 ) : null}
                               </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
