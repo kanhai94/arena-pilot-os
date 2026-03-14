@@ -4322,7 +4322,6 @@ export default function DashboardPage() {
                               className={composerShortSelectClassName}
                               value={classStatus}
                               onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
-                              title={classStatus === 'active' ? 'Active' : 'Inactive'}
                             >
                               <option value="active">Active</option>
                               <option value="inactive">Inactive</option>
@@ -4332,28 +4331,32 @@ export default function DashboardPage() {
                             className={composerLongSelectClassName}
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
-                            title={getCoachSelectLabel(classCoachId)}
                           >
-                            <option value="" title="No coach assigned">No coach assigned</option>
+                            <option value="">No coach assigned</option>
                             {coaches.map((coach) => (
-                              <option key={coach.id} value={coach.id} title={coach.fullName}>
+                              <option key={coach.id} value={coach.id}>
                                 {compactSelectLabel(coach.fullName, 18)}
                               </option>
                             ))}
                           </select>
+                          {classCoachId ? (
+                            <p className="-mt-2 text-xs font-medium text-slate-500">{getCoachSelectLabel(classCoachId)}</p>
+                          ) : null}
                           <select
                             className={composerLongSelectClassName}
                             value={classFeePlanId}
                             onChange={(e) => setClassFeePlanId(e.target.value)}
-                            title={getFeePlanSelectLabel(classFeePlanId, 'Attach plan')}
                           >
-                            <option value="" title="Attach plan">Attach plan</option>
+                            <option value="">Attach plan</option>
                             {feePlans.map((plan) => (
-                              <option key={plan._id} value={plan._id} title={`${plan.name} - ${formatCurrency(plan.amount)}`}>
+                              <option key={plan._id} value={plan._id}>
                                 {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 18)}
                               </option>
                             ))}
                           </select>
+                          {classFeePlanId ? (
+                            <p className="-mt-2 text-xs font-medium text-slate-500">{getFeePlanSelectLabel(classFeePlanId, 'Attach plan')}</p>
+                          ) : null}
                           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             <div className="rounded-2xl border border-slate-300 p-3">
                               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Start Time</p>
@@ -5040,7 +5043,6 @@ export default function DashboardPage() {
                                     value={clientGender}
                                     onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
                                     className={`w-full min-w-0 max-w-full md:max-w-[14rem] xl:max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
-                                    title={clientGender === 'male' ? 'Male' : clientGender === 'female' ? 'Female' : 'Other'}
                                   >
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
@@ -5066,7 +5068,6 @@ export default function DashboardPage() {
                                       value={clientMobileCode}
                                       onChange={(e) => setClientMobileCode(e.target.value)}
                                       className="w-full min-w-0 max-w-full md:max-w-[7.5rem] xl:max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
-                                      title={clientMobileCode}
                                     >
                                       <option value="+91">{compactPhoneCodeLabel('IND +91')}</option>
                                       <option value="+1">{compactPhoneCodeLabel('US +1')}</option>
@@ -5173,15 +5174,17 @@ export default function DashboardPage() {
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
                                   className={composerLongSelectClassName}
-                                  title={getFeePlanSelectLabel(subscriptionPlanId)}
                                 >
-                                  <option value="" title="Select plan">Select plan</option>
+                                  <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
-                                    <option key={plan._id} value={plan._id} title={`${plan.name} - ${formatCurrency(plan.amount)}`}>
+                                    <option key={plan._id} value={plan._id}>
                                       {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 16)}
                                     </option>
                                   ))}
                                 </select>
+                                {subscriptionPlanId ? (
+                                  <p className="text-xs font-medium text-slate-500">{getFeePlanSelectLabel(subscriptionPlanId)}</p>
+                                ) : null}
                               </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Class
@@ -5189,15 +5192,17 @@ export default function DashboardPage() {
                                   value={subscriptionClassId}
                                   onChange={(e) => setSubscriptionClassId(e.target.value)}
                                   className={composerLongSelectClassName}
-                                  title={getClassSelectLabel(subscriptionClassId)}
                                 >
-                                  <option value="" title="Select class">Select class</option>
+                                  <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
-                                    <option key={row.id} value={row.id} title={row.title}>
+                                    <option key={row.id} value={row.id}>
                                       {compactSelectLabel(row.title, 16)}
                                     </option>
                                   ))}
                                 </select>
+                                {subscriptionClassId ? (
+                                  <p className="text-xs font-medium text-slate-500">{getClassSelectLabel(subscriptionClassId)}</p>
+                                ) : null}
                               </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Start date
