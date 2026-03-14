@@ -451,6 +451,10 @@ export const createAuthService = (repository, dependencies = {}) => {
     },
 
     async refreshToken(refreshToken, requestMeta) {
+      if (!refreshToken) {
+        throw new AppError('Refresh token is missing', StatusCodes.UNAUTHORIZED);
+      }
+
       let decoded = null;
       try {
         decoded = verifyRefreshToken(refreshToken);
@@ -477,6 +481,10 @@ export const createAuthService = (repository, dependencies = {}) => {
     },
 
     async logout(refreshToken) {
+      if (!refreshToken) {
+        return { loggedOut: true };
+      }
+
       let decoded = null;
       try {
         decoded = verifyRefreshToken(refreshToken);

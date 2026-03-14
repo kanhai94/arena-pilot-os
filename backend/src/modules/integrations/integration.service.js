@@ -4,6 +4,7 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
 import { encryptSecret, decryptSecret } from '../../utils/secretCipher.js';
+import { assertSafeExternalUrl } from '../../utils/networkSafety.js';
 import { sendAutomationEmail } from '../../adapters/email.adapter.js';
 
 const mask = (value) => (value ? '******' : null);
@@ -348,6 +349,7 @@ export const createIntegrationService = (repository, dependencies = {}) => {
   const sendViaCurlTemplate = async (template, variables) => {
     const request = parseCurlTemplate(template, variables);
     if (!request) return { sent: false };
+    assertSafeExternalUrl(request.url, 'Curl template URL');
     const headers = { ...request.headers };
     if (!headers['content-type'] && request.body) {
       headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -410,6 +412,7 @@ export const createIntegrationService = (repository, dependencies = {}) => {
       if (config.email.type === 'api') {
         const api = config.email.api || {};
         if (!api.endpoint) return { sent: false };
+        assertSafeExternalUrl(api.endpoint, 'Email API endpoint');
 
         const headers = {
           'content-type': 'application/json',
@@ -439,6 +442,7 @@ export const createIntegrationService = (repository, dependencies = {}) => {
       if (config.whatsapp.type === 'api') {
         const api = config.whatsapp.api || {};
         if (!api.endpoint) return { sent: false };
+        assertSafeExternalUrl(api.endpoint, 'WhatsApp API endpoint');
         const headers = {
           'content-type': 'application/json',
           ...parseHeaders(api.headers)
@@ -473,6 +477,7 @@ export const createIntegrationService = (repository, dependencies = {}) => {
       if (config.sms.type === 'api') {
         const api = config.sms.api || {};
         if (!api.endpoint) return { sent: false };
+        assertSafeExternalUrl(api.endpoint, 'SMS API endpoint');
         const headers = {
           'content-type': 'application/json',
           ...parseHeaders(api.headers)

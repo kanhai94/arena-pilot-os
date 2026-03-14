@@ -1,5 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import { apiSuccess } from '../../utils/apiResponse.js';
+import { clearAuthCookies, readCookie, REFRESH_COOKIE_NAME, setAuthCookies } from '../../utils/authCookies.js';
 import {
   createRegistrationOrderSchema,
   loginSchema,
@@ -12,6 +13,10 @@ import {
 } from '../../validators/auth.validators.js';
 
 export const createAuthController = (authService) => {
+  const buildSessionResponse = (data) => ({
+    user: data.user
+  });
+
   return {
     getRegistrationPlans: async (_req, res, next) => {
       try {
@@ -89,7 +94,8 @@ export const createAuthController = (authService) => {
           userAgent: req.headers['user-agent'],
           ipAddress: req.ip
         });
-        return apiSuccess(res, data);
+        setAuthCookies(res, data);
+        return apiSuccess(res, buildSessionResponse(data));
       } catch (error) {
         return next(error);
       }
@@ -98,12 +104,15 @@ export const createAuthController = (authService) => {
     refreshToken: async (req, res, next) => {
       try {
         const payload = parseOrThrow(refreshTokenSchema, req.body);
-        const data = await authService.refreshToken(payload.refreshToken, {
+        const refreshToken = payload.refreshToken || readCookie(req, REFRESH_COOKIE_NAME);
+        const data = await authService.refreshToken(refreshToken, {
           userAgent: req.headers['user-agent'],
           ipAddress: req.ip
         });
-        return apiSuccess(res, data);
+        setAuthCookies(res, data);
+        return apiSuccess(res, buildSessionResponse(data));
       } catch (error) {
+        clearAuthCookies(res);
         return next(error);
       }
     },
@@ -111,9 +120,12 @@ export const createAuthController = (authService) => {
     logout: async (req, res, next) => {
       try {
         const payload = parseOrThrow(refreshTokenSchema, req.body);
-        const data = await authService.logout(payload.refreshToken);
+        const refreshToken = payload.refreshToken || readCookie(req, REFRESH_COOKIE_NAME);
+        const data = await authService.logout(refreshToken);
+        clearAuthCookies(res);
         return apiSuccess(res, data);
       } catch (error) {
+        clearAuthCookies(res);
         return next(error);
       }
     },

@@ -1,17 +1,19 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../errors/appError.js';
+import { ACCESS_COOKIE_NAME, readCookie } from '../utils/authCookies.js';
 import { verifyAccessToken } from '../utils/jwt.js';
 import { normalizeRole } from '../constants/roles.js';
 
 export const authMiddleware = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    const cookieToken = readCookie(req, ACCESS_COOKIE_NAME);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!cookieToken && (!authHeader || !authHeader.startsWith('Bearer '))) {
       throw new AppError('Authorization token is missing', StatusCodes.UNAUTHORIZED);
     }
 
-    const token = authHeader.slice(7).trim();
+    const token = cookieToken || authHeader.slice(7).trim();
     const decoded = verifyAccessToken(token);
     const normalizedRole = normalizeRole(decoded.role);
 

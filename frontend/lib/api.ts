@@ -13,20 +13,7 @@ type ApiResponse<T> = {
   details?: unknown;
 };
 
-type RefreshTokenResponse = {
-  accessToken: string;
-  refreshToken: string;
-  user?: {
-    id: string;
-    tenantId: string;
-    fullName: string;
-    email: string;
-    role: string;
-    permissions?: string[];
-  };
-};
-
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
 const parseErrorMessage = (payload: any): string => {
   if (!payload) {
@@ -59,6 +46,7 @@ const sendRequest = async <T>(path: string, method: string, body?: unknown, acce
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
+    credentials: 'include',
     ...(body !== undefined ? { body: JSON.stringify(body) } : {})
   });
 
@@ -69,8 +57,6 @@ const sendRequest = async <T>(path: string, method: string, body?: unknown, acce
 
 const clearClientSession = () => {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
   localStorage.removeItem('currentUser');
 };
 
@@ -81,39 +67,20 @@ const assertPayload = <T>(response: Response, payload: ApiResponse<T>): T => {
   return payload.data as T;
 };
 
-const performRefreshToken = async (): Promise<string | null> => {
+const performRefreshToken = async (): Promise<boolean> => {
   if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) {
-    return null;
+    return false;
   }
 
   try {
-    const { response, payload } = await sendRequest<RefreshTokenResponse>('/auth/refresh-token', 'POST', {
-      refreshToken
-    });
-
-    if (!response.ok || !payload.success || !payload.data?.accessToken || !payload.data?.refreshToken) {
-      return null;
-    }
-
-    localStorage.setItem('accessToken', payload.data.accessToken);
-    localStorage.setItem('refreshToken', payload.data.refreshToken);
-
-    if (payload.data.user) {
-      localStorage.setItem('currentUser', JSON.stringify(payload.data.user));
-    }
-
-    return payload.data.accessToken;
+    const { response, payload } = await sendRequest('/auth/refresh-token', 'POST');
+    return response.ok && payload.success;
   } catch {
-    return null;
+    return false;
   }
 };
 
-const attemptRefreshToken = async (): Promise<string | null> => {
+const attemptRefreshToken = async (): Promise<boolean> => {
   if (refreshInFlight) {
     return refreshInFlight;
   }
@@ -134,22 +101,17 @@ const request = async <T>(
 ): Promise<T> => {
   const { withAuth = false } = options;
 
-  let token = accessToken;
-  if (withAuth && typeof window !== 'undefined' && !token) {
-    token = localStorage.getItem('accessToken') || undefined;
-  }
-  let result = await sendRequest<T>(path, method, body, token);
+  let result = await sendRequest<T>(path, method, body, accessToken);
 
   if (withAuth && result.response.status === 401) {
-    const refreshedAccessToken = await attemptRefreshToken();
+    const refreshed = await attemptRefreshToken();
 
-    if (!refreshedAccessToken) {
+    if (!refreshed) {
       clearClientSession();
       throw new Error('Session expired. Please login again.');
     }
 
-    token = refreshedAccessToken;
-    result = await sendRequest<T>(path, method, body, token);
+    result = await sendRequest<T>(path, method, body, accessToken);
   }
 
   if (withAuth && result.response.status === 401) {
@@ -168,22 +130,22 @@ export const apiGet = async <T>(path: string): Promise<T> => {
   return request<T>(path, 'GET');
 };
 
-export const apiGetWithAuth = async <T>(path: string, accessToken: string): Promise<T> => {
+export const apiGetWithAuth = async <T>(path: string, accessToken?: string): Promise<T> => {
   return request<T>(path, 'GET', undefined, accessToken, { withAuth: true });
 };
 
-export const apiPostWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
+export const apiPostWithAuth = async <T>(path: string, body: unknown, accessToken?: string): Promise<T> => {
   return request<T>(path, 'POST', body, accessToken, { withAuth: true });
 };
 
-export const apiPutWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
+export const apiPutWithAuth = async <T>(path: string, body: unknown, accessToken?: string): Promise<T> => {
   return request<T>(path, 'PUT', body, accessToken, { withAuth: true });
 };
 
-export const apiPatchWithAuth = async <T>(path: string, body: unknown, accessToken: string): Promise<T> => {
+export const apiPatchWithAuth = async <T>(path: string, body: unknown, accessToken?: string): Promise<T> => {
   return request<T>(path, 'PATCH', body, accessToken, { withAuth: true });
 };
 
-export const apiDeleteWithAuth = async <T>(path: string, accessToken: string): Promise<T> => {
+export const apiDeleteWithAuth = async <T>(path: string, accessToken?: string): Promise<T> => {
   return request<T>(path, 'DELETE', undefined, accessToken, { withAuth: true });
 };

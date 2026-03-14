@@ -2,13 +2,29 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { apiGetWithAuth } from '../lib/api';
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    setIsLoggedIn(Boolean(token));
+    let mounted = true;
+
+    apiGetWithAuth('/auth/me')
+      .then(() => {
+        if (mounted) {
+          setIsLoggedIn(true);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setIsLoggedIn(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (

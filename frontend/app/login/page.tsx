@@ -6,8 +6,6 @@ import { FormEvent, useState } from 'react';
 import { apiPost } from '../../lib/api';
 
 type LoginResponse = {
-  accessToken: string;
-  refreshToken: string;
   user: {
     id: string;
     tenantId: string;
@@ -44,11 +42,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await apiPost<LoginResponse>('/auth/login', { email, password });
-
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
+      await apiPost<LoginResponse>('/auth/login', { email, password });
 
       router.push('/dashboard');
     } catch (err) {

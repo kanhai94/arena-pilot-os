@@ -1,6 +1,6 @@
 export const productionConfig = {
   cors: {
-    allowCredentials: false
+    allowCredentials: true
   },
   security: {
     enableHsts: true

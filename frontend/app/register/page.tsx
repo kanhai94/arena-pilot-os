@@ -25,8 +25,6 @@ type RegisterResponse = {
 };
 
 type LoginResponse = {
-  accessToken: string;
-  refreshToken: string;
   user: {
     id: string;
     tenantId: string;
@@ -452,14 +450,10 @@ export default function RegisterPage() {
         ...(registrationPaymentPayload ? { payment: registrationPaymentPayload } : {})
       });
 
-      const loginData = await apiPost<LoginResponse>('/auth/login', {
+      await apiPost<LoginResponse>('/auth/login', {
         email: normalizedAdminEmail,
         password: adminPassword
       });
-
-      localStorage.setItem('accessToken', loginData.accessToken);
-      localStorage.setItem('refreshToken', loginData.refreshToken);
-      localStorage.setItem('currentUser', JSON.stringify(loginData.user));
 
       setMessage(`Academy ${data.tenant.name} created. Redirecting to dashboard...`);
       router.push('/dashboard');

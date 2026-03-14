@@ -633,7 +633,7 @@ const csvEscape = (value: unknown) => {
 export default function DashboardPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [token, setToken] = useState('');
+  const token = '';
   const [user, setUser] = useState<UserSession | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('pulse');
   const [activeMenu, setActiveMenu] = useState<MenuItem>('Pulse Board');
@@ -1123,7 +1123,7 @@ export default function DashboardPage() {
     setTenantIntegrationLoading(false);
   };
 
-  const loadDashboardData = async (accessToken: string, currentUser?: UserSession | null) => {
+  const loadDashboardData = async (accessToken = '', currentUser?: UserSession | null) => {
     setLoading(true);
 
     const resolvedUser = currentUser || user;
@@ -1143,7 +1143,7 @@ export default function DashboardPage() {
       platformPlanList
     ] =
       await Promise.all([
-      safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', accessToken), null),
+      currentUser ? Promise.resolve(currentUser) : safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', accessToken), null),
       safeFetch(() => apiGetWithAuth<BillingCurrent>('/billing/current', accessToken), null),
       safeFetch(() => apiGetWithAuth<DashboardOverview>('/dashboard/overview', accessToken), null),
       safeFetch(() => apiGetWithAuth<StudentsListResponse>('/students?page=1&limit=12', accessToken), {
@@ -1181,7 +1181,6 @@ export default function DashboardPage() {
       ]);
 
     if (me) {
-      localStorage.setItem('currentUser', JSON.stringify(me));
       setUser(me);
     }
 
@@ -1222,7 +1221,7 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  const loadAttendanceByDate = async (accessToken: string, date: string) => {
+  const loadAttendanceByDate = async (accessToken = '', date: string) => {
     const response = await safeFetch(
       () => apiGetWithAuth<AttendanceByDateResponse>(`/attendance/by-date?date=${date}&page=1&limit=200`, accessToken),
       { items: [], pagination: { total: 0 } }
@@ -1231,26 +1230,28 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    const accessToken = localStorage.getItem('accessToken') || '';
-    const userData = localStorage.getItem('currentUser');
+    let mounted = true;
 
-    if (!accessToken || !userData) {
-      router.replace('/login');
-      return;
-    }
+    const bootstrapSession = async () => {
+      const me = await safeFetch(() => apiGetWithAuth<UserSession>('/auth/me'), null);
 
-    setToken(accessToken);
+      if (!mounted) return;
 
-    try {
-      const parsedUser = JSON.parse(userData) as UserSession;
-      setUser(parsedUser);
-      loadDashboardData(accessToken, parsedUser);
-      loadAttendanceByDate(accessToken, academyAttendanceDate);
-    } catch {
-      localStorage.removeItem('currentUser');
-      router.replace('/login');
-      return;
-    }
+      if (!me) {
+        router.replace('/login');
+        return;
+      }
+
+      setUser(me);
+      await loadDashboardData('', me);
+      await loadAttendanceByDate('', academyAttendanceDate);
+    };
+
+    bootstrapSession();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -1880,7 +1881,7 @@ export default function DashboardPage() {
   };
 
   const runAction = async (action: () => Promise<unknown>, successMessage: string): Promise<boolean> => {
-    if (!token) return false;
+    if (!user) return false;
 
     setActionLoading(true);
     setToast('');
@@ -1901,10 +1902,10 @@ export default function DashboardPage() {
   };
 
   const logout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('currentUser');
-    router.replace('/login');
+    apiPostWithAuth('/auth/logout', {}, token).finally(() => {
+      localStorage.removeItem('currentUser');
+      router.replace('/login');
+    });
   };
 
   const handleMenuClick = (menu: MenuItem) => {

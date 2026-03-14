@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AppError } from '../errors/appError.js';
+import { extractUrlFromCurlTemplate, isSafeExternalUrl } from '../utils/networkSafety.js';
 
 const smtpSchema = z
   .object({
@@ -14,7 +15,11 @@ const smtpSchema = z
 
 const emailApiSchema = z
   .object({
-    endpoint: z.string().url().optional(),
+    endpoint: z
+      .string()
+      .url()
+      .refine((value) => isSafeExternalUrl(value), 'Endpoint must be a public HTTPS URL')
+      .optional(),
     apiKey: z.string().min(1).optional(),
     headers: z.string().min(1).optional(),
     exampleCurl: z.string().min(1).optional()
@@ -33,7 +38,11 @@ const emailSchema = z
 
 const smsApiSchema = z
   .object({
-    endpoint: z.string().url().optional(),
+    endpoint: z
+      .string()
+      .url()
+      .refine((value) => isSafeExternalUrl(value), 'Endpoint must be a public HTTPS URL')
+      .optional(),
     apiKey: z.string().min(1).optional(),
     headers: z.string().min(1).optional()
   })
@@ -44,7 +53,11 @@ const smsSchema = z
   .object({
     type: z.enum(['api', 'curl']).optional(),
     api: smsApiSchema,
-    curlTemplate: z.string().min(1).optional()
+    curlTemplate: z
+      .string()
+      .min(1)
+      .refine((value) => isSafeExternalUrl(extractUrlFromCurlTemplate(value)), 'Curl template must target a public HTTPS URL')
+      .optional()
   })
   .strict()
   .optional();
@@ -53,7 +66,11 @@ const whatsappSchema = z
   .object({
     type: z.enum(['api', 'curl']).optional(),
     api: smsApiSchema,
-    curlTemplate: z.string().min(1).optional()
+    curlTemplate: z
+      .string()
+      .min(1)
+      .refine((value) => isSafeExternalUrl(extractUrlFromCurlTemplate(value)), 'Curl template must target a public HTTPS URL')
+      .optional()
   })
   .strict()
   .optional();
