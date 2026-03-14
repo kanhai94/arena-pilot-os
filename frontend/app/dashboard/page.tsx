@@ -1826,8 +1826,10 @@ export default function DashboardPage() {
   const compactSelectLabel = (label: string, max = 26) =>
     label.length > max ? `${label.slice(0, max - 1)}...` : label;
   const compactPhoneCodeLabel = (label: string) => label.replace('IND', 'IN');
-  const composerSelectClassName =
-    'w-full min-w-0 max-w-full md:max-w-[22rem] xl:max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium';
+  const composerLongSelectClassName =
+    'w-full min-w-0 max-w-full md:max-w-[16rem] xl:max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium';
+  const composerShortSelectClassName =
+    'w-full min-w-0 max-w-full md:max-w-[12rem] xl:max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium';
 
   const platformPlanPriceByName = useMemo(() => {
     return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
@@ -4305,7 +4307,7 @@ export default function DashboardPage() {
                           <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                             Class Status
                             <select
-                              className={composerSelectClassName}
+                              className={composerShortSelectClassName}
                               value={classStatus}
                               onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
                             >
@@ -4314,26 +4316,26 @@ export default function DashboardPage() {
                             </select>
                           </label>
                           <select
-                            className={composerSelectClassName}
+                            className={composerLongSelectClassName}
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
                           >
                             <option value="">No coach assigned</option>
                             {coaches.map((coach) => (
                               <option key={coach.id} value={coach.id}>
-                                {compactSelectLabel(coach.fullName, 22)}
+                                {compactSelectLabel(coach.fullName, 18)}
                               </option>
                             ))}
                           </select>
                           <select
-                            className={composerSelectClassName}
+                            className={composerLongSelectClassName}
                             value={classFeePlanId}
                             onChange={(e) => setClassFeePlanId(e.target.value)}
                           >
                             <option value="">Attach plan</option>
                             {feePlans.map((plan) => (
                               <option key={plan._id} value={plan._id}>
-                                {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 22)}
+                                {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 18)}
                               </option>
                             ))}
                           </select>
@@ -5022,7 +5024,7 @@ export default function DashboardPage() {
                                   <select
                                     value={clientGender}
                                     onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
-                                    className={`w-full min-w-0 max-w-full md:max-w-[22rem] xl:max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
+                                    className={`w-full min-w-0 max-w-full md:max-w-[12rem] xl:max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
                                   >
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
@@ -5047,7 +5049,7 @@ export default function DashboardPage() {
                                     <select
                                       value={clientMobileCode}
                                       onChange={(e) => setClientMobileCode(e.target.value)}
-                                      className="w-full min-w-0 max-w-full md:max-w-[8rem] xl:max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
+                                      className="w-full min-w-0 max-w-full md:max-w-[6.5rem] xl:max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
                                     >
                                       <option value="+91">{compactPhoneCodeLabel('IND +91')}</option>
                                       <option value="+1">{compactPhoneCodeLabel('US +1')}</option>
@@ -5153,12 +5155,12 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
-                                  className={composerSelectClassName}
+                                  className={composerLongSelectClassName}
                                 >
                                   <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
                                     <option key={plan._id} value={plan._id}>
-                                      {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 20)}
+                                      {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 16)}
                                     </option>
                                   ))}
                                 </select>
@@ -5168,12 +5170,12 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionClassId}
                                   onChange={(e) => setSubscriptionClassId(e.target.value)}
-                                  className={composerSelectClassName}
+                                  className={composerLongSelectClassName}
                                 >
                                   <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
                                     <option key={row.id} value={row.id}>
-                                      {compactSelectLabel(row.title, 20)}
+                                      {compactSelectLabel(row.title, 16)}
                                     </option>
                                   ))}
                                 </select>
