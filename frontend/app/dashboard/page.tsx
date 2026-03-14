@@ -1826,6 +1826,8 @@ export default function DashboardPage() {
   const compactSelectLabel = (label: string, max = 26) =>
     label.length > max ? `${label.slice(0, max - 1)}...` : label;
   const compactPhoneCodeLabel = (label: string) => label.replace('IND', 'IN');
+  const composerSelectClassName =
+    'w-full min-w-0 max-w-full md:max-w-[22rem] xl:max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium';
 
   const platformPlanPriceByName = useMemo(() => {
     return new Map(platformPlans.map((plan) => [plan.name.toLowerCase(), plan.priceMonthly]));
@@ -4303,7 +4305,7 @@ export default function DashboardPage() {
                           <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                             Class Status
                             <select
-                              className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
+                              className={composerSelectClassName}
                               value={classStatus}
                               onChange={(e) => setClassStatus(e.target.value as 'active' | 'inactive')}
                             >
@@ -4312,7 +4314,7 @@ export default function DashboardPage() {
                             </select>
                           </label>
                           <select
-                            className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
+                            className={composerSelectClassName}
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
                           >
@@ -4324,7 +4326,7 @@ export default function DashboardPage() {
                             ))}
                           </select>
                           <select
-                            className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium sm:px-5 sm:py-4 sm:text-base"
+                            className={composerSelectClassName}
                             value={classFeePlanId}
                             onChange={(e) => setClassFeePlanId(e.target.value)}
                           >
@@ -5020,7 +5022,7 @@ export default function DashboardPage() {
                                   <select
                                     value={clientGender}
                                     onChange={(e) => setClientGender(e.target.value as 'male' | 'female' | 'other')}
-                                    className={`w-full min-w-0 max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
+                                    className={`w-full min-w-0 max-w-full md:max-w-[22rem] xl:max-w-full rounded-2xl border px-4 py-3 text-sm font-medium ${clientSubmitAttempted && clientValidationErrors.gender ? 'border-rose-400' : 'border-slate-300'}`}
                                   >
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
@@ -5045,7 +5047,7 @@ export default function DashboardPage() {
                                     <select
                                       value={clientMobileCode}
                                       onChange={(e) => setClientMobileCode(e.target.value)}
-                                      className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
+                                      className="w-full min-w-0 max-w-full md:max-w-[8rem] xl:max-w-full rounded-2xl border border-slate-300 px-3 py-3 text-sm font-medium"
                                     >
                                       <option value="+91">{compactPhoneCodeLabel('IND +91')}</option>
                                       <option value="+1">{compactPhoneCodeLabel('US +1')}</option>
@@ -5151,7 +5153,7 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
-                                  className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium"
+                                  className={composerSelectClassName}
                                 >
                                   <option value="">Select plan</option>
                                   {feePlans.map((plan) => (
@@ -5166,7 +5168,7 @@ export default function DashboardPage() {
                                 <select
                                   value={subscriptionClassId}
                                   onChange={(e) => setSubscriptionClassId(e.target.value)}
-                                  className="w-full min-w-0 max-w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium"
+                                  className={composerSelectClassName}
                                 >
                                   <option value="">Select class</option>
                                   {academyClassRows.map((row) => (
