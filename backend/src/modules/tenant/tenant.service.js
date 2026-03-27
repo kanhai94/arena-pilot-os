@@ -107,6 +107,20 @@ export const createTenantService = (dependencies) => {
     };
   };
 
+  const resolveUpgradePlan = async (planIdentifier) => {
+    const directPlan = await billingRepository.findPlanById(planIdentifier);
+    if (directPlan && directPlan.status === 'active') {
+      return directPlan;
+    }
+
+    const namedPlan = await billingRepository.findActivePlanByName(String(planIdentifier || '').trim());
+    if (namedPlan) {
+      return namedPlan;
+    }
+
+    return null;
+  };
+
   return {
     async getPlans() {
       const plans = await tenantRepository.listActivePlans();
@@ -127,7 +141,7 @@ export const createTenantService = (dependencies) => {
 
     async upgradePlan(planId, payment = null, autoRenew = true) {
       const tenantId = resolveTenantId();
-      const plan = await billingRepository.findPlanById(planId);
+      const plan = await resolveUpgradePlan(planId);
       if (!plan || plan.status !== 'active') {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
