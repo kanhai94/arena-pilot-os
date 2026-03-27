@@ -40,6 +40,7 @@ export const createAdminService = (repository) => {
     tenantStatus: tenantDoc.tenantStatus || 'active',
     paymentStatus: tenantDoc.paymentStatus || 'pending',
     customPriceOverride: tenantDoc.customPriceOverride ?? null,
+    lastPaymentDate: tenantDoc.lastPaymentDate || null,
     nextPaymentDate: tenantDoc.planEndDate || null,
     createdAt: tenantDoc.createdAt
   });

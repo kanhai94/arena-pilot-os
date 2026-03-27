@@ -226,6 +226,7 @@ type PlatformTenant = {
   billingEmail?: string | null;
   studentCount: number;
   subscriptionStatus: string;
+  lastPaymentDate?: string | null;
   nextPaymentDate?: string | null;
   tenantStatus?: 'active' | 'blocked' | 'suspended' | string;
   paymentStatus?: 'paid' | 'pending' | 'failed' | string;
@@ -1111,6 +1112,7 @@ export default function DashboardPage() {
       workspaceId: row.workspaceId || row.academyCode || null,
       tenantStatus: row.tenantStatus || 'active',
       paymentStatus: row.paymentStatus || 'pending',
+      lastPaymentDate: row.lastPaymentDate || null,
       nextPaymentDate: row.nextPaymentDate || null
     }));
 
@@ -2006,12 +2008,15 @@ export default function DashboardPage() {
     return platformTenants.map((tenant) => {
       const estimated = platformPlanPriceByName.get(tenant.planName?.toLowerCase() || '') ?? 0;
       const amount = tenant.customPriceOverride ?? estimated;
+      const normalizedPaymentStatus = String(tenant.paymentStatus || 'pending').toLowerCase();
+      const status = amount > 0 ? normalizedPaymentStatus : 'n/a';
       return {
         id: tenant.id || tenant.academyName,
         tenant: tenant.academyName,
         amount,
-        status: tenant.paymentStatus || 'pending',
-        date: tenant.nextPaymentDate || '-'
+        status,
+        date: tenant.lastPaymentDate || '-',
+        nextPaymentDate: tenant.nextPaymentDate || null
       };
     });
   }, [platformTenants, platformPlanPriceByName]);
@@ -6974,12 +6979,13 @@ export default function DashboardPage() {
                             <th className="px-3 py-3 font-semibold">Amount</th>
                             <th className="px-3 py-3 font-semibold">Status</th>
                             <th className="px-3 py-3 font-semibold">Date</th>
+                            <th className="px-3 py-3 font-semibold">Next Payment</th>
                           </tr>
                         </thead>
                         <tbody>
                           {billingRows.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-3 py-5 text-center text-slate-500">
+                              <td colSpan={5} className="px-3 py-5 text-center text-slate-500">
                                 No payment records available.
                               </td>
                             </tr>
@@ -6989,11 +6995,24 @@ export default function DashboardPage() {
                               <td className="px-3 py-3 text-slate-800">{row.tenant}</td>
                               <td className="px-3 py-3 text-slate-800">{formatCurrency(row.amount)}</td>
                               <td className="px-3 py-3">
-                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${String(row.status).toLowerCase() === 'paid' ? 'bg-emerald-100 text-emerald-700' : String(row.status).toLowerCase() === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    String(row.status).toLowerCase() === 'paid'
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : String(row.status).toLowerCase() === 'failed'
+                                        ? 'bg-rose-100 text-rose-700'
+                                        : String(row.status).toLowerCase() === 'n/a'
+                                          ? 'bg-slate-100 text-slate-600'
+                                          : 'bg-amber-100 text-amber-700'
+                                  }`}
+                                >
                                   {row.status}
                                 </span>
                               </td>
                               <td className="px-3 py-3 text-slate-700">{row.date === '-' ? '-' : fmtDate(row.date)}</td>
+                              <td className="px-3 py-3 text-slate-700">
+                                {row.nextPaymentDate ? fmtDate(row.nextPaymentDate) : 'N/A'}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
