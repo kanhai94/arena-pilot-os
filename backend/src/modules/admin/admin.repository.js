@@ -158,7 +158,7 @@ export const adminRepository = {
   },
 
   async getBillingSummary({ monthStart, nextMonthStart }) {
-    const [clientsRows, monthlyRows, activeSubscriptions, failedPayments] = await Promise.all([
+    const [clientsRows, monthlyRows, activeSubscriptionRows, failedPayments] = await Promise.all([
       Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
@@ -174,11 +174,21 @@ export const adminRepository = {
           }
         }
       ]),
-      Tenant.countDocuments({
-        email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
-        paymentStatus: 'paid',
-        subscriptionStatus: { $in: ['active', 'trial'] }
-      }),
+      TenantBillingPayment.aggregate([
+        {
+          $match: {
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: '$tenantId'
+          }
+        },
+        {
+          $count: 'total'
+        }
+      ]),
       Tenant.countDocuments({
         email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
         paymentStatus: 'failed'
@@ -188,7 +198,7 @@ export const adminRepository = {
     return {
       totalClients: clientsRows[0]?.total || 0,
       monthlyRevenue: monthlyRows[0]?.monthlyRevenue || 0,
-      activeSubscriptions,
+      activeSubscriptions: activeSubscriptionRows[0]?.total || 0,
       failedPayments
     };
   },
