@@ -106,7 +106,20 @@ const request = async <T>(
       throw new Error('Session expired. Please login again.');
     }
 
-    result = await sendRequest<T>(path, method, body, accessToken);
+    let refreshedToken = accessToken;
+    if (typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem('currentUser');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          refreshedToken = parsed?.accessToken || accessToken;
+        } catch {
+          refreshedToken = accessToken;
+        }
+      }
+    }
+
+    result = await sendRequest<T>(path, method, body, refreshedToken);
   }
 
   if (withAuth && result.response.status === 401) {

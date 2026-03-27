@@ -575,7 +575,7 @@ export const createBillingService = (repository, dependencies = {}) => {
       return buildSubscriptionResponse(scopedTenantId, toPlain(subscription));
     },
 
-    async upgradePlan(payload, tenantId = null) {
+    async upgradePlan(payload, tenantId = null, options = {}) {
       const scopedTenantId = resolveTenantId(tenantId);
       await ensureDefaultPlans();
 
@@ -584,7 +584,7 @@ export const createBillingService = (repository, dependencies = {}) => {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
 
-      await repository.cancelAllActiveSubscriptions(scopedTenantId);
+      await repository.cancelAllActiveSubscriptions(scopedTenantId, options);
 
       const startDate = normalizeDate(new Date());
       const endDate = addMonthsUTC(startDate, 1);
@@ -596,9 +596,9 @@ export const createBillingService = (repository, dependencies = {}) => {
         endDate,
         status: 'active',
         autoRenew: payload.autoRenew ?? true
-      });
+      }, options);
 
-      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription, plan }));
+      await repository.updateTenantSubscription(scopedTenantId, buildTenantSnapshot({ subscription, plan }), options);
 
       return buildSubscriptionResponse(scopedTenantId, subscription.toObject ? subscription.toObject() : subscription);
     },

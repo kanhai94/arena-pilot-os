@@ -63,6 +63,13 @@ export const createAdminService = (repository) => {
     return `${prefix}${separator}${String(nextValue).padStart(env.ACADEMY_CODE_PAD, '0')}`;
   };
 
+  const getCurrentMonthRangeUTC = () => {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    return { monthStart, nextMonthStart };
+  };
+
   return {
     async getPlans() {
       const plans = await repository.listPlans();
@@ -110,6 +117,10 @@ export const createAdminService = (repository) => {
           totalPages: Math.ceil(total / limit)
         }
       };
+    },
+
+    async getBillingSummary() {
+      return repository.getBillingSummary(getCurrentMonthRangeUTC());
     },
 
     async getRazorpaySettings() {

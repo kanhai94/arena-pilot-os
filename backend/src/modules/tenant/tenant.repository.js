@@ -6,8 +6,8 @@ export const tenantRepository = {
     return Plan.find({ status: 'active' }).sort({ priceMonthly: 1, createdAt: 1 }).lean();
   },
 
-  createBillingPayment(payload) {
-    return TenantBillingPayment.create(payload);
+  createBillingPayment(payload, options = {}) {
+    return TenantBillingPayment.create([payload], { session: options.session }).then((docs) => docs[0]);
   },
 
   listBillingPayments(tenantId, limit = 12) {

@@ -245,6 +245,13 @@ type AdminTenantsResponse = {
   };
 };
 
+type AdminBillingSummary = {
+  totalClients: number;
+  monthlyRevenue: number;
+  activeSubscriptions: number;
+  failedPayments: number;
+};
+
 type PlatformPlan = {
   id: string;
   name: string;
@@ -888,8 +895,13 @@ export default function DashboardPage() {
   const [adminTenantPlanFilter, setAdminTenantPlanFilter] = useState('all');
   const [adminTenantStatusFilter, setAdminTenantStatusFilter] = useState('all');
   const [platformTenants, setPlatformTenants] = useState<PlatformTenant[]>([]);
-  const [platformTenantTotal, setPlatformTenantTotal] = useState(0);
   const [platformTenantLoading, setPlatformTenantLoading] = useState(false);
+  const [platformBillingSummary, setPlatformBillingSummary] = useState<AdminBillingSummary>({
+    totalClients: 0,
+    monthlyRevenue: 0,
+    activeSubscriptions: 0,
+    failedPayments: 0
+  });
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [platformPriceOverride, setPlatformPriceOverride] = useState('');
   const [showPlatformTenantComposer, setShowPlatformTenantComposer] = useState(false);
@@ -1161,13 +1173,18 @@ export default function DashboardPage() {
     setPlatformTenantLoading(false);
   };
 
-  const loadPlatformTenantTotal = async (accessToken: string) => {
+  const loadPlatformBillingSummary = async (accessToken: string) => {
     if (!isSuperAdmin) return;
-    const response = await safeFetch(
-      () => apiGetWithAuth<AdminTenantsResponse>('/admin/tenants?page=1&limit=1', accessToken),
-      { items: [], pagination: { page: 1, limit: 1, total: 0, totalPages: 1 } }
+    const summary = await safeFetch<AdminBillingSummary>(
+      () => apiGetWithAuth<AdminBillingSummary>('/admin/billing-summary', accessToken),
+      {
+        totalClients: 0,
+        monthlyRevenue: 0,
+        activeSubscriptions: 0,
+        failedPayments: 0
+      }
     );
-    setPlatformTenantTotal(response.pagination.total || 0);
+    setPlatformBillingSummary(summary);
   };
 
   const loadRazorpaySettings = async (accessToken: string) => {
@@ -1351,7 +1368,7 @@ export default function DashboardPage() {
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantSubscriptionSummary>('/tenant/subscription', accessToken), null) : Promise.resolve(null),
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/tenant/plans', accessToken), []) : Promise.resolve([]),
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantBillingPayment[]>('/tenant/payments', accessToken), []) : Promise.resolve([])
-      ]);
+    ]);
 
     if (me) {
       setUser(me);
@@ -1442,7 +1459,12 @@ export default function DashboardPage() {
       setCurrentSession(session);
       await loadDashboardData(sessionToken, session);
       if (normalizeRole(session.role) === 'SUPER_ADMIN') {
-        await Promise.all([loadPlatformTenants(sessionToken), loadRazorpaySettings(sessionToken), loadPlatformIntegrationSettings(sessionToken)]);
+        await Promise.all([
+          loadPlatformTenants(sessionToken),
+          loadRazorpaySettings(sessionToken),
+          loadPlatformIntegrationSettings(sessionToken),
+          loadPlatformBillingSummary(sessionToken)
+        ]);
       }
       await loadAttendanceByDate(sessionToken, academyAttendanceDate);
     };
@@ -1562,7 +1584,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!token || !isSuperAdmin) return;
-    loadPlatformTenantTotal(token);
+    loadPlatformBillingSummary(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isSuperAdmin]);
 
@@ -2078,18 +2100,6 @@ export default function DashboardPage() {
       };
     });
   }, [platformTenants, platformPlanPriceByName]);
-
-  const monthlyRevenue = useMemo(() => {
-    return billingRows.reduce((sum, row) => sum + (row.status === 'paid' ? row.totalAmount : 0), 0);
-  }, [billingRows]);
-
-  const activeSubscriptions = useMemo(() => {
-    return billingRows.filter((row) => String(row.status).toLowerCase() === 'paid').length;
-  }, [billingRows]);
-
-  const failedPaymentsCount = useMemo(() => {
-    return billingRows.filter((row) => String(row.status).toLowerCase() === 'failed').length;
-  }, [billingRows]);
 
   const tenantSubscriptionPlan = useMemo(() => {
     if (!tenantSubscription) return null;
@@ -7105,19 +7115,21 @@ export default function DashboardPage() {
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <article className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">Total Clients</p>
-                      <p className="mt-1 text-3xl font-extrabold text-cyan-800">{platformTenantTotal || platformTenants.length}</p>
+                      <p className="mt-1 text-3xl font-extrabold text-cyan-800">{platformBillingSummary.totalClients}</p>
                     </article>
                     <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Monthly Revenue</p>
-                      <p className="mt-1 text-3xl font-extrabold text-emerald-800">{formatCurrency(monthlyRevenue)}</p>
+                      <p className="mt-1 text-3xl font-extrabold text-emerald-800">
+                        {formatCurrency(platformBillingSummary.monthlyRevenue)}
+                      </p>
                     </article>
                     <article className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Active Subscriptions</p>
-                      <p className="mt-1 text-3xl font-extrabold text-indigo-800">{activeSubscriptions}</p>
+                      <p className="mt-1 text-3xl font-extrabold text-indigo-800">{platformBillingSummary.activeSubscriptions}</p>
                     </article>
                     <article className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-rose-700">Failed Payments</p>
-                      <p className="mt-1 text-3xl font-extrabold text-rose-800">{failedPaymentsCount}</p>
+                      <p className="mt-1 text-3xl font-extrabold text-rose-800">{platformBillingSummary.failedPayments}</p>
                     </article>
                   </div>
 

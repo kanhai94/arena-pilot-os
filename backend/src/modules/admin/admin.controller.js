@@ -25,6 +25,15 @@ export const createAdminController = (service) => {
       }
     },
 
+    getBillingSummary: async (_req, res, next) => {
+      try {
+        const data = await service.getBillingSummary();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     getPlans: async (_req, res, next) => {
       try {
         const data = await service.getPlans();

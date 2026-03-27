@@ -1,4 +1,5 @@
 import { StatusCodes } from 'http-status-codes';
+import mongoose from 'mongoose';
 import { AppError } from '../../errors/appError.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
 import {
@@ -122,6 +123,45 @@ export const createTenantService = (dependencies) => {
     return null;
   };
 
+  const supportsTransactions = () => {
+    const topologyType = mongoose.connection?.client?.topology?.description?.type;
+    return topologyType === 'ReplicaSetWithPrimary' || topologyType === 'Sharded';
+  };
+
+  const isTransactionUnsupportedError = (error) => {
+    const message = String(error?.message || '');
+    return (
+      message.includes('Transaction numbers are only allowed on a replica set member or mongos') ||
+      message.includes('Transaction numbers are only allowed on a replica set member') ||
+      message.includes('transactions are not supported')
+    );
+  };
+
+  const runUpgradeFlow = async (handler) => {
+    if (!supportsTransactions()) {
+      return handler({ session: null });
+    }
+
+    const session = await mongoose.startSession();
+    try {
+      let result = null;
+      try {
+        await session.withTransaction(async () => {
+          result = await handler({ session });
+        });
+        return result;
+      } catch (error) {
+        if (!isTransactionUnsupportedError(error)) {
+          throw error;
+        }
+
+        return handler({ session: null });
+      }
+    } finally {
+      await session.endSession();
+    }
+  };
+
   return {
     async getPlans() {
       const plans = await tenantRepository.listActivePlans();
@@ -151,25 +191,63 @@ export const createTenantService = (dependencies) => {
       const amount = Number(plan.priceMonthly || 0);
 
       if (amount <= 0) {
-        await billingService.upgradePlan({ planId, autoRenew }, tenantId);
-        const freePayment = await tenantRepository.createBillingPayment(
-          buildBillingPaymentPayload({
-            tenantId,
-            plan,
-            amount,
+        const freePayment = await runUpgradeFlow(async ({ session }) => {
+          if (session) {
+            await billingService.upgradePlan({ planId, autoRenew }, tenantId, { session });
+            const createdPayment = await tenantRepository.createBillingPayment(
+              buildBillingPaymentPayload({
+                tenantId,
+                plan,
+                amount,
+                billingCycle,
+                autoRenew
+              }),
+              { session }
+            );
+            await billingRepository.updateTenantPaymentSnapshot(
+              tenantId,
+              {
+                paymentStatus: 'paid',
+                lastPaymentDate: createdPayment.paymentDate,
+                nextPaymentDate: createdPayment.nextPaymentDate,
+                planStartDate: createdPayment.paymentDate,
+                planEndDate: createdPayment.nextPaymentDate,
+                planName: plan.name,
+                planPrice: amount,
+                billingCycle,
+                paymentAmount: amount,
+                currentPlanId: plan._id,
+                subscriptionStatus: 'active'
+              },
+              { session }
+            );
+            return createdPayment;
+          }
+
+          await billingService.upgradePlan({ planId, autoRenew }, tenantId);
+          const createdPayment = await tenantRepository.createBillingPayment(
+            buildBillingPaymentPayload({
+              tenantId,
+              plan,
+              amount,
+              billingCycle,
+              autoRenew
+            })
+          );
+          await billingRepository.updateTenantPaymentSnapshot(tenantId, {
+            paymentStatus: 'paid',
+            lastPaymentDate: createdPayment.paymentDate,
+            nextPaymentDate: createdPayment.nextPaymentDate,
+            planStartDate: createdPayment.paymentDate,
+            planEndDate: createdPayment.nextPaymentDate,
+            planName: plan.name,
+            planPrice: amount,
             billingCycle,
-            autoRenew
-          })
-        );
-        await billingRepository.updateTenantPaymentSnapshot(tenantId, {
-          paymentStatus: 'paid',
-          lastPaymentDate: freePayment.paymentDate,
-          nextPaymentDate: freePayment.nextPaymentDate,
-          planStartDate: freePayment.paymentDate,
-          planEndDate: freePayment.nextPaymentDate,
-          planName: plan.name,
-          planPrice: amount,
-          billingCycle
+            paymentAmount: amount,
+            currentPlanId: plan._id,
+            subscriptionStatus: 'active'
+          });
+          return createdPayment;
         });
 
         return {
@@ -234,30 +312,65 @@ export const createTenantService = (dependencies) => {
         };
       }
 
-      await billingService.upgradePlan({ planId, autoRenew }, tenantId);
+      const billingPayment = await runUpgradeFlow(async ({ session }) => {
+        if (session) {
+          await billingService.upgradePlan({ planId, autoRenew }, tenantId, { session });
+          const createdPayment = await tenantRepository.createBillingPayment(
+            buildBillingPaymentPayload({
+              tenantId,
+              plan,
+              amount,
+              billingCycle,
+              payment,
+              autoRenew
+            }),
+            { session }
+          );
+          await billingRepository.updateTenantPaymentSnapshot(
+            tenantId,
+            {
+              paymentStatus: 'paid',
+              paymentAmount: amount,
+              lastPaymentDate: createdPayment.paymentDate,
+              nextPaymentDate: createdPayment.nextPaymentDate,
+              planStartDate: createdPayment.paymentDate,
+              planEndDate: createdPayment.nextPaymentDate,
+              planName: plan.name,
+              planPrice: amount,
+              billingCycle,
+              currentPlanId: plan._id,
+              subscriptionStatus: 'active'
+            },
+            { session }
+          );
+          return createdPayment;
+        }
 
-      const billingPayment = await tenantRepository.createBillingPayment(
-        buildBillingPaymentPayload({
-          tenantId,
-          plan,
-          amount,
+        await billingService.upgradePlan({ planId, autoRenew }, tenantId);
+        const createdPayment = await tenantRepository.createBillingPayment(
+          buildBillingPaymentPayload({
+            tenantId,
+            plan,
+            amount,
+            billingCycle,
+            payment,
+            autoRenew
+          })
+        );
+        await billingRepository.updateTenantPaymentSnapshot(tenantId, {
+          paymentStatus: 'paid',
+          paymentAmount: amount,
+          lastPaymentDate: createdPayment.paymentDate,
+          nextPaymentDate: createdPayment.nextPaymentDate,
+          planStartDate: createdPayment.paymentDate,
+          planEndDate: createdPayment.nextPaymentDate,
+          planName: plan.name,
+          planPrice: amount,
           billingCycle,
-          payment,
-          autoRenew
-        })
-      );
-      await billingRepository.updateTenantPaymentSnapshot(tenantId, {
-        paymentStatus: 'paid',
-        paymentAmount: amount,
-        lastPaymentDate: billingPayment.paymentDate,
-        nextPaymentDate: billingPayment.nextPaymentDate,
-        planStartDate: billingPayment.paymentDate,
-        planEndDate: billingPayment.nextPaymentDate,
-        planName: plan.name,
-        planPrice: amount,
-        billingCycle,
-        currentPlanId: plan._id,
-        subscriptionStatus: 'active'
+          currentPlanId: plan._id,
+          subscriptionStatus: 'active'
+        });
+        return createdPayment;
       });
 
       return {

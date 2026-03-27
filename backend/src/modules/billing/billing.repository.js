@@ -38,8 +38,8 @@ export const billingRepository = {
     return Plan.find({ name: { $in: names } }).lean();
   },
 
-  createSubscription(payload) {
-    return Subscription.create(payload);
+  createSubscription(payload, options = {}) {
+    return Subscription.create([payload], { session: options.session }).then((docs) => docs[0]);
   },
 
   async findCurrentSubscription(tenantId) {
@@ -57,26 +57,27 @@ export const billingRepository = {
     return Subscription.findOne({ tenantId: scopedTenantId }).sort({ createdAt: -1 }).lean();
   },
 
-  updateSubscriptionById(tenantId, subscriptionId, updatePayload) {
+  updateSubscriptionById(tenantId, subscriptionId, updatePayload, options = {}) {
     const scopedTenantId = resolveTenantId(tenantId);
     return Subscription.findOneAndUpdate(
       { _id: subscriptionId, tenantId: scopedTenantId },
       { $set: updatePayload },
-      { new: true, lean: true }
+      { new: true, lean: true, session: options.session }
     );
   },
 
-  cancelAllActiveSubscriptions(tenantId) {
+  cancelAllActiveSubscriptions(tenantId, options = {}) {
     const scopedTenantId = resolveTenantId(tenantId);
     return Subscription.updateMany(
       { tenantId: scopedTenantId, status: { $in: ['trial', 'active'] } },
-      { $set: { status: 'cancelled', autoRenew: false } }
+      { $set: { status: 'cancelled', autoRenew: false } },
+      { session: options.session }
     );
   },
 
-  updateTenantSubscription(tenantId, payload) {
+  updateTenantSubscription(tenantId, payload, options = {}) {
     const scopedTenantId = resolveTenantId(tenantId);
-    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, { $set: payload }, { new: true, lean: true });
+    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, { $set: payload }, { new: true, lean: true, session: options.session });
   },
 
   findTenantById(tenantId) {
@@ -116,7 +117,7 @@ export const billingRepository = {
       .lean();
   },
 
-  updateTenantPaymentSnapshot(tenantId, payload) {
+  updateTenantPaymentSnapshot(tenantId, payload, options = {}) {
     const scopedTenantId = resolveTenantId(tenantId);
     const set = {};
     const inc = {};
@@ -144,6 +145,6 @@ export const billingRepository = {
       return Tenant.findOne({ _id: scopedTenantId }).lean();
     }
 
-    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, update, { new: true, lean: true });
+    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, update, { new: true, lean: true, session: options.session });
   }
 };
