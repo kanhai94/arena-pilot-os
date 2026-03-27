@@ -2066,6 +2066,7 @@ export default function DashboardPage() {
       const amount = tenant.customPriceOverride ?? estimated;
       const normalizedPaymentStatus = String(tenant.paymentStatus || 'pending').toLowerCase();
       const status = amount > 0 ? normalizedPaymentStatus : 'n/a';
+      const totalAmount = tenant.totalPaidAmount && tenant.totalPaidAmount > 0 ? tenant.totalPaidAmount : status === 'paid' ? amount : 0;
       return {
         id: tenant.id || tenant.academyName,
         tenant: tenant.academyName,
@@ -2073,7 +2074,7 @@ export default function DashboardPage() {
         status,
         date: tenant.planStartDate || tenant.lastPaymentDate || '-',
         nextPaymentDate: tenant.nextPaymentDate || null,
-        totalAmount: tenant.totalPaidAmount || 0
+        totalAmount
       };
     });
   }, [platformTenants, platformPlanPriceByName]);
