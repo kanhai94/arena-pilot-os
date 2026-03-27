@@ -177,7 +177,7 @@ export const adminRepository = {
       TenantBillingPayment.aggregate([
         {
           $match: {
-            status: 'paid'
+            tenantId: { $ne: null }
           }
         },
         {
