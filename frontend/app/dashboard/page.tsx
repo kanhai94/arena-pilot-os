@@ -4152,7 +4152,18 @@ export default function DashboardPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/80">Current Plan</p>
-                      <p className="mt-2 text-3xl font-bold leading-tight">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
+                      <p className="mt-2 inline-flex max-w-full items-baseline gap-2 whitespace-nowrap text-3xl font-bold leading-tight">
+                        <span className="truncate">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</span>
+                        <span className="text-base font-semibold text-emerald-100/80">
+                          (
+                          {tenantSubscription
+                            ? `${tenantSubscription.currentStudentCount}/${tenantSubscription.studentLimit ?? '∞'}`
+                            : billing?.plan
+                              ? `${billing.plan.studentLimit ?? '∞'} cap`
+                              : '0/∞'}
+                          )
+                        </span>
+                      </p>
                       <p className="mt-2 text-xs text-emerald-50/80">
                         {tenantSubscription
                           ? `${formatCurrency(tenantSubscription.planPrice)} / month`
@@ -4163,7 +4174,13 @@ export default function DashboardPage() {
                         Billing Cycle: {tenantSubscription?.billingCycle || 'monthly'}
                       </p>
                     </div>
-                    <div className="relative mt-2">
+                    <div className="relative mt-1.5 flex shrink-0 flex-col items-end gap-2">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-emerald-50/80">
+                          Workspace ID
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setVisualMenuOpen((prev) => !prev)}
@@ -4176,7 +4193,7 @@ export default function DashboardPage() {
                         </svg>
                       </button>
                       {visualMenuOpen ? (
-                        <div className="absolute right-0 top-10 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100">
+                        <div className="absolute right-0 top-12 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                             Visual mode <span className="text-slate-400">(beta)</span>
                           </p>
