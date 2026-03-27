@@ -2181,7 +2181,10 @@ export default function DashboardPage() {
 
       setToast('Congratulations! Your payment was successful and your plan has been upgraded.');
       setShowUpgradeModal(false);
-      await loadDashboardData(token);
+      await safeFetch(async () => {
+        await loadDashboardData(token);
+        return undefined;
+      }, undefined);
     } catch (err) {
       setToast(err instanceof Error ? err.message : 'Failed to upgrade plan');
     } finally {
