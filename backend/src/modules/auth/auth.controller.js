@@ -14,7 +14,8 @@ import {
 
 export const createAuthController = (authService) => {
   const buildSessionResponse = (data) => ({
-    user: data.user
+    user: data.user,
+    accessToken: data.accessToken
   });
 
   return {
@@ -133,7 +134,7 @@ export const createAuthController = (authService) => {
     getMe: async (req, res, next) => {
       try {
         const data = await authService.getMyProfile(req.auth.userId);
-        return apiSuccess(res, data);
+        return apiSuccess(res, { ...data, accessToken: req.accessToken || null });
       } catch (error) {
         return next(error);
       }

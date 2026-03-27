@@ -30,6 +30,7 @@ export const authMiddleware = (req, res, next) => {
       role: normalizedRole,
       permissions: decoded.permissions || []
     };
+    req.accessToken = token;
     req.user = { ...decoded, role: normalizedRole };
     req.tenantId = decoded.tenantId || null;
 

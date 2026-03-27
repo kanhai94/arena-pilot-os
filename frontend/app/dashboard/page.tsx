@@ -16,6 +16,11 @@ type UserSession = {
   fullName: string;
   email: string;
   role: string;
+  accessToken?: string | null;
+};
+
+type StoredUserSession = UserSession & {
+  accessToken?: string;
 };
 
 type RegistrationStats = {
@@ -646,7 +651,17 @@ const csvEscape = (value: unknown) => {
 export default function DashboardPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const token = '';
+  const [currentSession, setCurrentSession] = useState<StoredUserSession | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem('currentUser');
+      if (!raw) return null;
+      return JSON.parse(raw) as StoredUserSession;
+    } catch {
+      return null;
+    }
+  });
+  const token = currentSession?.accessToken || '';
   const [user, setUser] = useState<UserSession | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('pulse');
   const [activeMenu, setActiveMenu] = useState<MenuItem>('Pulse Board');
@@ -1261,7 +1276,7 @@ export default function DashboardPage() {
     let mounted = true;
 
     const bootstrapSession = async () => {
-      const me = await safeFetch(() => apiGetWithAuth<UserSession>('/auth/me'), null);
+      const me = await safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', token), null);
 
       if (!mounted) return;
 
@@ -1270,9 +1285,15 @@ export default function DashboardPage() {
         return;
       }
 
+      const sessionToken = me.accessToken || token;
       setUser(me);
-      await loadDashboardData('', me);
-      await loadAttendanceByDate('', academyAttendanceDate);
+      if (me?.accessToken) {
+        setCurrentSession({ ...me });
+      } else if (me) {
+        setCurrentSession((prev) => (prev ? { ...prev, ...me } : prev));
+      }
+      await loadDashboardData(sessionToken, me);
+      await loadAttendanceByDate(sessionToken, academyAttendanceDate);
     };
 
     bootstrapSession();
@@ -1949,6 +1970,7 @@ export default function DashboardPage() {
   const logout = () => {
     apiPostWithAuth('/auth/logout', {}, token).finally(() => {
       localStorage.removeItem('currentUser');
+      setCurrentSession(null);
       router.replace('/login');
     });
   };

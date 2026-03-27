@@ -13,6 +13,7 @@ type LoginResponse = {
     email: string;
     role: string;
   };
+  accessToken: string;
 };
 
 type OtpSendResponse = {
@@ -42,7 +43,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await apiPost<LoginResponse>('/auth/login', { email, password });
+      const data = await apiPost<LoginResponse>('/auth/login', { email, password });
+      localStorage.setItem('currentUser', JSON.stringify({ ...data.user, accessToken: data.accessToken }));
 
       router.push('/dashboard');
     } catch (err) {

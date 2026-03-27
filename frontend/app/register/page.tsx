@@ -32,6 +32,7 @@ type LoginResponse = {
     email: string;
     role: string;
   };
+  accessToken: string;
 };
 
 type OtpResponse = {
@@ -450,10 +451,14 @@ export default function RegisterPage() {
         ...(registrationPaymentPayload ? { payment: registrationPaymentPayload } : {})
       });
 
-      await apiPost<LoginResponse>('/auth/login', {
+      const loginData = await apiPost<LoginResponse>('/auth/login', {
         email: normalizedAdminEmail,
         password: adminPassword
       });
+      localStorage.setItem(
+        'currentUser',
+        JSON.stringify({ ...loginData.user, accessToken: loginData.accessToken })
+      );
 
       setMessage(`Academy ${data.tenant.name} created. Redirecting to dashboard...`);
       router.push('/dashboard');
