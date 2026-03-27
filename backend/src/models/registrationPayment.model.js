@@ -36,8 +36,7 @@ const registrationPaymentSchema = new mongoose.Schema(
     razorpayPaymentId: {
       type: String,
       default: null,
-      unique: true,
-      sparse: true
+      trim: true
     },
     razorpaySignature: {
       type: String,
@@ -66,6 +65,16 @@ const registrationPaymentSchema = new mongoose.Schema(
   {
     timestamps: true,
     versionKey: false
+  }
+);
+
+registrationPaymentSchema.index(
+  { razorpayPaymentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      razorpayPaymentId: { $type: 'string' }
+    }
   }
 );
 

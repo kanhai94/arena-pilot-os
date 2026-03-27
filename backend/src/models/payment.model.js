@@ -70,6 +70,14 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ tenantId: 1, studentId: 1, paymentDate: -1 });
 paymentSchema.index({ tenantId: 1, createdAt: -1 });
 paymentSchema.index({ tenantId: 1, studentId: 1 });
-paymentSchema.index({ razorpayPaymentId: 1 }, { unique: true, sparse: true });
+paymentSchema.index(
+  { razorpayPaymentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      razorpayPaymentId: { $type: 'string' }
+    }
+  }
+);
 
 export const Payment = mongoose.model('Payment', paymentSchema);
