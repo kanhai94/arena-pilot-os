@@ -2083,7 +2083,11 @@ export default function DashboardPage() {
         { planId: selectedUpgradePlanId },
         token
       );
-      setToast(data.paymentMode === 'mock' ? 'Plan upgraded successfully.' : 'Upgrade initiated.');
+      setToast(
+        data.paymentMode === 'mock'
+          ? 'Congratulations! Your payment was successful and your plan has been upgraded.'
+          : 'Upgrade initiated. Your payment will be confirmed shortly.'
+      );
       setShowUpgradeModal(false);
       await loadDashboardData(token);
     } catch (err) {

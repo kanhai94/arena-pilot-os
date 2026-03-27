@@ -606,7 +606,9 @@ export default function RegisterPage() {
                   setMessage('');
                   try {
                     await handlePlanPayment();
-                    setMessage('Payment successful. Verify OTP to automatically create your academy.');
+                    setMessage(
+                      'Congratulations! Your payment was successful. You can now verify your OTP to complete academy creation.'
+                    );
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'Payment failed');
                   }
