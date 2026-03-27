@@ -6,6 +6,7 @@ import {
   getRazorpayPublicKeyId,
   verifyRazorpaySignature
 } from '../../adapters/razorpay.adapter.js';
+import { buildRazorpayReceipt } from '../../utils/razorpayReceipt.js';
 
 const BILLING_CYCLE_MONTHS = {
   monthly: 1,
@@ -173,7 +174,7 @@ export const createTenantService = (dependencies) => {
       }
 
       if (!payment) {
-        const receipt = `tenant_upgrade_${String(tenantId)}_${Date.now()}`;
+        const receipt = buildRazorpayReceipt('tu', tenantId);
         const order = await createPlatformRazorpayOrder({
           amount: Math.round(amount * 100),
           currency: 'INR',

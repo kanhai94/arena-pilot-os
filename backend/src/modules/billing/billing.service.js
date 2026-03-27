@@ -9,6 +9,7 @@ import {
 import { TenantContext } from '../../core/context/tenantContext.js';
 import { TenantIntegration } from '../integrations/integration.model.js';
 import { decryptSecret } from '../../utils/secretCipher.js';
+import { buildRazorpayReceipt } from '../../utils/razorpayReceipt.js';
 
 const PLAN_LIMIT_ERROR_CODE = 'PLAN_LIMIT_REACHED';
 const PLAN_LIMIT_MESSAGE = 'Student limit reached. Upgrade your plan.';
@@ -171,7 +172,7 @@ export const createBillingService = (repository, dependencies = {}) => {
         ...(payload.notes || {}),
         tenantId
       };
-      const receipt = payload.receipt || `tenant-${tenantId}-${Date.now()}`;
+      const receipt = payload.receipt || buildRazorpayReceipt('tenant', tenantId);
       const order = await createTenantRazorpayOrder({
         tenantId,
         amount: amountInPaise,
