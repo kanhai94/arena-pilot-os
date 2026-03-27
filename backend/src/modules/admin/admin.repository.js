@@ -127,6 +127,7 @@ export const adminRepository = {
               ]
             },
             customPriceOverride: { $ifNull: ['$customPriceOverride', null] },
+            planPrice: { $ifNull: ['$planPrice', null] },
             planStartDate: { $ifNull: ['$planStartDate', null] },
             lastPaymentDate: { $ifNull: ['$lastPaymentDate', '$billingLastPaymentDate'] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
