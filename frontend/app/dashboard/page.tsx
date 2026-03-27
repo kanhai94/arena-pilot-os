@@ -4156,22 +4156,22 @@ export default function DashboardPage() {
               </div>
 
               {isAdmin ? (
-                <div className="w-full max-w-[560px] justify-self-end rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-2.5 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
-                  <div className="flex items-start justify-between gap-2.5">
+                <div className="w-full max-w-[440px] justify-self-end rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/80">Current Plan</p>
-                      <p className="mt-1 text-base font-bold leading-tight">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
-                      <p className="mt-1 text-[11px] text-emerald-50/80">
+                      <p className="mt-2 text-3xl font-bold leading-tight">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
+                      <p className="mt-2 text-xs text-emerald-50/80">
                         {tenantSubscription
                           ? `${formatCurrency(tenantSubscription.planPrice)} / month`
                           : billing?.plan
                             ? `${formatCurrency(billing.plan.priceMonthly)} / month`
                             : 'Upgrade anytime'}
                         <span className="mx-1.5 text-emerald-50/40">|</span>
-                        Cycle: {tenantSubscription?.billingCycle || 'monthly'}
+                        Billing Cycle: {tenantSubscription?.billingCycle || 'monthly'}
                       </p>
                     </div>
-                    <div className="relative">
+                    <div className="relative mt-2">
                       <button
                         type="button"
                         onClick={() => setVisualMenuOpen((prev) => !prev)}
@@ -4214,50 +4214,16 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/8 p-2">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/80">Usage</p>
-                      <p className="mt-1 text-sm font-semibold leading-tight">
-                        {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'} students` : 'Loading...'}
-                      </p>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-400 transition-all duration-500"
-                          style={{ width: `${tenantSubscription?.usagePercent || 0}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 p-2">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/80">Status</p>
-                      <p className="mt-1 text-sm font-semibold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
-                      <p className="mt-1 text-[11px] text-emerald-50/80">
-                        Next payment: {tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {tenantSubscription?.usagePercent !== undefined && tenantSubscription.usagePercent > 80 ? (
-                    <p className="mt-2.5 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
-                      You are near your student limit
-                    </p>
-                  ) : null}
-
-                  {tenantSubscription?.status === 'expired' ? (
-                    <p className="mt-2.5 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-1 text-xs text-rose-100">
-                      Plan expired. Upgrade to continue
-                    </p>
-                  ) : null}
-
-                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <div className="mt-4 flex items-center justify-between gap-3">
                     <button
                       onClick={() => token && loadDashboardData(token)}
-                      className="rounded-lg bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25"
+                      className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
                     >
                       Refresh Snapshot
                     </button>
                     <button
                       onClick={openUpgradeModal}
-                      className="rounded-lg bg-[#00E5A8] px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-[#22f0b7]"
+                      className="rounded-lg bg-[#00E5A8] px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-[#22f0b7]"
                     >
                       Upgrade Plan
                     </button>
