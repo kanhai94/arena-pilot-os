@@ -2079,7 +2079,7 @@ export default function DashboardPage() {
   }, [platformTenants, platformPlanPriceByName]);
 
   const monthlyRevenue = useMemo(() => {
-    return billingRows.reduce((sum, row) => sum + (row.status === 'paid' ? row.amount : 0), 0);
+    return billingRows.reduce((sum, row) => sum + (row.status === 'paid' ? row.totalAmount : 0), 0);
   }, [billingRows]);
 
   const activeSubscriptions = useMemo(() => {

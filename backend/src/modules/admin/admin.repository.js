@@ -92,10 +92,10 @@ export const adminRepository = {
             studentCount: {
               $ifNull: [{ $arrayElemAt: ['$studentStats.count', 0] }, 0]
             },
-            totalPaidAmount: {
+            billingTotalPaidAmount: {
               $ifNull: [{ $arrayElemAt: ['$billingStats.totalPaidAmount', 0] }, 0]
             },
-            lastPaymentDate: {
+            billingLastPaymentDate: {
               $ifNull: [{ $arrayElemAt: ['$billingStats.lastPaymentDate', 0] }, null]
             }
           }
@@ -127,9 +127,15 @@ export const adminRepository = {
             },
             customPriceOverride: { $ifNull: ['$customPriceOverride', null] },
             planStartDate: { $ifNull: ['$planStartDate', null] },
-            lastPaymentDate: { $ifNull: ['$lastPaymentDate', null] },
+            lastPaymentDate: { $ifNull: ['$lastPaymentDate', '$billingLastPaymentDate'] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
-            totalPaidAmount: 1,
+            totalPaidAmount: {
+              $cond: [
+                { $gt: [{ $ifNull: ['$totalPaidAmount', 0] }, 0] },
+                '$totalPaidAmount',
+                '$billingTotalPaidAmount'
+              ]
+            },
             createdAt: 1
           }
         },

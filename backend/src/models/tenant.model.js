@@ -80,6 +80,11 @@ const tenantSchema = new mongoose.Schema(
       default: 'pending',
       index: true
     },
+    totalPaidAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     planPrice: {
       type: Number,
       default: 0,

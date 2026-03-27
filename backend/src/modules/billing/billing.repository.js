@@ -118,6 +118,32 @@ export const billingRepository = {
 
   updateTenantPaymentSnapshot(tenantId, payload) {
     const scopedTenantId = resolveTenantId(tenantId);
-    return Tenant.updateOne({ _id: scopedTenantId }, { $set: payload });
+    const set = {};
+    const inc = {};
+
+    if (payload.paymentStatus !== undefined) set.paymentStatus = payload.paymentStatus;
+    if (payload.lastPaymentDate !== undefined) set.lastPaymentDate = payload.lastPaymentDate;
+    if (payload.nextPaymentDate !== undefined) set.nextPaymentDate = payload.nextPaymentDate;
+    if (payload.planStartDate !== undefined) set.planStartDate = payload.planStartDate;
+    if (payload.planEndDate !== undefined) set.planEndDate = payload.planEndDate;
+    if (payload.planName !== undefined) set.planName = payload.planName;
+    if (payload.planPrice !== undefined) set.planPrice = payload.planPrice;
+    if (payload.billingCycle !== undefined) set.billingCycle = payload.billingCycle;
+    if (payload.subscriptionStatus !== undefined) set.subscriptionStatus = payload.subscriptionStatus;
+    if (payload.currentPlanId !== undefined) set.currentPlanId = payload.currentPlanId;
+    if (payload.totalPaidAmount !== undefined) set.totalPaidAmount = payload.totalPaidAmount;
+    if (typeof payload.paymentAmount === 'number' && payload.paymentAmount > 0) {
+      inc.totalPaidAmount = payload.paymentAmount;
+    }
+
+    const update = {};
+    if (Object.keys(set).length > 0) update.$set = set;
+    if (Object.keys(inc).length > 0) update.$inc = inc;
+
+    if (Object.keys(update).length === 0) {
+      return Tenant.findOne({ _id: scopedTenantId }).lean();
+    }
+
+    return Tenant.findOneAndUpdate({ _id: scopedTenantId }, update, { new: true, lean: true });
   }
 };

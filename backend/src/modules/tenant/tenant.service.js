@@ -161,6 +161,16 @@ export const createTenantService = (dependencies) => {
             autoRenew
           })
         );
+        await billingRepository.updateTenantPaymentSnapshot(tenantId, {
+          paymentStatus: 'paid',
+          lastPaymentDate: freePayment.paymentDate,
+          nextPaymentDate: freePayment.nextPaymentDate,
+          planStartDate: freePayment.paymentDate,
+          planEndDate: freePayment.nextPaymentDate,
+          planName: plan.name,
+          planPrice: amount,
+          billingCycle
+        });
 
         return {
           success: true,
@@ -236,6 +246,19 @@ export const createTenantService = (dependencies) => {
           autoRenew
         })
       );
+      await billingRepository.updateTenantPaymentSnapshot(tenantId, {
+        paymentStatus: 'paid',
+        paymentAmount: amount,
+        lastPaymentDate: billingPayment.paymentDate,
+        nextPaymentDate: billingPayment.nextPaymentDate,
+        planStartDate: billingPayment.paymentDate,
+        planEndDate: billingPayment.nextPaymentDate,
+        planName: plan.name,
+        planPrice: amount,
+        billingCycle,
+        currentPlanId: plan._id,
+        subscriptionStatus: 'active'
+      });
 
       return {
         success: true,
