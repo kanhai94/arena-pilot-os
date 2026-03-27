@@ -4,7 +4,7 @@ const registrationPaymentSchema = new mongoose.Schema(
   {
     planName: {
       type: String,
-      enum: ['Starter', 'Growth', 'Pro'],
+      trim: true,
       required: true
     },
     amount: {

@@ -25,7 +25,7 @@ const tenantSchema = new mongoose.Schema(
     },
     requestedPlanName: {
       type: String,
-      enum: ['Starter', 'Growth', 'Pro'],
+      trim: true,
       default: 'Starter'
     },
     tenantStatus: {
