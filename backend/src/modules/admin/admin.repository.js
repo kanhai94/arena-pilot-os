@@ -107,17 +107,21 @@ export const adminRepository = {
   },
 
   upsertRazorpaySettings(payload) {
+    const set = {
+      key: 'platform',
+      'payments.razorpay.keyId': payload.keyId,
+      'payments.razorpay.keySecretEnc': payload.keySecretEnc,
+      'payments.razorpay.isActive': payload.isActive,
+      'payments.razorpay.updatedAt': new Date(),
+      'payments.razorpay.updatedBy': payload.updatedBy,
+      razorpayKeyId: payload.keyId,
+      razorpaySecretEncrypted: payload.keySecretEnc
+    };
+
     return PlatformSetting.findOneAndUpdate(
       { key: 'platform' },
       {
-        $set: {
-          key: 'platform',
-          'payments.razorpay.keyId': payload.keyId,
-          'payments.razorpay.keySecretEnc': payload.keySecretEnc,
-          'payments.razorpay.isActive': payload.isActive,
-          'payments.razorpay.updatedAt': new Date(),
-          'payments.razorpay.updatedBy': payload.updatedBy
-        }
+        $set: set
       },
       { upsert: true, new: true, setDefaultsOnInsert: true, lean: true }
     );

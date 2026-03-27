@@ -113,13 +113,17 @@ export const createAdminService = (repository) => {
     async getRazorpaySettings() {
       const settings = await repository.getPlatformSettings();
       const razorpay = settings?.payments?.razorpay;
+      const legacyKeyId = settings?.razorpayKeyId || null;
+      const legacySecret = settings?.razorpaySecretEncrypted || null;
+      const resolvedKeyId = razorpay?.keyId || legacyKeyId;
+      const resolvedSecret = razorpay?.keySecretEnc || legacySecret;
 
       return {
-        configured: Boolean(razorpay?.keyId && razorpay?.keySecretEnc),
+        configured: Boolean(resolvedKeyId && resolvedSecret),
         isActive: Boolean(razorpay?.isActive),
-        keyId: razorpay?.keyId || null,
-        keyIdMasked: maskKey(razorpay?.keyId),
-        updatedAt: razorpay?.updatedAt || null
+        keyId: resolvedKeyId,
+        keyIdMasked: maskKey(resolvedKeyId),
+        updatedAt: razorpay?.updatedAt || settings?.updatedAt || null
       };
     },
 
