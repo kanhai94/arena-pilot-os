@@ -226,6 +226,7 @@ type PlatformTenant = {
   billingEmail?: string | null;
   studentCount: number;
   subscriptionStatus: string;
+  planStartDate?: string | null;
   lastPaymentDate?: string | null;
   nextPaymentDate?: string | null;
   tenantStatus?: 'active' | 'blocked' | 'suspended' | string;
@@ -1112,6 +1113,7 @@ export default function DashboardPage() {
       workspaceId: row.workspaceId || row.academyCode || null,
       tenantStatus: row.tenantStatus || 'active',
       paymentStatus: row.paymentStatus || 'pending',
+      planStartDate: row.planStartDate || null,
       lastPaymentDate: row.lastPaymentDate || null,
       nextPaymentDate: row.nextPaymentDate || null
     }));
@@ -2015,7 +2017,7 @@ export default function DashboardPage() {
         tenant: tenant.academyName,
         amount,
         status,
-        date: tenant.lastPaymentDate || '-',
+        date: tenant.planStartDate || tenant.lastPaymentDate || '-',
         nextPaymentDate: tenant.nextPaymentDate || null
       };
     });
