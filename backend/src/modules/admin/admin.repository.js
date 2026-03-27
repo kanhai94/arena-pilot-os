@@ -160,7 +160,7 @@ export const adminRepository = {
   },
 
   async getBillingSummary({ monthStart, nextMonthStart }) {
-    const [clientsRows, monthlyRows, billedTenantRows, paidTenantRows, failedPayments] = await Promise.all([
+    const [clientsRows, monthlyPaymentRows, billedTenantRows, paidTenantRows, failedPayments] = await Promise.all([
       Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
@@ -176,7 +176,7 @@ export const adminRepository = {
         },
         {
           $group: {
-            _id: null,
+            _id: '$tenantId',
             monthlyRevenue: { $sum: '$amount' }
           }
         }
@@ -213,9 +213,45 @@ export const adminRepository = {
       billedTenantIds.add(String(tenant._id));
     }
 
+    const paymentRevenue = monthlyPaymentRows.reduce((sum, row) => sum + (row.monthlyRevenue || 0), 0);
+    const paymentTenantIds = monthlyPaymentRows.map((row) => row._id).filter(Boolean).map((id) => String(id));
+    const fallbackRevenueRows = await Tenant.aggregate([
+      {
+        $match: {
+          email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
+          paymentStatus: 'paid',
+          $or: [
+            { lastPaymentDate: { $gte: monthStart, $lt: nextMonthStart } },
+            { planStartDate: { $gte: monthStart, $lt: nextMonthStart } }
+          ],
+          _id: { $nin: paymentTenantIds.length > 0 ? paymentTenantIds.map((id) => new mongoose.Types.ObjectId(id)) : [] }
+        }
+      },
+      {
+        $project: {
+          revenueAmount: {
+            $ifNull: [
+              '$customPriceOverride',
+              {
+                $ifNull: ['$planPrice', 0]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          monthlyRevenue: { $sum: '$revenueAmount' }
+        }
+      }
+    ]);
+
+    const fallbackRevenue = fallbackRevenueRows[0]?.monthlyRevenue || 0;
+
     return {
       totalClients: clientsRows[0]?.total || 0,
-      monthlyRevenue: monthlyRows[0]?.monthlyRevenue || 0,
+      monthlyRevenue: paymentRevenue + fallbackRevenue,
       activeSubscriptions: billedTenantIds.size,
       failedPayments
     };
