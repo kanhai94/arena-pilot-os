@@ -1293,6 +1293,9 @@ export default function DashboardPage() {
         setCurrentSession((prev) => (prev ? { ...prev, ...me } : prev));
       }
       await loadDashboardData(sessionToken, me);
+      if (normalizeRole(me.role) === 'SUPER_ADMIN') {
+        await Promise.all([loadPlatformTenants(sessionToken), loadRazorpaySettings(sessionToken), loadPlatformIntegrationSettings(sessionToken)]);
+      }
       await loadAttendanceByDate(sessionToken, academyAttendanceDate);
     };
 
