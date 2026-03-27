@@ -1,7 +1,6 @@
 import { env } from '../../config/env.js';
 import { Counter } from '../../models/counter.model.js';
 import { Plan } from '../../models/plan.model.js';
-import { Student } from '../../models/student.model.js';
 import { Tenant } from '../../models/tenant.model.js';
 import { TenantBillingPayment } from '../../models/tenantBillingPayment.model.js';
 import { PlatformSetting } from '../../models/platformSetting.model.js';
@@ -159,8 +158,8 @@ export const adminRepository = {
   },
 
   async getBillingSummary({ monthStart, nextMonthStart }) {
-    const [studentRows, monthlyRows, activeSubscriptions, failedPayments] = await Promise.all([
-      Student.aggregate([{ $match: { status: 'active' } }, { $count: 'total' }]),
+    const [clientsRows, monthlyRows, activeSubscriptions, failedPayments] = await Promise.all([
+      Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
           $match: {
@@ -187,8 +186,7 @@ export const adminRepository = {
     ]);
 
     return {
-      totalStudents: studentRows[0]?.total || 0,
-      totalClients: studentRows[0]?.total || 0,
+      totalClients: clientsRows[0]?.total || 0,
       monthlyRevenue: monthlyRows[0]?.monthlyRevenue || 0,
       activeSubscriptions,
       failedPayments

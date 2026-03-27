@@ -246,8 +246,7 @@ type AdminTenantsResponse = {
 };
 
 type AdminBillingSummary = {
-  totalStudents: number;
-  totalClients?: number;
+  totalClients: number;
   monthlyRevenue: number;
   activeSubscriptions: number;
   failedPayments: number;
@@ -898,7 +897,7 @@ export default function DashboardPage() {
   const [platformTenants, setPlatformTenants] = useState<PlatformTenant[]>([]);
   const [platformTenantLoading, setPlatformTenantLoading] = useState(false);
   const [platformBillingSummary, setPlatformBillingSummary] = useState<AdminBillingSummary>({
-    totalStudents: 0,
+    totalClients: 0,
     monthlyRevenue: 0,
     activeSubscriptions: 0,
     failedPayments: 0
@@ -1179,7 +1178,7 @@ export default function DashboardPage() {
     const summary = await safeFetch<AdminBillingSummary>(
       () => apiGetWithAuth<AdminBillingSummary>('/admin/billing-summary', accessToken),
       {
-        totalStudents: 0,
+        totalClients: 0,
         monthlyRevenue: 0,
         activeSubscriptions: 0,
         failedPayments: 0
@@ -7115,10 +7114,8 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <article className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">Total Students</p>
-                      <p className="mt-1 text-3xl font-extrabold text-cyan-800">
-                        {platformBillingSummary.totalStudents}
-                      </p>
+                      <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">Total Clients</p>
+                      <p className="mt-1 text-3xl font-extrabold text-cyan-800">{platformBillingSummary.totalClients}</p>
                     </article>
                     <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Monthly Revenue</p>
