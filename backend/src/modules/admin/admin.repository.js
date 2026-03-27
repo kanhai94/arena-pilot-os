@@ -158,7 +158,7 @@ export const adminRepository = {
   },
 
   async getBillingSummary({ monthStart, nextMonthStart }) {
-    const [clientsRows, monthlyRows, activeSubscriptionRows, failedPayments] = await Promise.all([
+    const [clientsRows, monthlyRows, billedTenantRows, paidTenantRows, failedPayments] = await Promise.all([
       Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
@@ -184,10 +184,16 @@ export const adminRepository = {
           $group: {
             _id: '$tenantId'
           }
-        },
-        {
-          $count: 'total'
         }
+      ]),
+      Tenant.aggregate([
+        {
+          $match: {
+            email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
+            $or: [{ paymentStatus: 'paid' }, { subscriptionStatus: { $in: ['active', 'trial'] } }]
+          }
+        },
+        { $project: { _id: 1 } }
       ]),
       Tenant.countDocuments({
         email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
@@ -195,10 +201,15 @@ export const adminRepository = {
       })
     ]);
 
+    const billedTenantIds = new Set(billedTenantRows.map((row) => String(row._id)));
+    for (const tenant of paidTenantRows) {
+      billedTenantIds.add(String(tenant._id));
+    }
+
     return {
       totalClients: clientsRows[0]?.total || 0,
       monthlyRevenue: monthlyRows[0]?.monthlyRevenue || 0,
-      activeSubscriptions: activeSubscriptionRows[0]?.total || 0,
+      activeSubscriptions: billedTenantIds.size,
       failedPayments
     };
   },
