@@ -264,7 +264,7 @@ export const createBillingService = (repository, dependencies = {}) => {
       }
 
       try {
-        if (!['payment.captured', 'payment.failed'].includes(eventType)) {
+        if (!['payment.captured', 'payment.failed', 'order.paid'].includes(eventType)) {
           webhookLogger.info(
             {
               tenantId: null,
