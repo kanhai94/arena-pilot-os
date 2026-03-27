@@ -1010,6 +1010,7 @@ export default function DashboardPage() {
   const canSendReminders = isSuperAdmin || isAdmin || isStaff;
   const canManageIntegrations = isAdmin;
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
+  const useDarkFinanceTheme = visualMode === 'dark' || (visualMode === 'system' && systemPrefersDark);
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
   const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
   const classCapacityError = useMemo(() => {
@@ -6433,39 +6434,71 @@ export default function DashboardPage() {
           ) : null}
 
           {!loading && activeTab === 'studio' && activeMenu === 'Finance Deck' && isAdmin ? (
-            <div className="space-y-4 rounded-[32px] border border-white/10 bg-[#0b1220] p-4 text-white shadow-[0_28px_60px_-35px_rgba(0,0,0,0.65)]">
+            <div
+              className={`space-y-4 rounded-[32px] p-4 shadow-[0_28px_60px_-35px_rgba(0,0,0,0.65)] ${
+                useDarkFinanceTheme
+                  ? 'border border-white/10 bg-[#0b1220] text-white'
+                  : 'border border-slate-200 bg-white text-slate-900'
+              }`}
+            >
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
-                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-200/80">Subscription Summary</p>
+                <article
+                  className={`rounded-2xl p-4 ${
+                    useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a] text-white' : 'border border-slate-200 bg-slate-50 text-slate-900'
+                  }`}
+                >
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>
+                    Subscription Summary
+                  </p>
                   <p className="mt-2 text-2xl font-bold">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
-                  <p className="mt-1 text-xs text-slate-300">Plan name</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Plan name</p>
                 </article>
-                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
-                  <p className="text-xs uppercase tracking-[0.14em] text-blue-200/80">Status</p>
+                <article
+                  className={`rounded-2xl p-4 ${
+                    useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a] text-white' : 'border border-slate-200 bg-slate-50 text-slate-900'
+                  }`}
+                >
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-blue-200/80' : 'text-blue-700'}`}>Status</p>
                   <p className="mt-2 text-2xl font-bold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
-                  <p className="mt-1 text-xs text-slate-300">
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
                     Auto renew: {tenantSubscription?.autoRenew ? 'On' : 'Off'}
                   </p>
                 </article>
-                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
-                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-200/80">Next Payment</p>
+                <article
+                  className={`rounded-2xl p-4 ${
+                    useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a] text-white' : 'border border-slate-200 bg-slate-50 text-slate-900'
+                  }`}
+                >
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>Next Payment</p>
                   <p className="mt-2 text-2xl font-bold">{tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}</p>
-                  <p className="mt-1 text-xs text-slate-300">Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                    Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
+                  </p>
                 </article>
-                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
-                  <p className="text-xs uppercase tracking-[0.14em] text-cyan-200/80">Usage</p>
+                <article
+                  className={`rounded-2xl p-4 ${
+                    useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a] text-white' : 'border border-slate-200 bg-slate-50 text-slate-900'
+                  }`}
+                >
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-cyan-200/80' : 'text-cyan-700'}`}>Usage</p>
                   <p className="mt-2 text-2xl font-bold">
                     {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'}` : '0 / ∞'}
                   </p>
-                  <p className="mt-1 text-xs text-slate-300">Students used / limit</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Students used / limit</p>
                 </article>
               </section>
 
-              <article className="rounded-3xl border border-white/10 bg-[#0f172a] p-5 shadow-[0_22px_45px_-30px_rgba(0,0,0,0.6)]">
+              <article
+                className={`rounded-3xl p-5 shadow-[0_22px_45px_-30px_rgba(0,0,0,0.6)] ${
+                  useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a]' : 'border border-slate-200 bg-white'
+                }`}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-2xl font-bold text-white">Billing & Payments</h3>
-                    <p className="mt-1 text-sm text-slate-300">Track subscription history and invoice records for this academy.</p>
+                    <h3 className={`text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>Billing & Payments</h3>
+                    <p className={`mt-1 text-sm ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Track subscription history and invoice records for this academy.
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -6486,32 +6519,36 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <article className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-200">Monthly Price</p>
-                    <p className="mt-1 text-3xl font-extrabold text-white">
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-emerald-300/15 bg-emerald-400/10' : 'border border-emerald-200 bg-emerald-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-200' : 'text-emerald-700'}`}>Monthly Price</p>
+                    <p className={`mt-1 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
                       {formatCurrency(tenantSubscription?.planPrice ?? billing?.plan?.priceMonthly ?? 0)}
                     </p>
                   </article>
-                  <article className="rounded-2xl border border-indigo-300/15 bg-indigo-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.14em] text-indigo-200">Student Limit</p>
-                    <p className="mt-1 text-3xl font-extrabold text-white">
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-indigo-300/15 bg-indigo-400/10' : 'border border-indigo-200 bg-indigo-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-indigo-200' : 'text-indigo-700'}`}>Student Limit</p>
+                    <p className={`mt-1 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
                       {tenantSubscription?.studentLimit ?? billing?.plan?.studentLimit ?? '∞'}
                     </p>
                   </article>
-                  <article className="rounded-2xl border border-amber-300/15 bg-amber-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.14em] text-amber-200">Usage Progress</p>
-                    <p className="mt-1 text-3xl font-extrabold text-white">{tenantSubscription?.usagePercent || 0}%</p>
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-amber-300/15 bg-amber-400/10' : 'border border-amber-200 bg-amber-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-amber-200' : 'text-amber-700'}`}>Usage Progress</p>
+                    <p className={`mt-1 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{tenantSubscription?.usagePercent || 0}%</p>
                   </article>
-                  <article className="rounded-2xl border border-slate-200/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Auto Renew</p>
-                    <p className="mt-1 text-3xl font-extrabold text-white">{tenantSubscription?.autoRenew ? 'On' : 'Off'}</p>
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-slate-200/10 bg-white/5' : 'border border-slate-200 bg-slate-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Auto Renew</p>
+                    <p className={`mt-1 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{tenantSubscription?.autoRenew ? 'On' : 'Off'}</p>
                   </article>
                 </div>
 
-                <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                <div
+                  className={`mt-4 overflow-x-auto rounded-2xl ${
+                    useDarkFinanceTheme ? 'border border-white/10' : 'border border-slate-200'
+                  }`}
+                >
                   <table className="min-w-full text-left text-sm">
-                    <thead className="bg-white/5">
-                      <tr className="border-b border-white/10 text-slate-300">
+                    <thead className={useDarkFinanceTheme ? 'bg-white/5' : 'bg-slate-50'}>
+                      <tr className={`border-b ${useDarkFinanceTheme ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
                         <th className="px-3 py-3 font-semibold">Date</th>
                         <th className="px-3 py-3 font-semibold">Amount</th>
                         <th className="px-3 py-3 font-semibold">Status</th>
@@ -6521,30 +6558,36 @@ export default function DashboardPage() {
                     <tbody>
                       {tenantBillingLoading ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-5 text-center text-slate-400">
+                          <td colSpan={4} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>
                             Loading payment history...
                           </td>
                         </tr>
                       ) : null}
                       {!tenantBillingLoading && tenantBillingHistory.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-5 text-center text-slate-400">
+                          <td colSpan={4} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>
                             No subscription payments yet.
                           </td>
                         </tr>
                       ) : null}
                       {tenantBillingHistory.map((payment) => (
-                        <tr key={payment.id} className="border-b border-white/5">
-                          <td className="px-3 py-3 text-slate-300">{fmtDate(payment.date)}</td>
-                          <td className="px-3 py-3 text-white">{formatCurrency(payment.amount)}</td>
+                        <tr key={payment.id} className={`border-b ${useDarkFinanceTheme ? 'border-white/5' : 'border-slate-100'}`}>
+                          <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{fmtDate(payment.date)}</td>
+                          <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(payment.amount)}</td>
                           <td className="px-3 py-3">
                             <span
                               className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                                 payment.status === 'paid'
-                                  ? 'bg-emerald-400/15 text-emerald-200'
+                                  ? useDarkFinanceTheme
+                                    ? 'bg-emerald-400/15 text-emerald-200'
+                                    : 'bg-emerald-100 text-emerald-700'
                                   : payment.status === 'failed'
-                                    ? 'bg-rose-400/15 text-rose-200'
-                                    : 'bg-amber-400/15 text-amber-200'
+                                    ? useDarkFinanceTheme
+                                      ? 'bg-rose-400/15 text-rose-200'
+                                      : 'bg-rose-100 text-rose-700'
+                                    : useDarkFinanceTheme
+                                      ? 'bg-amber-400/15 text-amber-200'
+                                      : 'bg-amber-100 text-amber-700'
                               }`}
                             >
                               {payment.status}
@@ -6554,7 +6597,11 @@ export default function DashboardPage() {
                             <button
                               type="button"
                               onClick={() => downloadInvoice(payment)}
-                              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10"
+                              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                                useDarkFinanceTheme
+                                  ? 'border border-white/10 text-white hover:bg-white/10'
+                                  : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                              }`}
                             >
                               Download
                             </button>
