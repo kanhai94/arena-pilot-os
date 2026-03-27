@@ -2047,7 +2047,7 @@ export default function DashboardPage() {
   }, [billingRows]);
 
   const activeSubscriptions = useMemo(() => {
-    return billingRows.filter((row) => row.totalAmount > 0).length;
+    return billingRows.filter((row) => String(row.status).toLowerCase() === 'paid').length;
   }, [billingRows]);
 
   const failedPaymentsCount = useMemo(() => {
