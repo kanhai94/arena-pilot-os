@@ -165,7 +165,14 @@ export const adminRepository = {
       TenantBillingPayment.aggregate([
         {
           $addFields: {
-            resolvedPaymentDate: { $ifNull: ['$paymentDate', '$createdAt'] }
+            resolvedPaymentDate: {
+              $convert: {
+                input: { $ifNull: ['$paymentDate', '$createdAt'] },
+                to: 'date',
+                onError: null,
+                onNull: null
+              }
+            }
           }
         },
         {
@@ -217,14 +224,32 @@ export const adminRepository = {
     const paymentTenantIds = monthlyPaymentRows.map((row) => row._id).filter(Boolean).map((id) => String(id));
     const fallbackRevenueRows = await Tenant.aggregate([
       {
+        $addFields: {
+          resolvedLastPaymentDate: {
+            $convert: {
+              input: '$lastPaymentDate',
+              to: 'date',
+              onError: null,
+              onNull: null
+            }
+          },
+          resolvedPlanStartDate: {
+            $convert: {
+              input: '$planStartDate',
+              to: 'date',
+              onError: null,
+              onNull: null
+            }
+          }
+        }
+      },
+      {
         $match: {
           email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
           $or: [
             { paymentStatus: 'paid' },
-            { billingTotalPaidAmount: { $gt: 0 } },
-            { totalPaidAmount: { $gt: 0 } },
-            { lastPaymentDate: { $gte: monthStart, $lt: nextMonthStart } },
-            { planStartDate: { $gte: monthStart, $lt: nextMonthStart } }
+            { resolvedLastPaymentDate: { $gte: monthStart, $lt: nextMonthStart } },
+            { resolvedPlanStartDate: { $gte: monthStart, $lt: nextMonthStart } }
           ],
           _id: { $nin: paymentTenantIds.length > 0 ? paymentTenantIds.map((id) => new mongoose.Types.ObjectId(id)) : [] }
         }
@@ -233,18 +258,11 @@ export const adminRepository = {
         $project: {
           revenueAmount: {
             $ifNull: [
-              '$billingTotalPaidAmount',
+              '$customPriceOverride',
               {
                 $ifNull: [
-                  '$totalPaidAmount',
-                  {
-                    $ifNull: [
-                      '$customPriceOverride',
-                      {
-                        $ifNull: ['$planPrice', 0]
-                      }
-                    ]
-                  }
+                  '$planPrice',
+                  0
                 ]
               }
             ]
