@@ -5,7 +5,16 @@ import { z } from 'zod';
 
 const upgradeTenantPlanSchema = z
   .object({
-    planId: z.string().min(1)
+    planId: z.string().min(1),
+    autoRenew: z.boolean().optional(),
+    payment: z
+      .object({
+        razorpayOrderId: z.string().min(1),
+        razorpayPaymentId: z.string().min(1),
+        razorpaySignature: z.string().min(1)
+      })
+      .strict()
+      .optional()
   })
   .strict();
 
@@ -32,7 +41,7 @@ export const createTenantController = (service) => {
     upgradePlan: async (req, res, next) => {
       try {
         const payload = parseOrThrow(upgradeTenantPlanSchema, req.body);
-        const data = await service.upgradePlan(payload.planId);
+        const data = await service.upgradePlan(payload.planId, payload.payment ?? null, payload.autoRenew ?? true);
         return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);

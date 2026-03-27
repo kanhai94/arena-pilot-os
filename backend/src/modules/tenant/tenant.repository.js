@@ -14,6 +14,14 @@ export const tenantRepository = {
     return TenantBillingPayment.find({ tenantId }).sort({ paymentDate: -1, createdAt: -1 }).limit(limit).lean();
   },
 
+  findBillingPaymentByRazorpayPaymentId(razorpayPaymentId) {
+    return TenantBillingPayment.findOne({ razorpayPaymentId }).lean();
+  },
+
+  findBillingPaymentByRazorpayOrderId(razorpayOrderId) {
+    return TenantBillingPayment.findOne({ razorpayOrderId }).lean();
+  },
+
   findBillingPaymentById(tenantId, paymentId) {
     return TenantBillingPayment.findOne({ _id: paymentId, tenantId }).lean();
   }

@@ -282,6 +282,37 @@ type TenantBillingPayment = {
   invoiceDownloadName: string;
 };
 
+type TenantUpgradeResponse = {
+  success: boolean;
+  stage: 'order_created' | 'completed';
+  paymentMode: 'razorpay' | 'free';
+  requiresPayment: boolean;
+  paymentLink?: string | null;
+  keyId?: string | null;
+  orderId?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  planId: string;
+  planName: string;
+  subscription?: TenantSubscriptionSummary | null;
+  payment?: TenantBillingPayment | null;
+};
+
+type RazorpayCheckoutPayload = {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      close?: () => void;
+    };
+  }
+}
+
 type AdminRazorpaySettings = {
   configured: boolean;
   isActive: boolean;
@@ -958,6 +989,19 @@ export default function DashboardPage() {
       setSidebarOpen(false);
     }
   }, [activeMenu, activeTab, activeAcademyPro, activePlatformControl]);
+
+  useEffect(() => {
+    const scriptId = 'razorpay-checkout-js';
+    if (document.getElementById(scriptId)) {
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
   const normalizedUserRole = normalizeRole(user?.role);
   const isSuperAdmin = normalizedUserRole === 'SUPER_ADMIN';
@@ -2075,19 +2119,75 @@ export default function DashboardPage() {
       setToast('Please select a plan first.');
       return;
     }
+
+    const selectedPlan = platformPlans.find((plan) => plan.id === selectedUpgradePlanId) || null;
+    if (!selectedPlan) {
+      setToast('Selected plan is not available.');
+      return;
+    }
+
     setUpgradeSubmitting(true);
     setToast('');
     try {
-      const data = await apiPostWithAuth<{ success: boolean; paymentMode: string; paymentLink: string | null }>(
+      const checkout = await apiPostWithAuth<TenantUpgradeResponse>('/tenant/upgrade-plan', { planId: selectedUpgradePlanId }, token);
+
+      if (checkout.paymentMode === 'free' || !checkout.requiresPayment || !checkout.keyId || !checkout.orderId || !checkout.amount) {
+        setToast('Congratulations! Your payment was successful and your plan has been upgraded.');
+        setShowUpgradeModal(false);
+        await loadDashboardData(token);
+        return;
+      }
+
+      if (!window.Razorpay) {
+        throw new Error('Razorpay SDK failed to load. Please refresh the page and try again.');
+      }
+
+      const payment = await new Promise<RazorpayCheckoutPayload>((resolve, reject) => {
+        const RazorpayCtor = window.Razorpay;
+        if (!RazorpayCtor) {
+          reject(new Error('Unable to initialize Razorpay checkout'));
+          return;
+        }
+
+        const instance = new RazorpayCtor({
+          key: checkout.keyId,
+          order_id: checkout.orderId,
+          amount: checkout.amount,
+          currency: checkout.currency || 'INR',
+          name: 'ArenaPilot OS',
+          description: `${selectedPlan.name} plan upgrade`,
+          prefill: {
+            name: user?.fullName || 'Tenant Admin',
+            email: user?.email || ''
+          },
+          theme: {
+            color: '#00E5A8'
+          },
+          handler: async (response: any) => {
+            resolve({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            });
+          },
+          modal: {
+            ondismiss: () => reject(new Error('Payment cancelled'))
+          }
+        });
+
+        instance.open();
+      });
+
+      await apiPostWithAuth<TenantUpgradeResponse>(
         '/tenant/upgrade-plan',
-        { planId: selectedUpgradePlanId },
+        {
+          planId: selectedUpgradePlanId,
+          payment
+        },
         token
       );
-      setToast(
-        data.paymentMode === 'mock'
-          ? 'Congratulations! Your payment was successful and your plan has been upgraded.'
-          : 'Upgrade initiated. Your payment will be confirmed shortly.'
-      );
+
+      setToast('Congratulations! Your payment was successful and your plan has been upgraded.');
       setShowUpgradeModal(false);
       await loadDashboardData(token);
     } catch (err) {
@@ -4056,20 +4156,19 @@ export default function DashboardPage() {
               </div>
 
               {isAdmin ? (
-                <div className="rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">Current Plan</p>
-                      <p className="mt-2 text-xl font-bold">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
-                      <p className="mt-1 text-xs text-emerald-50/80">
+                <div className="w-full max-w-[560px] justify-self-end rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-2.5 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/80">Current Plan</p>
+                      <p className="mt-1 text-base font-bold leading-tight">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
+                      <p className="mt-1 text-[11px] text-emerald-50/80">
                         {tenantSubscription
                           ? `${formatCurrency(tenantSubscription.planPrice)} / month`
                           : billing?.plan
                             ? `${formatCurrency(billing.plan.priceMonthly)} / month`
                             : 'Upgrade anytime'}
-                      </p>
-                      <p className="mt-1 text-xs text-emerald-50/70 capitalize">
-                        Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
+                        <span className="mx-1.5 text-emerald-50/40">|</span>
+                        Cycle: {tenantSubscription?.billingCycle || 'monthly'}
                       </p>
                     </div>
                     <div className="relative">
@@ -4085,7 +4184,7 @@ export default function DashboardPage() {
                         </svg>
                       </button>
                       {visualMenuOpen ? (
-                        <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:bg-slate-900/95 dark:text-slate-100 dark:border-slate-700">
+                        <div className="absolute right-0 top-10 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                             Visual mode <span className="text-slate-400">(beta)</span>
                           </p>
@@ -4115,50 +4214,50 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/80">Usage</p>
-                      <p className="mt-1 text-lg font-semibold">
+                  <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-2">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/80">Usage</p>
+                      <p className="mt-1 text-sm font-semibold leading-tight">
                         {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'} students` : 'Loading...'}
                       </p>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15">
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-400 transition-all duration-500"
                           style={{ width: `${tenantSubscription?.usagePercent || 0}%` }}
                         />
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/80">Status</p>
-                      <p className="mt-1 text-lg font-semibold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
-                      <p className="mt-1 text-xs text-emerald-50/80">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-2">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/80">Status</p>
+                      <p className="mt-1 text-sm font-semibold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
+                      <p className="mt-1 text-[11px] text-emerald-50/80">
                         Next payment: {tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}
                       </p>
                     </div>
                   </div>
 
                   {tenantSubscription?.usagePercent !== undefined && tenantSubscription.usagePercent > 80 ? (
-                    <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+                    <p className="mt-2.5 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
                       You are near your student limit
                     </p>
                   ) : null}
 
                   {tenantSubscription?.status === 'expired' ? (
-                    <p className="mt-3 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+                    <p className="mt-2.5 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-1 text-xs text-rose-100">
                       Plan expired. Upgrade to continue
                     </p>
                   ) : null}
 
-                  <div className="mt-4 flex items-center justify-between gap-2">
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
                     <button
                       onClick={() => token && loadDashboardData(token)}
-                      className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+                      className="rounded-lg bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25"
                     >
                       Refresh Snapshot
                     </button>
                     <button
                       onClick={openUpgradeModal}
-                      className="rounded-lg bg-[#00E5A8] px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-[#22f0b7]"
+                      className="rounded-lg bg-[#00E5A8] px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-[#22f0b7]"
                     >
                       Upgrade Plan
                     </button>
@@ -7147,7 +7246,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-emerald-200/80">Upgrade Plan</p>
                     <h3 className="mt-2 text-3xl font-bold">Choose the next tier</h3>
-                    <p className="mt-1 text-sm text-slate-300">Select a plan and continue with a mock payment flow for now.</p>
+                    <p className="mt-1 text-sm text-slate-300">Select a plan and continue with a secure Razorpay checkout.</p>
                   </div>
                   <button
                     type="button"

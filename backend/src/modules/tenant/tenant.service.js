@@ -1,6 +1,11 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
+import {
+  createRegistrationOrder as createPlatformRazorpayOrder,
+  getRazorpayPublicKeyId,
+  verifyRazorpaySignature
+} from '../../adapters/razorpay.adapter.js';
 
 const BILLING_CYCLE_MONTHS = {
   monthly: 1,
@@ -17,6 +22,31 @@ const formatInvoiceNumber = () => {
   const stamp = Date.now().toString(36).toUpperCase();
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `INV-${stamp}-${suffix}`;
+};
+
+const getBillingCycleMonths = (billingCycle) => BILLING_CYCLE_MONTHS[billingCycle] || 1;
+
+const buildBillingPaymentPayload = ({ tenantId, plan, amount, billingCycle, payment = null, autoRenew = true }) => {
+  const now = new Date();
+  const nextPaymentDate = addMonthsUTC(now, getBillingCycleMonths(billingCycle));
+
+  return {
+    tenantId,
+    planId: plan._id,
+    planName: plan.name,
+    amount,
+    currency: 'INR',
+    billingCycle,
+    status: 'paid',
+    paymentDate: now,
+    nextPaymentDate,
+    autoRenew,
+    invoiceNumber: formatInvoiceNumber(),
+    invoiceLabel: `${plan.name} subscription`,
+    razorpayOrderId: payment?.razorpayOrderId || null,
+    razorpayPaymentId: payment?.razorpayPaymentId || null,
+    razorpaySignature: payment?.razorpaySignature || null
+  };
 };
 
 export const createTenantService = (dependencies) => {
@@ -95,40 +125,111 @@ export const createTenantService = (dependencies) => {
       return mapSummary(tenantId);
     },
 
-    async upgradePlan(planId) {
+    async upgradePlan(planId, payment = null, autoRenew = true) {
       const tenantId = resolveTenantId();
       const plan = await billingRepository.findPlanById(planId);
       if (!plan || plan.status !== 'active') {
         throw new AppError('Plan not found or inactive', StatusCodes.BAD_REQUEST);
       }
 
-      const subscription = await billingService.upgradePlan({ planId, autoRenew: true }, tenantId);
-      const now = new Date();
       const billingCycle = 'monthly';
-      const paymentDate = now;
-      const nextPaymentDate = addMonthsUTC(now, billingCycle === 'yearly' ? 12 : 1);
+      const amount = Number(plan.priceMonthly || 0);
 
-      const payment = await tenantRepository.createBillingPayment({
-        tenantId,
-        planId: plan._id,
-        planName: plan.name,
-        amount: plan.priceMonthly,
-        currency: 'INR',
-        billingCycle,
-        status: 'paid',
-        paymentDate,
-        nextPaymentDate,
-        autoRenew: true,
-        invoiceNumber: formatInvoiceNumber(),
-        invoiceLabel: `${plan.name} subscription`
+      if (amount <= 0) {
+        await billingService.upgradePlan({ planId, autoRenew }, tenantId);
+        const freePayment = await tenantRepository.createBillingPayment(
+          buildBillingPaymentPayload({
+            tenantId,
+            plan,
+            amount,
+            billingCycle,
+            autoRenew
+          })
+        );
+
+        return {
+          success: true,
+          stage: 'completed',
+          paymentMode: 'free',
+          requiresPayment: false,
+          paymentLink: null,
+          subscription: await mapSummary(tenantId),
+          payment: freePayment
+        };
+      }
+
+      if (!payment) {
+        const receipt = `tenant_upgrade_${String(tenantId)}_${Date.now()}`;
+        const order = await createPlatformRazorpayOrder({
+          amount: Math.round(amount * 100),
+          currency: 'INR',
+          receipt,
+          notes: {
+            tenantId: String(tenantId),
+            planId: String(plan._id),
+            planName: plan.name,
+            purpose: 'tenant_upgrade'
+          }
+        });
+
+        return {
+          success: true,
+          stage: 'order_created',
+          paymentMode: 'razorpay',
+          requiresPayment: true,
+          keyId: await getRazorpayPublicKeyId(),
+          orderId: order.id,
+          amount: Math.round(amount * 100),
+          currency: 'INR',
+          planId: String(plan._id),
+          planName: plan.name
+        };
+      }
+
+      const isValidSignature = await verifyRazorpaySignature({
+        orderId: payment.razorpayOrderId,
+        paymentId: payment.razorpayPaymentId,
+        signature: payment.razorpaySignature
       });
+
+      if (!isValidSignature) {
+        throw new AppError('Invalid payment signature', StatusCodes.BAD_REQUEST);
+      }
+
+      const existingPayment = await tenantRepository.findBillingPaymentByRazorpayPaymentId(payment.razorpayPaymentId);
+      if (existingPayment) {
+        return {
+          success: true,
+          stage: 'completed',
+          paymentMode: 'razorpay',
+          requiresPayment: false,
+          paymentLink: null,
+          subscription: await mapSummary(tenantId),
+          payment: existingPayment
+        };
+      }
+
+      await billingService.upgradePlan({ planId, autoRenew }, tenantId);
+
+      const billingPayment = await tenantRepository.createBillingPayment(
+        buildBillingPaymentPayload({
+          tenantId,
+          plan,
+          amount,
+          billingCycle,
+          payment,
+          autoRenew
+        })
+      );
 
       return {
         success: true,
-        paymentMode: 'mock',
+        stage: 'completed',
+        paymentMode: 'razorpay',
+        requiresPayment: false,
         paymentLink: null,
         subscription: await mapSummary(tenantId),
-        payment
+        payment: billingPayment
       };
     },
 
