@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiDeleteWithAuth, apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
+import { apiDeleteWithAuth, apiGetWithAuth, apiPatchWithAuth, apiPost, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import type { EmailIntegrationForm } from './components/integrations/EmailIntegrationCard';
 import type { SmsIntegrationForm } from './components/integrations/SmsIntegrationCard';
@@ -1285,15 +1285,23 @@ export default function DashboardPage() {
         return;
       }
 
-      const sessionToken = me.accessToken || token;
-      setUser(me);
-      if (me?.accessToken) {
-        setCurrentSession({ ...me });
-      } else if (me) {
-        setCurrentSession((prev) => (prev ? { ...prev, ...me } : prev));
+      const session = me.accessToken
+        ? me
+        : await safeFetch(async () => {
+            const refreshed = await apiPost<{ user: UserSession; accessToken: string }>('/auth/refresh-token', {});
+            return { ...refreshed.user, accessToken: refreshed.accessToken };
+          }, null);
+
+      if (!session) {
+        router.replace('/login');
+        return;
       }
-      await loadDashboardData(sessionToken, me);
-      if (normalizeRole(me.role) === 'SUPER_ADMIN') {
+
+      const sessionToken = session.accessToken || token;
+      setUser(session);
+      setCurrentSession(session);
+      await loadDashboardData(sessionToken, session);
+      if (normalizeRole(session.role) === 'SUPER_ADMIN') {
         await Promise.all([loadPlatformTenants(sessionToken), loadRazorpaySettings(sessionToken), loadPlatformIntegrationSettings(sessionToken)]);
       }
       await loadAttendanceByDate(sessionToken, academyAttendanceDate);
