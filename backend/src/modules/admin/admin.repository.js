@@ -130,11 +130,7 @@ export const adminRepository = {
             lastPaymentDate: { $ifNull: ['$lastPaymentDate', '$billingLastPaymentDate'] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
             totalPaidAmount: {
-              $cond: [
-                { $gt: [{ $ifNull: ['$totalPaidAmount', 0] }, 0] },
-                '$totalPaidAmount',
-                '$billingTotalPaidAmount'
-              ]
+              $ifNull: ['$billingTotalPaidAmount', { $ifNull: ['$totalPaidAmount', 0] }]
             },
             createdAt: 1
           }
