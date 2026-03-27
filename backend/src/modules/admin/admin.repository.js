@@ -159,14 +159,7 @@ export const adminRepository = {
 
   async getBillingSummary({ monthStart, nextMonthStart }) {
     const [clientsRows, monthlyRows, activeSubscriptions, failedPayments] = await Promise.all([
-      TenantBillingPayment.aggregate([
-        {
-          $group: {
-            _id: '$tenantId'
-          }
-        },
-        { $count: 'total' }
-      ]),
+      Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
           $match: {
