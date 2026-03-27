@@ -80,10 +80,20 @@ const tenantSchema = new mongoose.Schema(
       default: 'pending',
       index: true
     },
+    planPrice: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     planName: {
       type: String,
       trim: true,
       default: null
+    },
+    currentStudentCount: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     studentLimit: {
       type: Number,
@@ -93,11 +103,20 @@ const tenantSchema = new mongoose.Schema(
         message: 'studentLimit must be null (unlimited) or an integer >= 1'
       }
     },
+    billingCycle: {
+      type: String,
+      enum: ['monthly', 'yearly'],
+      default: 'monthly'
+    },
     planStartDate: {
       type: Date,
       default: null
     },
     planEndDate: {
+      type: Date,
+      default: null
+    },
+    nextPaymentDate: {
       type: Date,
       default: null
     },

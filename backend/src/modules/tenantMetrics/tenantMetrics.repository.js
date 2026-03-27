@@ -47,6 +47,9 @@ export const tenantMetricsRepository = {
             totalStudents: {
               $max: [0, { $add: [{ $ifNull: ['$totalStudents', 0] }, delta] }]
             },
+            currentStudentCount: {
+              $max: [0, { $add: [{ $ifNull: ['$currentStudentCount', 0] }, delta] }]
+            },
             lastActivityAt: date
           }
         }
@@ -84,4 +87,3 @@ export const tenantMetricsRepository = {
     );
   }
 };
-

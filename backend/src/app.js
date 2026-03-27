@@ -16,6 +16,7 @@ import { automationRouter } from './modules/automations/automation.routes.js';
 import { integrationRouter } from './modules/integrations/integration.routes.js';
 import { teamRouter } from './modules/team/team.routes.js';
 import { subscriptionRouter } from './modules/subscription/subscription.routes.js';
+import { tenantRouter } from './modules/tenant/tenant.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { platformRouter } from './modules/platform/platform.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
@@ -87,6 +88,7 @@ export const createApp = () => {
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/billing', billingRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
+  app.use('/api/v1/tenant', tenantRouter);
   app.use('/api/v1/admin', adminRouter);
   app.use('/api/v1/students', studentRouter);
   app.use('/api/v1/batches', batchRouter);

@@ -251,6 +251,34 @@ type PlatformPlan = {
   features?: string[];
 };
 
+type TenantSubscriptionSummary = {
+  planName: string;
+  planPrice: number;
+  studentLimit: number | null;
+  currentStudentCount: number;
+  usagePercent: number;
+  nextPaymentDate: string | null;
+  billingCycle: 'monthly' | 'yearly';
+  status: 'trial' | 'active' | 'expired' | 'cancelled';
+  autoRenew: boolean;
+  planStartDate: string | null;
+  planEndDate: string | null;
+};
+
+type TenantBillingPayment = {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'paid' | 'pending' | 'failed';
+  planName: string;
+  invoiceNumber: string;
+  invoiceLabel: string;
+  billingCycle: 'monthly' | 'yearly';
+  autoRenew: boolean;
+  nextPaymentDate: string | null;
+  invoiceDownloadName: string;
+};
+
 type AdminRazorpaySettings = {
   configured: boolean;
   isActive: boolean;
@@ -854,6 +882,12 @@ export default function DashboardPage() {
     { id: 'growth', name: 'Growth', priceMonthly: 1999, studentLimit: 50, status: 'active' },
     { id: 'pro', name: 'Pro', priceMonthly: 4999, studentLimit: null, status: 'active' }
   ]);
+  const [tenantSubscription, setTenantSubscription] = useState<TenantSubscriptionSummary | null>(null);
+  const [tenantBillingHistory, setTenantBillingHistory] = useState<TenantBillingPayment[]>([]);
+  const [tenantBillingLoading, setTenantBillingLoading] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedUpgradePlanId, setSelectedUpgradePlanId] = useState('');
+  const [upgradeSubmitting, setUpgradeSubmitting] = useState(false);
   const [showPlatformPlanComposer, setShowPlatformPlanComposer] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState('');
   const [newPlatformPlanName, setNewPlatformPlanName] = useState('');
@@ -1109,6 +1143,41 @@ export default function DashboardPage() {
     setIntegrationSmtpPass('');
   };
 
+  const loadTenantSubscription = async (accessToken: string) => {
+    if (!isAdmin) return;
+    const data = await safeFetch<TenantSubscriptionSummary | null>(
+      () => apiGetWithAuth<TenantSubscriptionSummary>('/tenant/subscription', accessToken),
+      null
+    );
+    setTenantSubscription(data);
+  };
+
+  const loadTenantBillingPlans = async (accessToken: string) => {
+    if (!isAdmin) return;
+    const plans = await safeFetch<PlatformPlan[]>(
+      () => apiGetWithAuth<PlatformPlan[]>('/tenant/plans', accessToken),
+      []
+    );
+    if (plans.length > 0) {
+      setPlatformPlans(plans);
+      if (!selectedUpgradePlanId) {
+        const currentId = plans.find((plan) => plan.name === tenantSubscription?.planName)?.id || plans[0]?.id || '';
+        setSelectedUpgradePlanId(currentId);
+      }
+    }
+  };
+
+  const loadTenantBillingHistory = async (accessToken: string) => {
+    if (!isAdmin) return;
+    setTenantBillingLoading(true);
+    const data = await safeFetch<TenantBillingPayment[]>(
+      () => apiGetWithAuth<TenantBillingPayment[]>('/tenant/payments', accessToken),
+      []
+    );
+    setTenantBillingHistory(data);
+    setTenantBillingLoading(false);
+  };
+
   const loadTenantIntegrations = async (accessToken: string) => {
     if (!isAdmin) return;
     setTenantIntegrationLoading(true);
@@ -1170,6 +1239,9 @@ export default function DashboardPage() {
     setLoading(true);
 
     const resolvedUser = currentUser || user;
+    const resolvedRole = normalizeRole(resolvedUser?.role);
+    const resolvedIsSuperAdmin = resolvedRole === 'SUPER_ADMIN';
+    const resolvedIsAdmin = resolvedRole === 'ADMIN';
 
     const [
       me,
@@ -1183,7 +1255,10 @@ export default function DashboardPage() {
       plans,
       batchList,
       memberList,
-      platformPlanList
+      platformPlanList,
+      tenantSubscriptionData,
+      tenantBillingPlans,
+      tenantBillingHistoryData
     ] =
       await Promise.all([
       currentUser ? Promise.resolve(currentUser) : safeFetch(() => apiGetWithAuth<UserSession>('/auth/me', accessToken), null),
@@ -1205,7 +1280,7 @@ export default function DashboardPage() {
         items: [],
         pagination: { total: 0 }
       }),
-      normalizeRole(resolvedUser?.role) === 'SUPER_ADMIN'
+      resolvedIsSuperAdmin
         ? safeFetch(() => apiGetWithAuth<RegistrationStats>('/auth/registration-stats', accessToken), null)
         : Promise.resolve(null),
       safeFetch(() => apiGetWithAuth<FeePlan[]>('/fees/plans', accessToken), []),
@@ -1218,9 +1293,12 @@ export default function DashboardPage() {
         { items: [], pagination: { total: 0 } }
       ),
       safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 }),
-      normalizeRole(resolvedUser?.role) === 'SUPER_ADMIN'
+      resolvedIsSuperAdmin
         ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/admin/plans', accessToken), [])
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantSubscriptionSummary>('/tenant/subscription', accessToken), null) : Promise.resolve(null),
+      resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/tenant/plans', accessToken), []) : Promise.resolve([]),
+      resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantBillingPayment[]>('/tenant/payments', accessToken), []) : Promise.resolve([])
       ]);
 
     if (me) {
@@ -1244,6 +1322,16 @@ export default function DashboardPage() {
     if (platformPlanList.length > 0) {
       setPlatformPlans(platformPlanList);
     }
+    if (tenantBillingPlans.length > 0) {
+      setPlatformPlans(tenantBillingPlans);
+      const selectedPlanId =
+        tenantBillingPlans.find((plan) => plan.name === tenantSubscriptionData?.planName)?.id || tenantBillingPlans[0]?.id || '';
+      if (!selectedUpgradePlanId && selectedPlanId) {
+        setSelectedUpgradePlanId(selectedPlanId);
+      }
+    }
+    setTenantSubscription(tenantSubscriptionData);
+    setTenantBillingHistory(tenantBillingHistoryData);
 
     const recentDateList = [0, 1, 2].map((offset) => {
       const date = new Date();
@@ -1390,6 +1478,12 @@ export default function DashboardPage() {
       setActiveTab('studio');
       setActiveMenu('Student Roster');
       setPlatformControlExpanded(false);
+      router.replace('/dashboard?section=student-roster');
+    }
+
+    if (section === 'finance-deck' && normalizeRole(user.role) !== 'ADMIN') {
+      setActiveTab('studio');
+      setActiveMenu('Student Roster');
       router.replace('/dashboard?section=student-roster');
     }
 
@@ -1934,6 +2028,74 @@ export default function DashboardPage() {
     return billingRows.filter((row) => String(row.status).toLowerCase() === 'failed').length;
   }, [billingRows]);
 
+  const tenantSubscriptionPlan = useMemo(() => {
+    if (!tenantSubscription) return null;
+    return platformPlans.find((plan) => plan.name === tenantSubscription.planName) || null;
+  }, [platformPlans, tenantSubscription]);
+
+  const openUpgradeModal = () => {
+    if (!isAdmin) return;
+    const fallbackPlanId = tenantSubscriptionPlan?.id || platformPlans[0]?.id || '';
+    setSelectedUpgradePlanId((prev) => prev || fallbackPlanId);
+    setShowUpgradeModal(true);
+  };
+
+  const closeUpgradeModal = () => {
+    setShowUpgradeModal(false);
+  };
+
+  const upgradeTenantPlan = async () => {
+    if (!selectedUpgradePlanId) {
+      setToast('Please select a plan first.');
+      return;
+    }
+    setUpgradeSubmitting(true);
+    setToast('');
+    try {
+      const data = await apiPostWithAuth<{ success: boolean; paymentMode: string; paymentLink: string | null }>(
+        '/tenant/upgrade-plan',
+        { planId: selectedUpgradePlanId },
+        token
+      );
+      setToast(data.paymentMode === 'mock' ? 'Plan upgraded successfully.' : 'Upgrade initiated.');
+      setShowUpgradeModal(false);
+      await loadDashboardData(token);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'Failed to upgrade plan');
+    } finally {
+      setUpgradeSubmitting(false);
+    }
+  };
+
+  const retryTenantPayment = async (planName: string) => {
+    const plan = platformPlans.find((item) => item.name === planName);
+    if (!plan) {
+      setToast('Plan not found for retry.');
+      return;
+    }
+    setSelectedUpgradePlanId(plan.id);
+    setShowUpgradeModal(true);
+  };
+
+  const downloadInvoice = (payment: TenantBillingPayment) => {
+    const lines = [
+      'ArenaPilot OS Invoice',
+      `Invoice: ${payment.invoiceNumber}`,
+      `Plan: ${payment.planName}`,
+      `Amount: ${formatCurrency(payment.amount)}`,
+      `Status: ${payment.status}`,
+      `Billing cycle: ${payment.billingCycle}`,
+      `Date: ${fmtDate(payment.date)}`
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = payment.invoiceDownloadName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const getTenantStatusMeta = (status?: string) => {
     const normalized = String(status || 'active').toLowerCase();
     if (normalized === 'blocked') {
@@ -2028,6 +2190,22 @@ export default function DashboardPage() {
       setShowCoachComposer(false);
       setActiveAttendanceBatch(null);
       router.replace('/dashboard?section=integrations');
+      return;
+    }
+
+    if (menu === 'Finance Deck') {
+      if (!isAdmin) {
+        setToast('Only tenant admin can view billing.');
+        return;
+      }
+      setShowPlanComposer(false);
+      setShowClassComposer(false);
+      setShowClientComposer(false);
+      setShowCoachComposer(false);
+      setActiveAttendanceBatch(null);
+      setActiveMenu(menu);
+      setActiveTab(menuToTab[menu]);
+      router.replace(`/dashboard?section=${menuToSectionSlug[menu]}`);
       return;
     }
 
@@ -3672,6 +3850,9 @@ export default function DashboardPage() {
               if (item === 'Integrations' && !canManageIntegrations) {
                 return null;
               }
+              if (item === 'Finance Deck' && !isAdmin) {
+                return null;
+              }
               if (item === 'Academy Pro') {
                 return (
                   <div
@@ -3844,70 +4025,181 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1e293b_45%,#065f46)] p-4 text-white">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-200">Current Plan</p>
-                    <p className="mt-2 text-xl font-bold">{billing?.plan?.name || 'Trial Window'}</p>
-                    <p className="mt-1 text-xs text-slate-200">
-                      {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
-                    </p>
-                  </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setVisualMenuOpen((prev) => !prev)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
-                      aria-label="Visual mode settings"
-                    >
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="3.25" />
-                        <path d="M19.4 15a7.97 7.97 0 0 0 .02-6l2.05-1.6-2-3.46-2.46 1a8.08 8.08 0 0 0-5.2-3L11 1H7l-.41 3a8.08 8.08 0 0 0-4.8 3l-2.46-1-2 3.46 2.05 1.6a7.97 7.97 0 0 0 0 6L-1 16.6l2 3.46 2.46-1a8.08 8.08 0 0 0 4.8 3L7 23h4l.41-3a8.08 8.08 0 0 0 5.2-3l2.46 1 2-3.46L19.4 15Z" />
-                      </svg>
-                    </button>
-                    {visualMenuOpen ? (
-                      <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:bg-slate-900/95 dark:text-slate-100 dark:border-slate-700">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Visual mode <span className="text-slate-400">(beta)</span>
-                        </p>
-                        <div className="mt-3 space-y-2 text-sm">
-                          {([
-                            { value: 'system', label: 'Browser default' },
-                            { value: 'light', label: 'Light' },
-                            { value: 'dark', label: 'Dark' }
-                          ] as const).map((option) => (
-                            <label key={option.value} className="flex cursor-pointer items-center gap-2">
-                              <input
-                                type="radio"
-                                name="visual-mode"
-                                checked={visualMode === option.value}
-                                onChange={() => {
-                                  setVisualMode(option.value);
-                                  setVisualMenuOpen(false);
-                                }}
-                                className="h-4 w-4 accent-slate-900"
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
+              {isAdmin ? (
+                <div className="rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">Current Plan</p>
+                      <p className="mt-2 text-xl font-bold">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
+                      <p className="mt-1 text-xs text-emerald-50/80">
+                        {tenantSubscription
+                          ? `${formatCurrency(tenantSubscription.planPrice)} / month`
+                          : billing?.plan
+                            ? `${formatCurrency(billing.plan.priceMonthly)} / month`
+                            : 'Upgrade anytime'}
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-50/70 capitalize">
+                        Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setVisualMenuOpen((prev) => !prev)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
+                        aria-label="Visual mode settings"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="3.25" />
+                          <path d="M19.4 15a7.97 7.97 0 0 0 .02-6l2.05-1.6-2-3.46-2.46 1a8.08 8.08 0 0 0-5.2-3L11 1H7l-.41 3a8.08 8.08 0 0 0-4.8 3l-2.46-1-2 3.46 2.05 1.6a7.97 7.97 0 0 0 0 6L-1 16.6l2 3.46 2.46-1a8.08 8.08 0 0 0 4.8 3L7 23h4l.41-3a8.08 8.08 0 0 0 5.2-3l2.46 1 2-3.46L19.4 15Z" />
+                        </svg>
+                      </button>
+                      {visualMenuOpen ? (
+                        <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:bg-slate-900/95 dark:text-slate-100 dark:border-slate-700">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Visual mode <span className="text-slate-400">(beta)</span>
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm">
+                            {([
+                              { value: 'system', label: 'Browser default' },
+                              { value: 'light', label: 'Light' },
+                              { value: 'dark', label: 'Dark' }
+                            ] as const).map((option) => (
+                              <label key={option.value} className="flex cursor-pointer items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="visual-mode"
+                                  checked={visualMode === option.value}
+                                  onChange={() => {
+                                    setVisualMode(option.value);
+                                    setVisualMenuOpen(false);
+                                  }}
+                                  className="h-4 w-4 accent-slate-900"
+                                />
+                                <span>{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/80">Usage</p>
+                      <p className="mt-1 text-lg font-semibold">
+                        {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'} students` : 'Loading...'}
+                      </p>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-400 transition-all duration-500"
+                          style={{ width: `${tenantSubscription?.usagePercent || 0}%` }}
+                        />
                       </div>
-                    ) : null}
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/80">Status</p>
+                      <p className="mt-1 text-lg font-semibold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
+                      <p className="mt-1 text-xs text-emerald-50/80">
+                        Next payment: {tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {tenantSubscription?.usagePercent !== undefined && tenantSubscription.usagePercent > 80 ? (
+                    <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+                      You are near your student limit
+                    </p>
+                  ) : null}
+
+                  {tenantSubscription?.status === 'expired' ? (
+                    <p className="mt-3 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+                      Plan expired. Upgrade to continue
+                    </p>
+                  ) : null}
+
+                  <div className="mt-4 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => token && loadDashboardData(token)}
+                      className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+                    >
+                      Refresh Snapshot
+                    </button>
+                    <button
+                      onClick={openUpgradeModal}
+                      className="rounded-lg bg-[#00E5A8] px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-[#22f0b7]"
+                    >
+                      Upgrade Plan
+                    </button>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => token && loadDashboardData(token)}
-                    className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
-                  >
-                    Refresh Snapshot
-                  </button>
-                  <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
-                    <span className="text-[10px] uppercase tracking-[0.16em] text-slate-200">Workspace ID</span>
-                    <span className="ml-2 font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+              ) : (
+                <div className="rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1e293b_45%,#065f46)] p-4 text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-200">Current Plan</p>
+                      <p className="mt-2 text-xl font-bold">{billing?.plan?.name || 'Trial Window'}</p>
+                      <p className="mt-1 text-xs text-slate-200">
+                        {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setVisualMenuOpen((prev) => !prev)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
+                        aria-label="Visual mode settings"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="3.25" />
+                          <path d="M19.4 15a7.97 7.97 0 0 0 .02-6l2.05-1.6-2-3.46-2.46 1a8.08 8.08 0 0 0-5.2-3L11 1H7l-.41 3a8.08 8.08 0 0 0-4.8 3l-2.46-1-2 3.46 2.05 1.6a7.97 7.97 0 0 0 0 6L-1 16.6l2 3.46 2.46-1a8.08 8.08 0 0 0 4.8 3L7 23h4l.41-3a8.08 8.08 0 0 0 5.2-3l2.46 1 2-3.46L19.4 15Z" />
+                        </svg>
+                      </button>
+                      {visualMenuOpen ? (
+                        <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white/95 p-3 text-slate-900 shadow-lg backdrop-blur dark:bg-slate-900/95 dark:text-slate-100 dark:border-slate-700">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Visual mode <span className="text-slate-400">(beta)</span>
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm">
+                            {([
+                              { value: 'system', label: 'Browser default' },
+                              { value: 'light', label: 'Light' },
+                              { value: 'dark', label: 'Dark' }
+                            ] as const).map((option) => (
+                              <label key={option.value} className="flex cursor-pointer items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="visual-mode"
+                                  checked={visualMode === option.value}
+                                  onChange={() => {
+                                    setVisualMode(option.value);
+                                    setVisualMenuOpen(false);
+                                  }}
+                                  className="h-4 w-4 accent-slate-900"
+                                />
+                                <span>{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => token && loadDashboardData(token)}
+                      className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+                    >
+                      Refresh Snapshot
+                    </button>
+                    <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                      <span className="text-[10px] uppercase tracking-[0.16em] text-slate-200">Workspace ID</span>
+                      <span className="ml-2 font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -5798,7 +6090,7 @@ export default function DashboardPage() {
           )
         ) : null}
 
-          {!loading && activeTab === 'studio' ? (
+          {!loading && activeTab === 'studio' && activeMenu !== 'Finance Deck' ? (
             <div className="space-y-4">
               <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -6050,6 +6342,142 @@ export default function DashboardPage() {
                   {debugOutput || 'Run an action to inspect output.'}
                 </pre>
                 {toast ? <p className="mt-3 text-xs font-semibold text-indigo-700">{toast}</p> : null}
+              </article>
+            </div>
+          ) : null}
+
+          {!loading && activeTab === 'studio' && activeMenu === 'Finance Deck' && isAdmin ? (
+            <div className="space-y-4 rounded-[32px] border border-white/10 bg-[#0b1220] p-4 text-white shadow-[0_28px_60px_-35px_rgba(0,0,0,0.65)]">
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-200/80">Subscription Summary</p>
+                  <p className="mt-2 text-2xl font-bold">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</p>
+                  <p className="mt-1 text-xs text-slate-300">Plan name</p>
+                </article>
+                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.14em] text-blue-200/80">Status</p>
+                  <p className="mt-2 text-2xl font-bold capitalize">{tenantSubscription?.status || billing?.status || 'trial'}</p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    Auto renew: {tenantSubscription?.autoRenew ? 'On' : 'Off'}
+                  </p>
+                </article>
+                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-200/80">Next Payment</p>
+                  <p className="mt-2 text-2xl font-bold">{tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}</p>
+                  <p className="mt-1 text-xs text-slate-300">Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}</p>
+                </article>
+                <article className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.14em] text-cyan-200/80">Usage</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'}` : '0 / ∞'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">Students used / limit</p>
+                </article>
+              </section>
+
+              <article className="rounded-3xl border border-white/10 bg-[#0f172a] p-5 shadow-[0_22px_45px_-30px_rgba(0,0,0,0.6)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-2xl font-bold text-white">Billing & Payments</h3>
+                    <p className="mt-1 text-sm text-slate-300">Track subscription history and invoice records for this academy.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={openUpgradeModal}
+                      className="rounded-xl bg-[#00E5A8] px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-[#22f0b7]"
+                    >
+                      Upgrade Plan
+                    </button>
+                    {tenantBillingHistory.some((payment) => payment.status === 'failed') ? (
+                      <button
+                        onClick={() => retryTenantPayment(tenantBillingHistory.find((payment) => payment.status === 'failed')?.planName || '')}
+                        className="rounded-xl border border-rose-300/30 px-4 py-2 text-sm font-semibold text-rose-200 hover:bg-rose-400/10"
+                      >
+                        Retry Payment
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <article className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-emerald-200">Monthly Price</p>
+                    <p className="mt-1 text-3xl font-extrabold text-white">
+                      {formatCurrency(tenantSubscription?.planPrice ?? billing?.plan?.priceMonthly ?? 0)}
+                    </p>
+                  </article>
+                  <article className="rounded-2xl border border-indigo-300/15 bg-indigo-400/10 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-indigo-200">Student Limit</p>
+                    <p className="mt-1 text-3xl font-extrabold text-white">
+                      {tenantSubscription?.studentLimit ?? billing?.plan?.studentLimit ?? '∞'}
+                    </p>
+                  </article>
+                  <article className="rounded-2xl border border-amber-300/15 bg-amber-400/10 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-amber-200">Usage Progress</p>
+                    <p className="mt-1 text-3xl font-extrabold text-white">{tenantSubscription?.usagePercent || 0}%</p>
+                  </article>
+                  <article className="rounded-2xl border border-slate-200/10 bg-white/5 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Auto Renew</p>
+                    <p className="mt-1 text-3xl font-extrabold text-white">{tenantSubscription?.autoRenew ? 'On' : 'Off'}</p>
+                  </article>
+                </div>
+
+                <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/5">
+                      <tr className="border-b border-white/10 text-slate-300">
+                        <th className="px-3 py-3 font-semibold">Date</th>
+                        <th className="px-3 py-3 font-semibold">Amount</th>
+                        <th className="px-3 py-3 font-semibold">Status</th>
+                        <th className="px-3 py-3 font-semibold">Invoice</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantBillingLoading ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-5 text-center text-slate-400">
+                            Loading payment history...
+                          </td>
+                        </tr>
+                      ) : null}
+                      {!tenantBillingLoading && tenantBillingHistory.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-5 text-center text-slate-400">
+                            No subscription payments yet.
+                          </td>
+                        </tr>
+                      ) : null}
+                      {tenantBillingHistory.map((payment) => (
+                        <tr key={payment.id} className="border-b border-white/5">
+                          <td className="px-3 py-3 text-slate-300">{fmtDate(payment.date)}</td>
+                          <td className="px-3 py-3 text-white">{formatCurrency(payment.amount)}</td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                payment.status === 'paid'
+                                  ? 'bg-emerald-400/15 text-emerald-200'
+                                  : payment.status === 'failed'
+                                    ? 'bg-rose-400/15 text-rose-200'
+                                    : 'bg-amber-400/15 text-amber-200'
+                              }`}
+                            >
+                              {payment.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <button
+                              type="button"
+                              onClick={() => downloadInvoice(payment)}
+                              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10"
+                            >
+                              Download
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </article>
             </div>
           ) : null}
@@ -6659,6 +7087,88 @@ export default function DashboardPage() {
                   </button>
                 </article>
               ) : null}
+            </div>
+          ) : null}
+
+          {showUpgradeModal ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
+              <div className="w-full max-w-4xl rounded-[28px] border border-white/10 bg-[#0f172a] p-5 text-white shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200/80">Upgrade Plan</p>
+                    <h3 className="mt-2 text-3xl font-bold">Choose the next tier</h3>
+                    <p className="mt-1 text-sm text-slate-300">Select a plan and continue with a mock payment flow for now.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeUpgradeModal}
+                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  {platformPlans.map((plan) => {
+                    const isCurrent = tenantSubscription?.planName?.toLowerCase() === plan.name.toLowerCase();
+                    const isRecommended = plan.name.toLowerCase() === 'growth';
+                    const isSelected = selectedUpgradePlanId === plan.id;
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => setSelectedUpgradePlanId(plan.id)}
+                        className={`rounded-3xl border p-4 text-left transition ${
+                          isSelected
+                            ? 'border-emerald-300 bg-emerald-400/10 shadow-[0_0_0_1px_rgba(0,229,168,0.35)]'
+                            : 'border-white/10 bg-white/5 hover:bg-white/8'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-lg font-bold">{plan.name}</p>
+                            <p className="mt-1 text-sm text-slate-300">{plan.studentLimit === null ? 'Unlimited students' : `${plan.studentLimit} students`}</p>
+                          </div>
+                          {isRecommended ? (
+                            <span className="rounded-full bg-blue-400/15 px-2 py-1 text-[11px] font-semibold text-blue-200">Recommended</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-4 text-3xl font-extrabold text-white">{formatCurrency(plan.priceMonthly)}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-400">per month</p>
+                        {plan.features?.length ? (
+                          <ul className="mt-4 space-y-1 text-sm text-slate-300">
+                            {plan.features.slice(0, 3).map((feature) => (
+                              <li key={feature}>• {feature}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="mt-4 flex items-center justify-between text-xs">
+                          {isCurrent ? (
+                            <span className="rounded-full bg-emerald-400/15 px-2 py-1 font-semibold text-emerald-200">Current Plan</span>
+                          ) : (
+                            <span className="text-slate-400">Select to upgrade</span>
+                          )}
+                          {isSelected ? <span className="text-emerald-300">Selected</span> : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                  <p className="text-sm text-slate-300">
+                    Current: <span className="font-semibold text-white">{tenantSubscription?.planName || 'Trial Window'}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={upgradeTenantPlan}
+                    disabled={upgradeSubmitting || !selectedUpgradePlanId}
+                    className="rounded-2xl bg-[#00E5A8] px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-[#25f1b8] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {upgradeSubmitting ? 'Upgrading...' : 'Upgrade Now'}
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 

@@ -65,18 +65,22 @@ const serializePlan = (plan) => {
   };
 };
 
-const buildTenantSnapshot = ({ subscription, plan, statusOverride }) => {
+const buildTenantSnapshot = ({ subscription, plan, statusOverride, billingCycle = 'monthly' }) => {
   const subscriptionStatus = statusOverride || subscription?.status || 'expired';
   const paymentStatus = subscription ? 'paid' : 'pending';
+  const nextPaymentDate = subscription?.endDate || null;
 
   return {
     currentPlanId: plan?._id || null,
     planName: plan?.name || null,
+    planPrice: plan?.priceMonthly ?? 0,
     studentLimit: typeof plan?.studentLimit === 'number' ? plan.studentLimit : null,
     subscriptionStatus,
     paymentStatus,
+    billingCycle,
     planStartDate: subscription?.startDate || null,
-    planEndDate: subscription?.endDate || null
+    planEndDate: subscription?.endDate || null,
+    nextPaymentDate
   };
 };
 

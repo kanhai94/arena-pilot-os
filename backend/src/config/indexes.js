@@ -3,6 +3,7 @@ import { Student } from '../models/student.model.js';
 import { Attendance } from '../models/attendance.model.js';
 import { Payment } from '../models/payment.model.js';
 import { RegistrationPayment } from '../models/registrationPayment.model.js';
+import { TenantBillingPayment } from '../models/tenantBillingPayment.model.js';
 import { Notification } from '../models/notification.model.js';
 import { Tenant } from '../models/tenant.model.js';
 import { User } from '../models/user.model.js';
@@ -14,6 +15,7 @@ const INDEX_MODELS = [
   { name: 'Attendance', model: Attendance },
   { name: 'Payment', model: Payment },
   { name: 'RegistrationPayment', model: RegistrationPayment },
+  { name: 'TenantBillingPayment', model: TenantBillingPayment },
   { name: 'Notification', model: Notification },
   { name: 'AutomationLog', model: AutomationLog },
   { name: 'TenantIntegration', model: TenantIntegration },
