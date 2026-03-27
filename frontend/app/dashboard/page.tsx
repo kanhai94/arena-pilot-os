@@ -230,6 +230,7 @@ type PlatformTenant = {
   lastPaymentDate?: string | null;
   nextPaymentDate?: string | null;
   totalPaidAmount?: number | null;
+  billingTotalPaidAmount?: number | null;
   tenantStatus?: 'active' | 'blocked' | 'suspended' | string;
   paymentStatus?: 'paid' | 'pending' | 'failed' | string;
   customPriceOverride?: number | null;
@@ -1168,6 +1169,7 @@ export default function DashboardPage() {
       lastPaymentDate: row.lastPaymentDate || null,
       nextPaymentDate: row.nextPaymentDate || null,
       planPrice: row.planPrice ?? null,
+      billingTotalPaidAmount: row.billingTotalPaidAmount ?? null,
       totalPaidAmount: row.totalPaidAmount ?? 0
     }));
 
@@ -2090,8 +2092,9 @@ export default function DashboardPage() {
       const configuredAmount = tenant.customPriceOverride ?? tenant.planPrice ?? estimated;
       const normalizedPaymentStatus = String(tenant.paymentStatus || 'pending').toLowerCase();
       const status = configuredAmount > 0 ? normalizedPaymentStatus : 'n/a';
-      const amount = tenant.totalPaidAmount && tenant.totalPaidAmount > 0 ? tenant.totalPaidAmount : configuredAmount;
-      const totalAmount = tenant.totalPaidAmount && tenant.totalPaidAmount > 0 ? tenant.totalPaidAmount : status === 'paid' ? configuredAmount : 0;
+      const billedAmount = tenant.billingTotalPaidAmount && tenant.billingTotalPaidAmount > 0 ? tenant.billingTotalPaidAmount : 0;
+      const amount = billedAmount || (tenant.totalPaidAmount && tenant.totalPaidAmount > 0 ? tenant.totalPaidAmount : configuredAmount);
+      const totalAmount = billedAmount || (tenant.totalPaidAmount && tenant.totalPaidAmount > 0 ? tenant.totalPaidAmount : status === 'paid' ? configuredAmount : 0);
       return {
         id: tenant.id || tenant.academyName,
         tenant: tenant.academyName,

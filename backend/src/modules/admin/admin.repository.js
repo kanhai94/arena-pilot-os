@@ -131,6 +131,7 @@ export const adminRepository = {
             planStartDate: { $ifNull: ['$planStartDate', null] },
             lastPaymentDate: { $ifNull: ['$lastPaymentDate', '$billingLastPaymentDate'] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
+            billingTotalPaidAmount: { $ifNull: ['$billingTotalPaidAmount', 0] },
             totalPaidAmount: {
               $let: {
                 vars: {
