@@ -7,6 +7,7 @@ import {
   parseOrThrow,
   superAdminTenantsQuerySchema,
   updateAdminPlanSchema,
+  updatePlatformIntegrationsSchema,
   updateTenantPriceOverrideSchema,
   updateTenantStatusSchema,
   updateRazorpaySettingsSchema
@@ -57,6 +58,25 @@ export const createAdminController = (service) => {
       try {
         const payload = parseOrThrow(updateRazorpaySettingsSchema, req.body);
         const data = await service.updateRazorpaySettings(payload, req.auth.userId);
+        return apiSuccess(res, data, StatusCodes.OK);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    getIntegrationSettings: async (req, res, next) => {
+      try {
+        const data = await service.getIntegrationSettings();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    updateIntegrationSettings: async (req, res, next) => {
+      try {
+        const payload = parseOrThrow(updatePlatformIntegrationsSchema, req.body);
+        const data = await service.updateIntegrationSettings(payload, req.auth.userId);
         return apiSuccess(res, data, StatusCodes.OK);
       } catch (error) {
         return next(error);

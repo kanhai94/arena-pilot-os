@@ -123,6 +123,42 @@ export const adminRepository = {
     );
   },
 
+  upsertIntegrationSettings(payload) {
+    const set = { key: 'platform' };
+
+    if (payload.whatsappProviderKeyEnc) {
+      set['integrations.whatsappProviderKeyEnc'] = payload.whatsappProviderKeyEnc;
+    }
+
+    if (payload.smtp) {
+      if (payload.smtp.host !== undefined) {
+        set['integrations.smtp.host'] = payload.smtp.host;
+      }
+      if (payload.smtp.port !== undefined) {
+        set['integrations.smtp.port'] = payload.smtp.port;
+      }
+      if (payload.smtp.user !== undefined) {
+        set['integrations.smtp.user'] = payload.smtp.user;
+      }
+      if (payload.smtp.passwordEnc !== undefined) {
+        set['integrations.smtp.passwordEnc'] = payload.smtp.passwordEnc;
+      }
+      if (payload.smtp.fromEmail !== undefined) {
+        set['integrations.smtp.fromEmail'] = payload.smtp.fromEmail;
+      }
+      set['integrations.smtp.updatedAt'] = new Date();
+      set['integrations.smtp.updatedBy'] = payload.updatedBy;
+    }
+
+    return PlatformSetting.findOneAndUpdate(
+      { key: 'platform' },
+      {
+        $set: set
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true, lean: true }
+    );
+  },
+
   async getNextAcademySequence() {
     const counter = await Counter.findOneAndUpdate(
       { name: 'academy_code' },

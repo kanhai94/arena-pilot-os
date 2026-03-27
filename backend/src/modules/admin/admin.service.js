@@ -13,6 +13,13 @@ const maskKey = (value) => {
   return `****${visible}`;
 };
 
+const maskSecret = (value) => {
+  if (!value) {
+    return null;
+  }
+  return '****';
+};
+
 export const createAdminService = (repository) => {
   const assertValidTenantId = (tenantId) => {
     if (!mongoose.Types.ObjectId.isValid(tenantId)) {
@@ -124,6 +131,53 @@ export const createAdminService = (repository) => {
       });
 
       return this.getRazorpaySettings();
+    },
+
+    async getIntegrationSettings() {
+      const settings = await repository.getPlatformSettings();
+      const integrations = settings?.integrations;
+
+      return {
+        whatsappProviderKeyMasked: maskSecret(integrations?.whatsappProviderKeyEnc),
+        smtp: {
+          host: integrations?.smtp?.host || null,
+          port: integrations?.smtp?.port || null,
+          user: integrations?.smtp?.user || null,
+          passMasked: maskSecret(integrations?.smtp?.passwordEnc),
+          from: integrations?.smtp?.fromEmail || null
+        },
+        updatedAt: integrations?.smtp?.updatedAt || null
+      };
+    },
+
+    async updateIntegrationSettings(payload, updatedBy) {
+      const nextPayload = {};
+
+      if (payload.whatsappProviderKey?.trim()) {
+        nextPayload.whatsappProviderKeyEnc = encryptSecret(payload.whatsappProviderKey.trim());
+      }
+
+      if (payload.smtp) {
+        const smtp = {};
+
+        if (payload.smtp.host?.trim()) smtp.host = payload.smtp.host.trim();
+        if (payload.smtp.port && payload.smtp.port > 0) smtp.port = payload.smtp.port;
+        if (payload.smtp.user?.trim()) smtp.user = payload.smtp.user.trim();
+        if (payload.smtp.pass?.trim()) smtp.passwordEnc = encryptSecret(payload.smtp.pass.trim());
+        if (payload.smtp.from?.trim()) smtp.fromEmail = payload.smtp.from.trim();
+
+        if (Object.keys(smtp).length > 0) {
+          nextPayload.smtp = smtp;
+        }
+      }
+
+      if (Object.keys(nextPayload).length === 0) {
+        return this.getIntegrationSettings();
+      }
+
+      nextPayload.updatedBy = updatedBy;
+      await repository.upsertIntegrationSettings(nextPayload);
+      return this.getIntegrationSettings();
     },
 
     async getQueueStatus() {

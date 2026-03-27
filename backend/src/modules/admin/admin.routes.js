@@ -25,5 +25,7 @@ adminRouter.patch('/tenant/:id/price-override', adminController.updateTenantPric
 adminRouter.get('/queue/status', adminController.getQueueStatus);
 adminRouter.get('/settings/razorpay', adminController.getRazorpaySettings);
 adminRouter.put('/settings/razorpay', adminController.updateRazorpaySettings);
+adminRouter.get('/settings/integrations', adminController.getIntegrationSettings);
+adminRouter.put('/settings/integrations', adminController.updateIntegrationSettings);
 
 export { adminRouter };

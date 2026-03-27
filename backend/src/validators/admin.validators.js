@@ -48,6 +48,22 @@ export const updateRazorpaySettingsSchema = z
   })
   .strict();
 
+export const updatePlatformIntegrationsSchema = z
+  .object({
+    whatsappProviderKey: z.string().trim().optional(),
+    smtp: z
+      .object({
+        host: z.string().trim().optional(),
+        port: z.union([z.coerce.number().int().min(1).max(65535), z.literal(0)]).optional(),
+        user: z.string().trim().optional(),
+        pass: z.string().trim().optional(),
+        from: z.string().trim().optional()
+      })
+      .strict()
+      .optional()
+  })
+  .strict();
+
 export const adminPlanIdParamsSchema = z
   .object({
     id: z.string().trim().min(1)
