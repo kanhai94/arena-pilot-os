@@ -191,7 +191,7 @@ export const adminRepository = {
         {
           $match: {
             email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
-            $or: [{ paymentStatus: 'paid' }, { subscriptionStatus: { $in: ['active', 'trial'] } }]
+            paymentStatus: 'paid'
           }
         },
         { $project: { _id: 1 } }
