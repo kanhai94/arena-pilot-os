@@ -229,6 +229,7 @@ type PlatformTenant = {
   planStartDate?: string | null;
   lastPaymentDate?: string | null;
   nextPaymentDate?: string | null;
+  totalPaidAmount?: number | null;
   tenantStatus?: 'active' | 'blocked' | 'suspended' | string;
   paymentStatus?: 'paid' | 'pending' | 'failed' | string;
   customPriceOverride?: number | null;
@@ -1115,7 +1116,8 @@ export default function DashboardPage() {
       paymentStatus: row.paymentStatus || 'pending',
       planStartDate: row.planStartDate || null,
       lastPaymentDate: row.lastPaymentDate || null,
-      nextPaymentDate: row.nextPaymentDate || null
+      nextPaymentDate: row.nextPaymentDate || null,
+      totalPaidAmount: row.totalPaidAmount ?? 0
     }));
 
     setPlatformTenants(normalized);
@@ -2018,7 +2020,8 @@ export default function DashboardPage() {
         amount,
         status,
         date: tenant.planStartDate || tenant.lastPaymentDate || '-',
-        nextPaymentDate: tenant.nextPaymentDate || null
+        nextPaymentDate: tenant.nextPaymentDate || null,
+        totalAmount: tenant.totalPaidAmount || 0
       };
     });
   }, [platformTenants, platformPlanPriceByName]);
@@ -6982,12 +6985,13 @@ export default function DashboardPage() {
                             <th className="px-3 py-3 font-semibold">Status</th>
                             <th className="px-3 py-3 font-semibold">Date</th>
                             <th className="px-3 py-3 font-semibold">Next Payment</th>
+                            <th className="px-3 py-3 font-semibold">Total Amount</th>
                           </tr>
                         </thead>
                         <tbody>
                           {billingRows.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="px-3 py-5 text-center text-slate-500">
+                              <td colSpan={6} className="px-3 py-5 text-center text-slate-500">
                                 No payment records available.
                               </td>
                             </tr>
@@ -7015,6 +7019,7 @@ export default function DashboardPage() {
                               <td className="px-3 py-3 text-slate-700">
                                 {row.nextPaymentDate ? fmtDate(row.nextPaymentDate) : 'N/A'}
                               </td>
+                              <td className="px-3 py-3 text-slate-800">{formatCurrency(row.totalAmount)}</td>
                             </tr>
                           ))}
                         </tbody>

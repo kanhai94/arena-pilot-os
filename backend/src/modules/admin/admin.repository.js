@@ -65,9 +65,38 @@ export const adminRepository = {
           }
         },
         {
+          $lookup: {
+            from: 'tenantbillingpayments',
+            let: { tenantId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ['$tenantId', '$$tenantId'] }, { $eq: ['$status', 'paid'] }]
+                  }
+                }
+              },
+              {
+                $group: {
+                  _id: null,
+                  totalPaidAmount: { $sum: '$amount' },
+                  lastPaymentDate: { $max: '$paymentDate' }
+                }
+              }
+            ],
+            as: 'billingStats'
+          }
+        },
+        {
           $addFields: {
             studentCount: {
               $ifNull: [{ $arrayElemAt: ['$studentStats.count', 0] }, 0]
+            },
+            totalPaidAmount: {
+              $ifNull: [{ $arrayElemAt: ['$billingStats.totalPaidAmount', 0] }, 0]
+            },
+            lastPaymentDate: {
+              $ifNull: [{ $arrayElemAt: ['$billingStats.lastPaymentDate', 0] }, null]
             }
           }
         },
@@ -100,6 +129,7 @@ export const adminRepository = {
             planStartDate: { $ifNull: ['$planStartDate', null] },
             lastPaymentDate: { $ifNull: ['$lastPaymentDate', null] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
+            totalPaidAmount: 1,
             createdAt: 1
           }
         },
