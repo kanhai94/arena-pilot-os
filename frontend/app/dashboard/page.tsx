@@ -1010,7 +1010,7 @@ export default function DashboardPage() {
   const canSendReminders = isSuperAdmin || isAdmin || isStaff;
   const canManageIntegrations = isAdmin;
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
-  const useDarkFinanceTheme = visualMode === 'dark' || (visualMode === 'system' && systemPrefersDark);
+  const useDarkFinanceTheme = visualMode === 'dark';
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
   const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
   const classCapacityError = useMemo(() => {
