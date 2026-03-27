@@ -4135,17 +4135,17 @@ export default function DashboardPage() {
 
         <section className="space-y-4">
           <header className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur sm:p-5">
-            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-              <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Live Operations</p>
-                <h2 className="mt-2 text-2xl font-bold text-slate-900">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Monitor schedule flow, fee pressure and communication events from one board.
-                </p>
-                <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  Active: {activeTab === 'platform-control' ? 'Platform Control' : activeMenu}
-                </p>
-              </div>
+              <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Live Operations</p>
+                  <h2 className="mt-2 text-2xl font-bold text-slate-900">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Monitor schedule flow, fee pressure and communication events from one board.
+                  </p>
+                  <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-700">
+                    Active: {activeTab === 'platform-control' ? 'Platform Control' : activeMenu}
+                  </p>
+                </div>
 
               {isAdmin ? (
                 <div className="w-full max-w-[440px] justify-self-end rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
