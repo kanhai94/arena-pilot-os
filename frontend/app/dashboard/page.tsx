@@ -304,15 +304,6 @@ type RazorpayCheckoutPayload = {
   razorpaySignature: string;
 };
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => {
-      open: () => void;
-      close?: () => void;
-    };
-  }
-}
-
 type AdminRazorpaySettings = {
   configured: boolean;
   isActive: boolean;
