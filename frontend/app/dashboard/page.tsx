@@ -20,7 +20,7 @@ type UserSession = {
 };
 
 type StoredUserSession = UserSession & {
-  accessToken?: string;
+  accessToken?: string | null;
 };
 
 type RegistrationStats = {
