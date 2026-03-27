@@ -83,7 +83,19 @@ export const adminRepository = {
             studentCount: 1,
             subscriptionStatus: 1,
             tenantStatus: { $ifNull: ['$tenantStatus', 'active'] },
-            paymentStatus: { $ifNull: ['$paymentStatus', 'pending'] },
+            paymentStatus: {
+              $cond: [
+                { $eq: ['$paymentStatus', 'paid'] },
+                'paid',
+                {
+                  $cond: [
+                    { $in: ['$subscriptionStatus', ['active', 'trial']] },
+                    'paid',
+                    { $ifNull: ['$paymentStatus', 'pending'] }
+                  ]
+                }
+              ]
+            },
             customPriceOverride: { $ifNull: ['$customPriceOverride', null] },
             nextPaymentDate: { $ifNull: ['$planEndDate', null] },
             createdAt: 1

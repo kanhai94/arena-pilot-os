@@ -67,12 +67,14 @@ const serializePlan = (plan) => {
 
 const buildTenantSnapshot = ({ subscription, plan, statusOverride }) => {
   const subscriptionStatus = statusOverride || subscription?.status || 'expired';
+  const paymentStatus = subscription ? 'paid' : 'pending';
 
   return {
     currentPlanId: plan?._id || null,
     planName: plan?.name || null,
     studentLimit: typeof plan?.studentLimit === 'number' ? plan.studentLimit : null,
     subscriptionStatus,
+    paymentStatus,
     planStartDate: subscription?.startDate || null,
     planEndDate: subscription?.endDate || null
   };
