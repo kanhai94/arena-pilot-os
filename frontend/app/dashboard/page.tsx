@@ -866,6 +866,7 @@ export default function DashboardPage() {
   const [adminTenantPlanFilter, setAdminTenantPlanFilter] = useState('all');
   const [adminTenantStatusFilter, setAdminTenantStatusFilter] = useState('all');
   const [platformTenants, setPlatformTenants] = useState<PlatformTenant[]>([]);
+  const [platformTenantTotal, setPlatformTenantTotal] = useState(0);
   const [platformTenantLoading, setPlatformTenantLoading] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [platformPriceOverride, setPlatformPriceOverride] = useState('');
@@ -1122,6 +1123,15 @@ export default function DashboardPage() {
 
     setPlatformTenants(normalized);
     setPlatformTenantLoading(false);
+  };
+
+  const loadPlatformTenantTotal = async (accessToken: string) => {
+    if (!isSuperAdmin) return;
+    const response = await safeFetch(
+      () => apiGetWithAuth<AdminTenantsResponse>('/admin/tenants?page=1&limit=1', accessToken),
+      { items: [], pagination: { page: 1, limit: 1, total: 0, totalPages: 1 } }
+    );
+    setPlatformTenantTotal(response.pagination.total || 0);
   };
 
   const loadRazorpaySettings = async (accessToken: string) => {
@@ -1513,6 +1523,12 @@ export default function DashboardPage() {
     loadPlatformIntegrationSettings(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isSuperAdmin, adminTenantPlanFilter, adminTenantStatusFilter]);
+
+  useEffect(() => {
+    if (!token || !isSuperAdmin) return;
+    loadPlatformTenantTotal(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isSuperAdmin]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
@@ -2031,8 +2047,8 @@ export default function DashboardPage() {
   }, [billingRows]);
 
   const activeSubscriptions = useMemo(() => {
-    return platformTenants.filter((tenant) => ['active', 'trial'].includes((tenant.subscriptionStatus || '').toLowerCase())).length;
-  }, [platformTenants]);
+    return billingRows.filter((row) => row.totalAmount > 0).length;
+  }, [billingRows]);
 
   const failedPaymentsCount = useMemo(() => {
     return billingRows.filter((row) => String(row.status).toLowerCase() === 'failed').length;
@@ -6958,7 +6974,11 @@ export default function DashboardPage() {
 
               {activePlatformControl === 'billing-payments' ? (
                 <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">Total Clients</p>
+                      <p className="mt-1 text-3xl font-extrabold text-cyan-800">{platformTenantTotal || platformTenants.length}</p>
+                    </article>
                     <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                       <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Monthly Revenue</p>
                       <p className="mt-1 text-3xl font-extrabold text-emerald-800">{formatCurrency(monthlyRevenue)}</p>
