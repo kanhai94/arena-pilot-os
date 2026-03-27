@@ -219,8 +219,10 @@ export const adminRepository = {
       {
         $match: {
           email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() },
-          paymentStatus: 'paid',
           $or: [
+            { paymentStatus: 'paid' },
+            { billingTotalPaidAmount: { $gt: 0 } },
+            { totalPaidAmount: { $gt: 0 } },
             { lastPaymentDate: { $gte: monthStart, $lt: nextMonthStart } },
             { planStartDate: { $gte: monthStart, $lt: nextMonthStart } }
           ],
@@ -231,9 +233,19 @@ export const adminRepository = {
         $project: {
           revenueAmount: {
             $ifNull: [
-              '$customPriceOverride',
+              '$billingTotalPaidAmount',
               {
-                $ifNull: ['$planPrice', 0]
+                $ifNull: [
+                  '$totalPaidAmount',
+                  {
+                    $ifNull: [
+                      '$customPriceOverride',
+                      {
+                        $ifNull: ['$planPrice', 0]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
