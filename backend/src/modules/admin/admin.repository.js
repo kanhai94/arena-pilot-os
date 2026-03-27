@@ -164,9 +164,14 @@ export const adminRepository = {
       Tenant.aggregate([{ $match: { email: { $ne: env.SUPER_ADMIN_EMAIL.toLowerCase() } } }, { $count: 'total' }]),
       TenantBillingPayment.aggregate([
         {
+          $addFields: {
+            resolvedPaymentDate: { $ifNull: ['$paymentDate', '$createdAt'] }
+          }
+        },
+        {
           $match: {
             status: 'paid',
-            paymentDate: { $gte: monthStart, $lt: nextMonthStart }
+            resolvedPaymentDate: { $gte: monthStart, $lt: nextMonthStart }
           }
         },
         {
