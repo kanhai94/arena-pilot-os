@@ -249,7 +249,20 @@ type PlatformPlan = {
 type AdminRazorpaySettings = {
   configured: boolean;
   isActive: boolean;
+  keyId: string | null;
   keyIdMasked: string | null;
+  updatedAt: string | null;
+};
+
+type AdminPlatformIntegrationSettings = {
+  whatsappProviderKeyMasked: string | null;
+  smtp: {
+    host: string | null;
+    port: number | null;
+    user: string | null;
+    passMasked: string | null;
+    from: string | null;
+  };
   updatedAt: string | null;
 };
 
@@ -1063,7 +1076,22 @@ export default function DashboardPage() {
       null
     );
     if (!data) return;
-    setIntegrationRazorpayKeyId(data.keyIdMasked || '');
+    setIntegrationRazorpayKeyId(data.keyId || data.keyIdMasked || '');
+  };
+
+  const loadPlatformIntegrationSettings = async (accessToken: string) => {
+    if (!isSuperAdmin) return;
+    const data = await safeFetch<AdminPlatformIntegrationSettings | null>(
+      () => apiGetWithAuth<AdminPlatformIntegrationSettings>('/admin/settings/integrations', accessToken),
+      null
+    );
+    if (!data) return;
+    setIntegrationWhatsappKey('');
+    setIntegrationSmtpHost(data.smtp?.host || '');
+    setIntegrationSmtpPort(data.smtp?.port ? String(data.smtp.port) : '587');
+    setIntegrationSmtpUser(data.smtp?.user || '');
+    setIntegrationSmtpFrom(data.smtp?.from || '');
+    setIntegrationSmtpPass('');
   };
 
   const loadTenantIntegrations = async (accessToken: string) => {
@@ -1350,6 +1378,7 @@ export default function DashboardPage() {
     if (!token || !isSuperAdmin) return;
     loadPlatformTenants(token);
     loadRazorpaySettings(token);
+    loadPlatformIntegrationSettings(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isSuperAdmin, adminTenantPlanFilter, adminTenantStatusFilter]);
 

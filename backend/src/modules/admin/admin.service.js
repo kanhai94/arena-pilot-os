@@ -117,6 +117,7 @@ export const createAdminService = (repository) => {
       return {
         configured: Boolean(razorpay?.keyId && razorpay?.keySecretEnc),
         isActive: Boolean(razorpay?.isActive),
+        keyId: razorpay?.keyId || null,
         keyIdMasked: maskKey(razorpay?.keyId),
         updatedAt: razorpay?.updatedAt || null
       };
