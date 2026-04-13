@@ -27,6 +27,7 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 //kanhai kumar
+
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((item) => item.trim());
 const corsOptions = {
    origin: (origin, callback) => {
