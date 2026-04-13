@@ -1,4 +1,4 @@
-import cors from 'cors';
+import cors from 'cors'; 
 import express from 'express';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
@@ -26,9 +26,8 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-
+//kanhai
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((item) => item.trim());
-
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
