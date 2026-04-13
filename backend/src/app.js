@@ -26,10 +26,10 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimiter.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-//kanhai
+//kanhai kumar
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((item) => item.trim());
 const corsOptions = {
-  origin: (origin, callback) => {
+   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
