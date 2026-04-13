@@ -29,6 +29,15 @@ export const createTenantController = (service) => {
       }
     },
 
+    getFeatures: async (_req, res, next) => {
+      try {
+        const data = await service.getFeatures();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     getPlans: async (_req, res, next) => {
       try {
         const data = await service.getPlans();

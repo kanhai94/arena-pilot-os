@@ -28,6 +28,11 @@ const tenantSchema = new mongoose.Schema(
       trim: true,
       default: 'Starter'
     },
+    organizationType: {
+      type: String,
+      enum: ['SPORTS', 'SCHOOL'],
+      default: 'SPORTS'
+    },
     tenantStatus: {
       type: String,
       enum: ['active', 'blocked', 'suspended'],

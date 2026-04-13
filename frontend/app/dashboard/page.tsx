@@ -4,6 +4,14 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiDeleteWithAuth, apiGetWithAuth, apiPatchWithAuth, apiPost, apiPostWithAuth, apiPutWithAuth } from '../../lib/api';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
+import {
+  CurriculumPage,
+  type CurriculumSubject,
+  type SchoolClass,
+  type SchoolTeacher
+} from './components/curriculum/CurriculumPage';
+import { SchoolClassesPage, type SchoolClassDetails } from './components/school/SchoolClassesPage';
+import { getUILabels, type OrganizationType } from './label.helper';
 import type { EmailIntegrationForm } from './components/integrations/EmailIntegrationCard';
 import type { SmsIntegrationForm } from './components/integrations/SmsIntegrationCard';
 import type { WhatsappIntegrationForm } from './components/integrations/WhatsappIntegrationCard';
@@ -38,6 +46,8 @@ type Student = {
   parentPhone: string;
   email?: string | null;
   batchId?: string | { _id: string; name?: string } | null;
+  classId?: string | { _id: string; name?: string } | null;
+  rollNumber?: string | null;
   feeStatus: 'paid' | 'pending';
   status: 'active' | 'inactive';
 };
@@ -342,6 +352,11 @@ type TenantIntegrationStatus = {
   razorpay: IntegrationStatus;
 };
 
+type TenantFeaturesResponse = {
+  organizationType: OrganizationType;
+  features: Record<string, boolean>;
+};
+
 type DashboardOverview = {
   activeStudents: number;
   newStudentsThisMonth: number;
@@ -355,18 +370,16 @@ type DashboardOverview = {
   activeBatches: number;
 };
 
-const leftMenu = [
-  'Pulse Board',
-  'Academy Pro',
-  'Student Roster',
-  'Training Grid',
-  'Finance Deck',
-  'Alert Center',
-  'Growth Reports',
-  'Access Control',
-  'Integrations'
-] as const;
-type MenuItem = (typeof leftMenu)[number];
+type MenuItem =
+  | 'Pulse Board'
+  | 'Academy Pro'
+  | 'Student Roster'
+  | 'Training Grid'
+  | 'Finance Deck'
+  | 'Alert Center'
+  | 'Growth Reports'
+  | 'Access Control'
+  | 'Integrations';
 
 type AcademyProItem = 'plans' | 'classes' | 'class-schedule' | 'clients' | 'renewals' | 'coach' | 'attendance';
 type TabId = 'pulse' | 'studio' | 'automations' | 'academy-pro' | 'platform-control';
@@ -415,16 +428,6 @@ const tabLabels: Record<TabId, string> = {
   'academy-pro': 'Academy Pro',
   'platform-control': 'Platform Control'
 };
-
-const academyProNav: Array<{ id: AcademyProItem; label: string }> = [
-  { id: 'plans', label: 'Plans' },
-  { id: 'classes', label: 'Classes' },
-  { id: 'class-schedule', label: 'Class Schedule' },
-  { id: 'clients', label: 'Student Registry' },
-  { id: 'attendance', label: 'Attendance' },
-  { id: 'renewals', label: 'Renewals' },
-  { id: 'coach', label: 'Coach' }
-];
 
 const platformControlNav: Array<{ id: PlatformControlItem; label: string }> = [
   { id: 'tenants', label: 'Tenants' },
@@ -710,6 +713,43 @@ const csvEscape = (value: unknown) => {
   return str;
 };
 
+const getSidebarMenuItems = (orgType: OrganizationType): MenuItem[] => {
+  if (orgType === 'SCHOOL') {
+    return ['Pulse Board', 'Academy Pro', 'Access Control', 'Training Grid', 'Student Roster', 'Finance Deck', 'Alert Center', 'Growth Reports', 'Integrations'];
+  }
+
+  return ['Pulse Board', 'Training Grid', 'Academy Pro', 'Access Control', 'Student Roster', 'Finance Deck', 'Alert Center', 'Growth Reports', 'Integrations'];
+};
+
+const getSidebarMenuLabel = (menu: MenuItem, labels: ReturnType<typeof getUILabels>) => {
+  switch (menu) {
+    case 'Academy Pro':
+      return labels.batchPlural;
+    case 'Access Control':
+      return labels.coachPlural;
+    case 'Training Grid':
+      return labels.trainingMenu;
+    case 'Student Roster':
+      return labels.studentsMenu;
+    case 'Finance Deck':
+      return labels.financeMenu;
+    case 'Alert Center':
+      return labels.automationsMenu;
+    case 'Growth Reports':
+      return labels.reportsMenu;
+    default:
+      return menu;
+  }
+};
+
+const getSidebarMenuIcon = (menu: MenuItem, orgType: OrganizationType) => {
+  if (orgType === 'SCHOOL' && menu === 'Training Grid') {
+    return '📚';
+  }
+
+  return null;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -752,6 +792,9 @@ export default function DashboardPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [coaches, setCoaches] = useState<TeamMember[]>([]);
+  const [schoolClasses, setSchoolClasses] = useState<SchoolClass[]>([]);
+  const [schoolTeachers, setSchoolTeachers] = useState<SchoolTeacher[]>([]);
+  const [curriculumSubjects, setCurriculumSubjects] = useState<CurriculumSubject[]>([]);
 
   const [studentName, setStudentName] = useState('');
   const [studentAge, setStudentAge] = useState('');
@@ -968,6 +1011,7 @@ export default function DashboardPage() {
     whatsapp: 'not_configured',
     razorpay: 'not_configured'
   });
+  const [organizationType, setOrganizationType] = useState<OrganizationType>('SPORTS');
   const [visualMode, setVisualMode] = useState<VisualMode>(() => {
     if (typeof window === 'undefined') return 'system';
     const stored = window.localStorage.getItem('ap-visual-mode') as VisualMode | null;
@@ -1023,6 +1067,20 @@ export default function DashboardPage() {
   const canMarkAttendance = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canSendReminders = isSuperAdmin || isAdmin || isStaff;
   const canManageIntegrations = isAdmin;
+  const uiLabels = useMemo(() => getUILabels(organizationType), [organizationType]);
+  const leftMenu = useMemo(() => getSidebarMenuItems(organizationType), [organizationType]);
+  const academyProNav = useMemo<Array<{ id: AcademyProItem; label: string }>>(
+    () => [
+      { id: 'plans', label: 'Plans' },
+      { id: 'classes', label: uiLabels.batchPlural },
+      { id: 'class-schedule', label: `${uiLabels.batch} Schedule` },
+      { id: 'clients', label: 'Student Registry' },
+      { id: 'attendance', label: 'Attendance' },
+      { id: 'renewals', label: 'Renewals' },
+      { id: 'coach', label: uiLabels.coachPlural }
+    ],
+    [uiLabels]
+  );
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const useDarkFinanceTheme = visualMode === 'dark';
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
@@ -1054,12 +1112,12 @@ export default function DashboardPage() {
     !classEndTime.trim();
   const classRequiredFieldErrors = useMemo(() => {
     const errors: Record<string, string> = {};
-    if (!classBatchName.trim()) errors.batchName = 'Batch name is required.';
+      if (!classBatchName.trim()) errors.batchName = `${uiLabels.batch} name is required.`;
     if (!classSkill.trim()) errors.skill = 'Sport / Skill is required.';
     if (!classCenter.trim()) errors.center = 'Center name is required.';
     if (classScheduleDays.length === 0) errors.scheduleDays = 'Please select at least one schedule day.';
     return errors;
-  }, [classBatchName, classCenter, classScheduleDays, classSkill]);
+  }, [classBatchName, classCenter, classScheduleDays, classSkill, uiLabels.batch]);
   const canSubmitClassForm =
     !actionLoading &&
     !classFormHasRequiredMissing &&
@@ -1110,9 +1168,9 @@ export default function DashboardPage() {
     const normalizedCoachEmail = coachEmail.trim().toLowerCase();
 
     if (!normalizedCoachName) {
-      errors.name = 'Coach name is required.';
+      errors.name = `${uiLabels.coach} name is required.`;
     } else if (normalizedCoachName.length < 2) {
-      errors.name = 'Coach name must contain at least 2 characters.';
+      errors.name = `${uiLabels.coach} name must contain at least 2 characters.`;
     } else {
       const nameExists = teamMembers.some(
         (member) => member.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
@@ -1123,9 +1181,9 @@ export default function DashboardPage() {
     }
 
     if (!normalizedCoachEmail) {
-      errors.email = 'Coach email is required.';
+      errors.email = `${uiLabels.coach} email is required.`;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCoachEmail)) {
-      errors.email = 'Enter a valid coach email address.';
+      errors.email = `Enter a valid ${uiLabels.coach.toLowerCase()} email address.`;
     }
 
     if (!coachTitle.trim()) {
@@ -1141,7 +1199,7 @@ export default function DashboardPage() {
     if (!coachPassword.trim()) errors.password = 'Temporary password is required.';
 
     return errors;
-  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, teamMembers]);
+  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, teamMembers, uiLabels.coach]);
   const canSubmitCoachForm = Object.keys(coachValidationErrors).length === 0;
 
   const loadPlatformTenants = async (accessToken: string) => {
@@ -1325,8 +1383,8 @@ export default function DashboardPage() {
       notificationList,
       pending,
       regStats,
+      tenantFeatures,
       plans,
-      batchList,
       memberList,
       platformPlanList,
       tenantSubscriptionData,
@@ -1356,15 +1414,11 @@ export default function DashboardPage() {
       resolvedIsSuperAdmin
         ? safeFetch(() => apiGetWithAuth<RegistrationStats>('/auth/registration-stats', accessToken), null)
         : Promise.resolve(null),
-      safeFetch(() => apiGetWithAuth<FeePlan[]>('/fees/plans', accessToken), []),
       safeFetch(
-        () =>
-          apiGetWithAuth<BatchesListResponse>(
-            `/batches?page=1&limit=60${batchFilterStatus === 'all' ? '' : `&status=${batchFilterStatus}`}`,
-            accessToken
-          ),
-        { items: [], pagination: { total: 0 } }
+        () => apiGetWithAuth<TenantFeaturesResponse>('/tenant/features', accessToken),
+        { organizationType: 'SPORTS', features: {} }
       ),
+      safeFetch(() => apiGetWithAuth<FeePlan[]>('/fees/plans', accessToken), []),
       safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 }),
       resolvedIsSuperAdmin
         ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/admin/plans', accessToken), [])
@@ -1372,6 +1426,25 @@ export default function DashboardPage() {
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantSubscriptionSummary>('/tenant/subscription', accessToken), null) : Promise.resolve(null),
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/tenant/plans', accessToken), []) : Promise.resolve([]),
       resolvedIsAdmin ? safeFetch(() => apiGetWithAuth<TenantBillingPayment[]>('/tenant/payments', accessToken), []) : Promise.resolve([])
+    ]);
+
+    const resolvedOrgType = tenantFeatures.organizationType || 'SPORTS';
+    const [batchList, classList, teacherList, subjectList] = await Promise.all([
+      resolvedOrgType === 'SPORTS'
+        ? safeFetch(
+            () =>
+              apiGetWithAuth<BatchesListResponse>(
+                `/batches?page=1&limit=60${batchFilterStatus === 'all' ? '' : `&status=${batchFilterStatus}`}`,
+                accessToken
+              ),
+            { items: [], pagination: { total: 0 } }
+          )
+        : Promise.resolve({ items: [], pagination: { total: 0 } }),
+      resolvedOrgType === 'SCHOOL' ? safeFetch(() => apiGetWithAuth<SchoolClass[]>('/classes', accessToken), []) : Promise.resolve([]),
+      resolvedOrgType === 'SCHOOL' ? safeFetch(() => apiGetWithAuth<SchoolTeacher[]>('/teachers', accessToken), []) : Promise.resolve([]),
+      resolvedOrgType === 'SCHOOL'
+        ? safeFetch(() => apiGetWithAuth<CurriculumSubject[]>('/subjects', accessToken), [])
+        : Promise.resolve([])
     ]);
 
     if (me) {
@@ -1387,11 +1460,15 @@ export default function DashboardPage() {
     setNotificationsTotal(notificationList.pagination.total);
     setPendingFees(pending.items);
     setRegistrationStats(regStats);
+    setOrganizationType(resolvedOrgType);
     setFeePlans(plans);
     setBatches(batchList.items);
     const activeMembers = memberList.items.filter((member) => member.isActive);
     setTeamMembers(activeMembers);
     setCoaches(activeMembers.filter((member) => normalizeRole(member.role) === 'COACH'));
+    setSchoolClasses(classList);
+    setSchoolTeachers(teacherList);
+    setCurriculumSubjects(subjectList);
     if (platformPlanList.length > 0) {
       setPlatformPlans(platformPlanList);
     }
@@ -2075,7 +2152,7 @@ export default function DashboardPage() {
   }, [platformPlans]);
   const getCoachSelectLabel = (coachId: string) => {
     const coach = coaches.find((item) => item.id === coachId);
-    return coach ? coach.fullName : 'No coach assigned';
+    return coach ? coach.fullName : `No ${uiLabels.coach.toLowerCase()} assigned`;
   };
   const getFeePlanSelectLabel = (planId: string, fallback = 'Select plan') => {
     const plan = feePlans.find((item) => item._id === planId);
@@ -2280,6 +2357,86 @@ export default function DashboardPage() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const runCurriculumAction = async (action: () => Promise<unknown>, successMessage: string): Promise<boolean> => {
+    if (!user) return false;
+
+    setActionLoading(true);
+    setToast('');
+
+    try {
+      const data = await action();
+      setDebugOutput(JSON.stringify(data, null, 2));
+      setToast(successMessage);
+      await loadDashboardData(token);
+      return true;
+    } catch (err) {
+      setDebugOutput(JSON.stringify({ error: err instanceof Error ? err.message : 'Action failed' }, null, 2));
+      setToast(err instanceof Error ? err.message : 'Action failed');
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const createCurriculumSubject = async (payload: {
+    name: string;
+    classId: string;
+    teacherId?: string | null;
+    status: 'active' | 'inactive';
+  }) => {
+    return runCurriculumAction(
+      () => apiPostWithAuth('/subjects', payload, token),
+      'Subject added to curriculum'
+    );
+  };
+
+  const updateCurriculumSubject = async (
+    id: string,
+    payload: {
+      name: string;
+      classId: string;
+      teacherId?: string | null;
+      status: 'active' | 'inactive';
+    }
+  ) => {
+    return runCurriculumAction(
+      () => apiPutWithAuth(`/subjects/${id}`, payload, token),
+      'Subject updated successfully'
+    );
+  };
+
+  const deleteCurriculumSubject = async (id: string) => {
+    return runCurriculumAction(
+      () => apiDeleteWithAuth(`/subjects/${id}`, token),
+      'Subject removed from curriculum'
+    );
+  };
+
+  const createSchoolClass = async (payload: { name: string; section: string }) => {
+    return runCurriculumAction(
+      () => apiPostWithAuth('/classes', payload, token),
+      'Class created successfully'
+    );
+  };
+
+  const fetchSchoolClassDetails = async (id: string): Promise<SchoolClassDetails | null> => {
+    return safeFetch(() => apiGetWithAuth<SchoolClassDetails>(`/classes/${id}`, token), null);
+  };
+
+  const assignTeacherToSchoolClass = async (classId: string, teacherId: string) => {
+    return runCurriculumAction(
+      () => apiPutWithAuth(`/classes/${classId}/assign-teacher`, { teacherId }, token),
+      'Teacher assigned to class'
+    );
+  };
+
+  const assignStudentToSchoolClass = async (studentId: string, classId: string, rollNumber: string) => {
+    return runCurriculumAction(
+      () => apiPutWithAuth(`/students/${studentId}/assign-class`, { classId, rollNumber }, token),
+      'Student assigned to class'
+    );
   };
 
   const logout = () => {
@@ -3938,7 +4095,7 @@ export default function DashboardPage() {
       <div className="mx-auto mb-3 flex max-w-[1500px] items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:hidden">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">ArenaPilot OS</p>
-          <p className="text-sm font-semibold text-slate-900">{activeMenu}</p>
+              <p className="text-sm font-semibold text-slate-900">{getSidebarMenuLabel(activeMenu, uiLabels)}</p>
         </div>
         <button
           type="button"
@@ -4009,7 +4166,7 @@ export default function DashboardPage() {
                           : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                       }`}
                     >
-                      <span>AcademyPRO</span>
+                      <span>{getSidebarMenuLabel(item, uiLabels)}</span>
                       <span
                         className={`inline-block text-base leading-none transition-transform duration-200 ${
                           academyProExpanded ? 'rotate-90' : ''
@@ -4046,7 +4203,7 @@ export default function DashboardPage() {
                               <button
                                 onClick={openClassComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
-                                aria-label="Add new class"
+                                aria-label={`Add new ${uiLabels.batch.toLowerCase()}`}
                               >
                                 +
                               </button>
@@ -4055,7 +4212,7 @@ export default function DashboardPage() {
                               <button
                                 onClick={openCoachComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
-                                aria-label="Add new coach"
+                                aria-label={`Add new ${uiLabels.coach.toLowerCase()}`}
                               >
                                 +
                               </button>
@@ -4078,7 +4235,10 @@ export default function DashboardPage() {
                       : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                   }`}
                 >
-                  {item}
+                  <span className="inline-flex items-center gap-2">
+                    {getSidebarMenuIcon(item, organizationType) ? <span aria-hidden="true">{getSidebarMenuIcon(item, organizationType)}</span> : null}
+                    <span>{getSidebarMenuLabel(item, uiLabels)}</span>
+                  </span>
                 </button>
               );
             })}
@@ -4163,7 +4323,7 @@ export default function DashboardPage() {
                     Monitor schedule flow, fee pressure and communication events from one board.
                   </p>
                   <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-700">
-                    Active: {activeTab === 'platform-control' ? 'Platform Control' : activeMenu}
+                Active: {activeTab === 'platform-control' ? 'Platform Control' : getSidebarMenuLabel(activeMenu, uiLabels)}
                   </p>
                 </div>
 
@@ -4348,6 +4508,18 @@ export default function DashboardPage() {
           ) : null}
 
           {!loading && activeTab === 'pulse' ? (
+            organizationType === 'SCHOOL' && activeMenu === 'Training Grid' ? (
+              <CurriculumPage
+                subjects={curriculumSubjects}
+                classes={schoolClasses}
+                teachers={schoolTeachers}
+                canManage={canManageBatches}
+                saving={actionLoading}
+                onCreateSubject={createCurriculumSubject}
+                onUpdateSubject={updateCurriculumSubject}
+                onDeleteSubject={deleteCurriculumSubject}
+              />
+            ) : (
             <div className="space-y-4">
               <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <article className="growth-metric-card growth-metric-card-neutral rounded-2xl border border-slate-200 bg-white p-4">
@@ -4508,6 +4680,7 @@ export default function DashboardPage() {
                 </div>
               </section>
             </div>
+            )
           ) : null}
 
           {!loading && activeTab === 'academy-pro' ? (
@@ -4724,6 +4897,21 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'classes' ? (
+                organizationType === 'SCHOOL' ? (
+                  <div className="xl:col-span-12">
+                    <SchoolClassesPage
+                      classes={schoolClasses}
+                      teachers={schoolTeachers}
+                      students={attendanceStudents}
+                      canManage={canManageBatches}
+                      saving={actionLoading}
+                      onCreateClass={createSchoolClass}
+                      onFetchClassDetails={fetchSchoolClassDetails}
+                      onAssignTeacher={assignTeacherToSchoolClass}
+                      onAssignStudent={assignStudentToSchoolClass}
+                    />
+                  </div>
+                ) : (
                 <>
                   {showClassComposer ? (
                     <article className="rounded-2xl border border-slate-200 bg-white p-6 xl:col-span-12">
@@ -4732,15 +4920,17 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academy Pro</p>
                             <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-                              {classEditBatchId ? 'Edit Class' : 'Add New Class'}
+                              {classEditBatchId ? `Edit ${uiLabels.batch}` : `Add New ${uiLabels.batch}`}
                             </h3>
-                            <p className="mt-2 text-lg text-slate-500">Create class with schedule, plan and optional coach assignment.</p>
+                            <p className="mt-2 text-lg text-slate-500">
+                              {`Create ${uiLabels.batch.toLowerCase()} with schedule, plan and optional ${uiLabels.coach.toLowerCase()} assignment.`}
+                            </p>
                           </div>
                           <button
                             onClick={() => setShowClassComposer(false)}
                             className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
-                            Back to Classes
+                            {`Back to ${uiLabels.batchPlural}`}
                           </button>
                         </div>
 
@@ -4749,7 +4939,7 @@ export default function DashboardPage() {
                             className="w-full rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
                             value={classBatchName}
                             onChange={(e) => setClassBatchName(e.target.value)}
-                            placeholder="Batch name"
+                            placeholder={`${uiLabels.batch} name`}
                           />
                           {classSubmitAttempted && classRequiredFieldErrors.batchName ? (
                             <p className="-mt-2 text-sm font-medium text-rose-600">{classRequiredFieldErrors.batchName}</p>
@@ -4810,7 +5000,7 @@ export default function DashboardPage() {
                             value={classCoachId}
                             onChange={(e) => setClassCoachId(e.target.value)}
                           >
-                            <option value="">No coach assigned</option>
+                            <option value="">{`No ${uiLabels.coach.toLowerCase()} assigned`}</option>
                             {coaches.map((coach) => (
                               <option key={coach.id} value={coach.id}>
                                 {compactSelectLabel(coach.fullName, 18)}
@@ -4819,7 +5009,8 @@ export default function DashboardPage() {
                           </select>
                           {classCoachId ? (
                             <p className="-mt-2 text-xs font-medium text-slate-500">
-                              Selected coach: <span className="text-slate-700">{getCoachSelectLabel(classCoachId)}</span>
+                              {`Selected ${uiLabels.coach.toLowerCase()}: `}
+                              <span className="text-slate-700">{getCoachSelectLabel(classCoachId)}</span>
                             </p>
                           ) : null}
                           <select
@@ -5079,7 +5270,7 @@ export default function DashboardPage() {
                               <th className="px-2 py-2 font-semibold">Title</th>
                               <th className="px-2 py-2 font-semibold">Center</th>
                               <th className="px-2 py-2 font-semibold">Skill</th>
-                              <th className="px-2 py-2 font-semibold">Coach</th>
+                              <th className="px-2 py-2 font-semibold">{uiLabels.coach}</th>
                               <th className="px-2 py-2 font-semibold">Plan</th>
                               <th className="px-2 py-2 font-semibold">Timing</th>
                               <th className="px-2 py-2 font-semibold">Status</th>
@@ -5169,12 +5360,13 @@ export default function DashboardPage() {
                     </article>
                   )}
                 </>
+                )
               ) : null}
 
               {activeAcademyPro === 'class-schedule' ? (
                 <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-900">Class Schedule</h3>
+                      <h3 className="text-lg font-bold text-slate-900">{uiLabels.batch} Schedule</h3>
                     <span className="text-xs text-slate-500">{scheduleRows.length} classes</span>
                   </div>
                   <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-3">
@@ -5203,7 +5395,7 @@ export default function DashboardPage() {
                       </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                      Batch/Class
+                      {`${uiLabels.batch}/Class`}
                       <select
                         value={scheduleBatchFilter}
                         onChange={(e) => setScheduleBatchFilter(e.target.value)}
@@ -6001,7 +6193,7 @@ export default function DashboardPage() {
                       <thead className="bg-slate-50 dark:bg-black">
                         <tr className="border-b border-slate-200 text-slate-600 dark:border-white/20 dark:text-slate-200">
                           <th className="px-3 py-3 font-semibold">Client Name</th>
-                          <th className="px-3 py-3 font-semibold">Batch</th>
+                              <th className="px-3 py-3 font-semibold">{uiLabels.batch}</th>
                           <th className="px-3 py-3 font-semibold">Center</th>
                           <th className="px-3 py-3 font-semibold">Email</th>
                           <th className="px-3 py-3 font-semibold">Mobile</th>
@@ -6085,7 +6277,7 @@ export default function DashboardPage() {
                         {teamMembers.length === 0 ? (
                           <tr>
                             <td className="px-2 py-3 text-slate-500" colSpan={canDeleteClassAndAccess ? 7 : 6}>
-                              No access users yet. Click + to add ADMIN, COACH, or STAFF.
+                              {`No access users yet. Click + to add ADMIN, ${uiLabels.coach.toUpperCase()}, or STAFF.`}
                             </td>
                           </tr>
                         ) : null}

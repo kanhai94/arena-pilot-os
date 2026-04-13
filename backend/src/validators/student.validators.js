@@ -15,6 +15,8 @@ export const createStudentSchema = z
     parentPhone: z.string().regex(phoneRegex, 'Invalid parentPhone'),
     email: z.string().email().optional(),
     batchId: optionalObjectId,
+    classId: optionalObjectId,
+    rollNumber: z.string().trim().min(1).max(50).optional(),
     feeStatus: z.enum(['paid', 'pending']).default('pending')
   })
   .strict();
@@ -28,6 +30,8 @@ export const updateStudentSchema = z
     parentPhone: z.string().regex(phoneRegex, 'Invalid parentPhone').optional(),
     email: z.string().email().nullable().optional(),
     batchId: optionalObjectId,
+    classId: optionalObjectId,
+    rollNumber: z.string().trim().min(1).max(50).nullable().optional(),
     feeStatus: z.enum(['paid', 'pending']).optional()
   })
   .strict()
@@ -43,6 +47,13 @@ export const listStudentsQuerySchema = z.object({
 export const studentIdParamSchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid studentId')
 });
+
+export const assignStudentClassSchema = z
+  .object({
+    classId: z.string().regex(objectIdRegex, 'Invalid classId'),
+    rollNumber: z.string().trim().min(1).max(50)
+  })
+  .strict();
 
 export const parseOrThrow = (schema, payload) => {
   const parsed = schema.safeParse(payload);

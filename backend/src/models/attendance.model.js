@@ -17,7 +17,13 @@ const attendanceSchema = new mongoose.Schema(
     batchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Batch',
-      required: true,
+      default: null,
+      index: true
+    },
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Class',
+      default: null,
       index: true
     },
     date: {
@@ -47,5 +53,6 @@ attendanceSchema.index({ tenantId: 1, date: -1 });
 attendanceSchema.index({ tenantId: 1, studentId: 1, date: -1 });
 attendanceSchema.index({ tenantId: 1, studentId: 1, date: 1 }, { unique: true });
 attendanceSchema.index({ tenantId: 1, batchId: 1, date: 1 });
+attendanceSchema.index({ tenantId: 1, classId: 1, date: 1 });
 
 export const Attendance = mongoose.model('Attendance', attendanceSchema);

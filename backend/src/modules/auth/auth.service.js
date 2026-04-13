@@ -362,6 +362,7 @@ export const createAuthService = (repository, dependencies = {}) => {
           name: payload.name,
           academyCode: await generateAcademyCode(),
           ownerName: payload.ownerName,
+          organizationType: payload.organizationType || 'SPORTS',
           academySize: quote.studentLimit ?? null,
           requestedPlanName: payload.planName,
           email: payload.email,

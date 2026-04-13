@@ -3,6 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { tenantMiddleware } from '../../middleware/tenantMiddleware.js';
 import { tenantContextMiddleware } from '../../middleware/tenantContext.middleware.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
+import { checkOrgType } from '../../middleware/checkOrgType.js';
 import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { ROLES } from '../../constants/roles.js';
 import { teamRepository } from './team.repository.js';
@@ -13,14 +14,33 @@ const teamRouter = Router();
 
 const teamService = createTeamService(teamRepository);
 const teamController = createTeamController(teamService);
+const sportsOnly = checkOrgType('SPORTS');
 
 teamRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard);
 
-teamRouter.post('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), teamController.createTeamMember);
+teamRouter.post(
+  '/',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  (req, res, next) => {
+    if (String(req.body?.role || '').toUpperCase() !== 'COACH') {
+      return next();
+    }
+
+    return sportsOnly(req, res, next);
+  },
+  teamController.createTeamMember
+);
 teamRouter.get('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), teamController.listTeamMembers);
 teamRouter.patch(
   '/:userId/access',
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  (req, res, next) => {
+    if (String(req.body?.role || '').toUpperCase() !== 'COACH') {
+      return next();
+    }
+
+    return sportsOnly(req, res, next);
+  },
   teamController.updateTeamMemberAccess
 );
 teamRouter.patch(

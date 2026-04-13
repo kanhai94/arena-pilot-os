@@ -27,6 +27,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,6 +35,7 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetOtp, setResetOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [forgotMsg, setForgotMsg] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
 
@@ -152,16 +154,26 @@ export default function LoginPage() {
             <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-slate-500"
-              placeholder="********"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-12 outline-none focus:border-slate-500"
+                placeholder="********"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute inset-y-0 right-3 my-auto text-sm font-medium text-slate-500 hover:text-slate-800"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
 
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
@@ -206,13 +218,23 @@ export default function LoginPage() {
                   placeholder="6 digit OTP"
                   className="w-1/2 rounded-xl border border-slate-300 px-3 py-2"
                 />
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password"
-                  className="w-1/2 rounded-xl border border-slate-300 px-3 py-2"
-                />
+                <div className="relative w-1/2">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((value) => !value)}
+                    className="absolute inset-y-0 right-3 my-auto text-xs font-medium text-slate-500 hover:text-slate-800"
+                    aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                  >
+                    {showNewPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button

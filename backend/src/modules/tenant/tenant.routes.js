@@ -19,6 +19,11 @@ const tenantController = createTenantController(tenantService);
 tenantRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard);
 
 tenantRouter.get(
+  '/features',
+  tenantController.getFeatures
+);
+
+tenantRouter.get(
   '/subscription',
   roleMiddleware(ROLES.ADMIN),
   tenantController.getSubscription

@@ -5,6 +5,7 @@ import { tenantContextMiddleware } from '../../middleware/tenantContext.middlewa
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
 import { roleMiddleware } from '../../middleware/roleMiddleware.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
+import { checkOrgType } from '../../middleware/checkOrgType.js';
 import { ROLES } from '../../constants/roles.js';
 import { batchRepository } from './batch.repository.js';
 import { createBatchService } from './batch.service.js';
@@ -15,7 +16,7 @@ const batchRouter = Router();
 const batchService = createBatchService(batchRepository);
 const batchController = createBatchController(batchService);
 
-batchRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, subscriptionGuard());
+batchRouter.use(authMiddleware, tenantMiddleware, tenantContextMiddleware, tenantAccessGuard, checkOrgType('SPORTS'), subscriptionGuard());
 
 batchRouter.post('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.STAFF, ROLES.COACH), batchController.createBatch);
 batchRouter.get('/', roleMiddleware(ROLES.SUPER_ADMIN, ROLES.ACADEMY_ADMIN, ROLES.STAFF, ROLES.COACH), batchController.getBatches);

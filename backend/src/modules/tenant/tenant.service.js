@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
 import { AppError } from '../../errors/appError.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
+import { getFeaturesByOrgType } from '../../utils/feature.util.js';
 import {
   createRegistrationOrder as createPlatformRazorpayOrder,
   getRazorpayPublicKeyId,
@@ -178,6 +179,21 @@ export const createTenantService = (dependencies) => {
     async getSubscription() {
       const tenantId = resolveTenantId();
       return mapSummary(tenantId);
+    },
+
+    async getFeatures() {
+      const tenantId = resolveTenantId();
+      const tenant = await tenantRepository.findTenantById(tenantId);
+      if (!tenant) {
+        throw new AppError('Tenant not found', StatusCodes.NOT_FOUND);
+      }
+
+      const organizationType = tenant.organizationType || 'SPORTS';
+
+      return {
+        organizationType,
+        features: getFeaturesByOrgType(organizationType)
+      };
     },
 
     async upgradePlan(planId, payment = null, autoRenew = true) {

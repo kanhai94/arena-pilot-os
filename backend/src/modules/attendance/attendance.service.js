@@ -15,15 +15,56 @@ const normalizeToUTCDate = (value) => {
 export const createAttendanceService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
   const resolveTenantId = () => TenantContext.requireTenantId();
+  const normalizeOrganizationType = (value) => (value === 'SCHOOL' ? 'SCHOOL' : 'SPORTS');
+
+  const resolveAttendanceScope = (organizationType, payload) => {
+    if (organizationType === 'SCHOOL') {
+      if (!payload.classId) {
+        throw new AppError('classId is required for school attendance', StatusCodes.BAD_REQUEST);
+      }
+
+      return {
+        scopeKey: 'classId',
+        scopeLabel: 'Class',
+        scopeValue: payload.classId
+      };
+    }
+
+    if (!payload.batchId) {
+      throw new AppError('batchId is required for sports attendance', StatusCodes.BAD_REQUEST);
+    }
+
+    return {
+      scopeKey: 'batchId',
+      scopeLabel: 'Batch',
+      scopeValue: payload.batchId
+    };
+  };
+
+  const validateAttendanceQueryScope = (organizationType, query) => {
+    if (organizationType === 'SCHOOL' && query.batchId) {
+      throw new AppError('batchId is not supported for school attendance queries', StatusCodes.BAD_REQUEST);
+    }
+
+    if (organizationType === 'SPORTS' && query.classId) {
+      throw new AppError('classId is not supported for sports attendance queries', StatusCodes.BAD_REQUEST);
+    }
+  };
 
   return {
     async markAttendance(auth, payload) {
       const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
-      const batch = await repository.findBatchById(tenantId, payload.batchId, coachScopedId);
+      const organizationType = normalizeOrganizationType(await repository.getTenantOrganizationType(tenantId));
+      const { scopeKey, scopeLabel, scopeValue } = resolveAttendanceScope(organizationType, payload);
 
-      if (!batch) {
-        throw new AppError('Batch not found or not accessible', StatusCodes.NOT_FOUND);
+      const attendanceGroup =
+        scopeKey === 'classId'
+          ? await repository.findClassById(tenantId, scopeValue)
+          : await repository.findBatchById(tenantId, scopeValue, coachScopedId);
+
+      if (!attendanceGroup) {
+        throw new AppError(`${scopeLabel} not found or not accessible`, StatusCodes.NOT_FOUND);
       }
 
       const uniqueRecords = Array.from(
@@ -31,12 +72,15 @@ export const createAttendanceService = (repository, dependencies = {}) => {
       );
 
       const studentIds = uniqueRecords.map((record) => record.studentId);
-      const eligibleStudents = await repository.findStudentsInBatch(tenantId, payload.batchId, studentIds);
+      const eligibleStudents =
+        scopeKey === 'classId'
+          ? await repository.findStudentsInClass(tenantId, scopeValue, studentIds)
+          : await repository.findStudentsInBatch(tenantId, scopeValue, studentIds);
       const studentMap = new Map(eligibleStudents.map((student) => [String(student._id), student]));
 
       const unauthorizedStudents = studentIds.filter((studentId) => !studentMap.has(studentId));
       if (unauthorizedStudents.length > 0) {
-        throw new AppError('Some students are not active members of this batch', StatusCodes.BAD_REQUEST, {
+        throw new AppError(`Some students are not active members of this ${scopeLabel.toLowerCase()}`, StatusCodes.BAD_REQUEST, {
           invalidStudentIds: unauthorizedStudents
         });
       }
@@ -52,7 +96,8 @@ export const createAttendanceService = (repository, dependencies = {}) => {
           },
           update: {
             $set: {
-              batchId: payload.batchId,
+              batchId: scopeKey === 'batchId' ? scopeValue : null,
+              classId: scopeKey === 'classId' ? scopeValue : null,
               status: record.status,
               markedBy: auth.userId
             },
@@ -87,7 +132,9 @@ export const createAttendanceService = (repository, dependencies = {}) => {
       if (absentStudents.length > 0) {
         domainEvents.emit(DOMAIN_EVENTS.ATTENDANCE_ABSENT, {
           tenantId,
-          batchId: payload.batchId,
+          batchId: scopeKey === 'batchId' ? scopeValue : null,
+          classId: scopeKey === 'classId' ? scopeValue : null,
+          organizationType,
           date: normalizedDate.toISOString().slice(0, 10),
           absentStudents,
           markedBy: auth.userId
@@ -96,7 +143,9 @@ export const createAttendanceService = (repository, dependencies = {}) => {
 
       return {
         date: normalizedDate,
-        batchId: payload.batchId,
+        organizationType,
+        batchId: scopeKey === 'batchId' ? scopeValue : null,
+        classId: scopeKey === 'classId' ? scopeValue : null,
         attempted: uniqueRecords.length,
         upsertedCount: writeResult.upsertedCount || 0,
         modifiedCount: writeResult.modifiedCount || 0,
@@ -108,18 +157,29 @@ export const createAttendanceService = (repository, dependencies = {}) => {
       const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
       const normalizedDate = normalizeToUTCDate(query.date);
+      const organizationType = normalizeOrganizationType(await repository.getTenantOrganizationType(tenantId));
+      validateAttendanceQueryScope(organizationType, query);
 
-      if (coachScopedId && query.batchId) {
+      if (organizationType === 'SPORTS' && coachScopedId && query.batchId) {
         const batch = await repository.findBatchById(tenantId, query.batchId, coachScopedId);
         if (!batch) {
           throw new AppError('Batch not found or not accessible', StatusCodes.NOT_FOUND);
         }
       }
 
+      if (organizationType === 'SCHOOL' && query.classId) {
+        const cls = await repository.findClassById(tenantId, query.classId);
+        if (!cls) {
+          throw new AppError('Class not found or not accessible', StatusCodes.NOT_FOUND);
+        }
+      }
+
       const { items, total } = await repository.getAttendanceByDate({
         tenantId,
         date: normalizedDate,
+        organizationType,
         batchId: query.batchId,
+        classId: query.classId,
         coachId: coachScopedId,
         page: query.page,
         limit: query.limit
@@ -139,13 +199,15 @@ export const createAttendanceService = (repository, dependencies = {}) => {
     async getStudentAttendanceStats(auth, query) {
       const tenantId = resolveTenantId();
       const coachScopedId = auth.role === ROLES.COACH ? auth.userId : null;
+      const organizationType = normalizeOrganizationType(await repository.getTenantOrganizationType(tenantId));
 
       return repository.getStudentAttendanceStats({
         tenantId,
         studentId: query.studentId,
         fromDate: query.fromDate ? normalizeToUTCDate(query.fromDate) : undefined,
         toDate: query.toDate ? normalizeToUTCDate(query.toDate) : undefined,
-        coachId: coachScopedId
+        coachId: coachScopedId,
+        organizationType
       });
     }
   };

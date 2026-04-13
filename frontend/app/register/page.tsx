@@ -55,12 +55,23 @@ type RazorpayPaymentPayload = {
   razorpaySignature: string;
 };
 
-type PlanName = string;
-type RegistrationPlan = {
+type OrganizationType = 'SPORTS' | 'SCHOOL';
+type PlanApiResponse = {
+  id?: string;
   name: string;
-  studentLimit: number | null;
+  price?: number;
+  monthlyPrice?: number;
+  studentLimit: number | string | null;
+  isRecommended?: boolean;
+  note?: string;
+};
+type RegistrationPlan = {
+  id: string;
+  name: string;
+  studentLimit: number | 'Unlimited' | null;
   monthlyPrice: number;
   note: string;
+  isRecommended: boolean;
 };
 type FieldKey =
   | 'academyName'
@@ -71,11 +82,33 @@ type FieldKey =
   | 'adminPassword'
   | 'confirmPassword';
 
-const DEFAULT_PLAN_OPTIONS: RegistrationPlan[] = [
-  { name: 'Starter', studentLimit: 10, monthlyPrice: 0, note: 'Launch with core academy workflows' },
-  { name: 'Growth', studentLimit: 50, monthlyPrice: 1999, note: 'Scale with stronger operations' },
-  { name: 'Pro', studentLimit: null, monthlyPrice: 4999, note: 'Unlimited student capacity and scale' }
-];
+const formatStudentLimit = (studentLimit: RegistrationPlan['studentLimit']) =>
+  studentLimit === null || studentLimit === 'Unlimited' ? 'Unlimited students' : `Up to ${studentLimit} students`;
+
+const buildPlanNote = (studentLimit: RegistrationPlan['studentLimit'], monthlyPrice: number) => {
+  if (monthlyPrice <= 0) {
+    return 'No payment required';
+  }
+
+  return formatStudentLimit(studentLimit);
+};
+
+const normalizePlan = (plan: PlanApiResponse): RegistrationPlan => {
+  const normalizedStudentLimit =
+    plan.studentLimit === 'Unlimited' || plan.studentLimit === null || plan.studentLimit === undefined
+      ? 'Unlimited'
+      : Number(plan.studentLimit);
+  const monthlyPrice = typeof plan.monthlyPrice === 'number' ? plan.monthlyPrice : Number(plan.price || 0);
+
+  return {
+    id: plan.id || plan.name.trim().toLowerCase().replace(/\s+/g, '-'),
+    name: plan.name,
+    studentLimit: Number.isFinite(normalizedStudentLimit as number) ? (normalizedStudentLimit as number) : 'Unlimited',
+    monthlyPrice,
+    note: plan.note || buildPlanNote(normalizedStudentLimit, monthlyPrice),
+    isRecommended: Boolean(plan.isRecommended)
+  };
+};
 
 declare global {
   interface Window {
@@ -88,10 +121,14 @@ declare global {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [planOptions, setPlanOptions] = useState<RegistrationPlan[]>(DEFAULT_PLAN_OPTIONS);
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [planOptions, setPlanOptions] = useState<RegistrationPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState('');
 
   const [academyName, setAcademyName] = useState('');
-  const [planName, setPlanName] = useState<PlanName>(DEFAULT_PLAN_OPTIONS[0].name);
+  const [organizationType, setOrganizationType] = useState<OrganizationType>('SPORTS');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [academyEmail, setAcademyEmail] = useState('');
   const [adminName, setAdminName] = useState('');
@@ -123,16 +160,14 @@ export default function RegisterPage() {
   });
 
   const normalizedAdminEmail = useMemo(() => adminEmail.trim().toLowerCase(), [adminEmail]);
-  const selectedPlan = useMemo(
-    () => planOptions.find((plan) => plan.name === planName) || planOptions[0] || DEFAULT_PLAN_OPTIONS[0],
-    [planName, planOptions]
-  );
+  const selectedPlan = useMemo(() => planOptions.find((plan) => plan.id === selectedPlanId) || null, [planOptions, selectedPlanId]);
 
   const detailsSnapshot = useMemo(
     () =>
       JSON.stringify({
         academyName: academyName.trim(),
-        planName,
+        organizationType,
+        planName: selectedPlan?.name || '',
         ownerName: ownerName.trim(),
         academyEmail: academyEmail.trim().toLowerCase(),
         adminName: adminName.trim(),
@@ -140,7 +175,17 @@ export default function RegisterPage() {
         adminPassword,
         confirmPassword
       }),
-    [academyName, planName, ownerName, academyEmail, adminName, normalizedAdminEmail, adminPassword, confirmPassword]
+    [
+      academyName,
+      organizationType,
+      selectedPlan,
+      ownerName,
+      academyEmail,
+      adminName,
+      normalizedAdminEmail,
+      adminPassword,
+      confirmPassword
+    ]
   );
 
   const detailChecks = useMemo(() => {
@@ -157,6 +202,7 @@ export default function RegisterPage() {
   }, [academyName, ownerName, academyEmail, adminName, normalizedAdminEmail, adminPassword, confirmPassword]);
 
   const detailsError = useMemo(() => {
+    if (!selectedPlan) return 'Please select a plan to continue.';
     if (!detailChecks[0].pass) return 'Academy name required.';
     if (!detailChecks[1].pass) return 'Owner name required.';
     if (!detailChecks[2].pass) return 'Valid academy email required.';
@@ -165,11 +211,11 @@ export default function RegisterPage() {
     if (!detailChecks[5].pass) return 'Admin password must be at least 8 characters.';
     if (!detailChecks[6].pass) return 'Password and confirm password must match.';
     return null;
-  }, [detailChecks]);
+  }, [detailChecks, selectedPlan]);
 
   const detailsReady = !detailsError;
   const otpSnapshotMismatch = Boolean(otpSent && otpLockedSnapshot && otpLockedSnapshot !== detailsSnapshot);
-  const paymentRequired = selectedPlan.monthlyPrice > 0;
+  const paymentRequired = (selectedPlan?.monthlyPrice || 0) > 0;
   const completedChecks = detailChecks.filter((check) => check.pass).length;
   const completionPercent = Math.round((completedChecks / detailChecks.length) * 100);
   const fieldErrors = useMemo<Record<FieldKey, string>>(
@@ -219,16 +265,35 @@ export default function RegisterPage() {
   useEffect(() => {
     let mounted = true;
     const loadRegistrationPlans = async () => {
+      setPlansLoading(true);
+      setPlansError('');
+
       try {
-        const plans = await apiGet<RegistrationPlan[]>('/auth/registration-plans');
-        if (!mounted || !plans?.length) {
-          return;
+        let plans: PlanApiResponse[] = [];
+
+        try {
+          plans = await apiGet<PlanApiResponse[]>('/plans');
+        } catch {
+          plans = await apiGet<PlanApiResponse[]>('/auth/registration-plans');
         }
 
-        setPlanOptions(plans);
-        setPlanName((prev) => (plans.some((plan) => plan.name === prev) ? prev : plans[0].name));
+        if (!mounted) return;
+
+        const normalizedPlans = plans.map(normalizePlan);
+        setPlanOptions(normalizedPlans);
+        setSelectedPlanId((prev) => (normalizedPlans.some((plan) => plan.id === prev) ? prev : ''));
+        if (normalizedPlans.length === 0) {
+          setPlansError('Unable to load plans. Please try again.');
+        }
       } catch {
-        // Keep default fallback plans if API load fails.
+        if (!mounted) return;
+        setPlanOptions([]);
+        setSelectedPlanId('');
+        setPlansError('Unable to load plans. Please try again.');
+      } finally {
+        if (mounted) {
+          setPlansLoading(false);
+        }
       }
     };
 
@@ -264,7 +329,7 @@ export default function RegisterPage() {
 
     setPaymentDone(false);
     setPaymentPayload(null);
-  }, [planName, normalizedAdminEmail, academyEmail, paymentRequired]);
+  }, [selectedPlanId, normalizedAdminEmail, academyEmail, paymentRequired]);
 
   const sendOtp = async () => {
     if (!detailsReady) {
@@ -339,6 +404,10 @@ export default function RegisterPage() {
   };
 
   const handlePlanPayment = async (): Promise<RazorpayPaymentPayload> => {
+    if (!selectedPlan) {
+      throw new Error('Please select a plan first.');
+    }
+
     if (!paymentRequired) {
       throw new Error('Payment not required for selected plan.');
     }
@@ -355,7 +424,7 @@ export default function RegisterPage() {
 
     try {
       const order = await apiPost<CreateOrderResponse>('/auth/create-registration-order', {
-        planName,
+        planName: selectedPlan.name,
         academyEmail: academyEmail.trim().toLowerCase(),
         adminEmail: normalizedAdminEmail
       });
@@ -439,9 +508,15 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      if (!selectedPlan) {
+        setError('Please select a plan first.');
+        return;
+      }
+
       const data = await apiPost<RegisterResponse>('/auth/register-tenant', {
         name: academyName.trim(),
-        planName,
+        organizationType,
+        planName: selectedPlan.name,
         ownerName: ownerName.trim(),
         email: academyEmail.trim().toLowerCase(),
         adminName: adminName.trim(),
@@ -479,31 +554,31 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-5 py-10 sm:px-8">
-      <section className="grid w-full gap-5 lg:grid-cols-[1.02fr_1.58fr]">
-        <aside className="relative overflow-hidden rounded-3xl bg-slate-900 p-7 text-white soft-shadow">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,#38bdf8_0%,transparent_40%),radial-gradient(circle_at_bottom_left,#22c55e_0%,transparent_45%)] opacity-35" />
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f3f8fc_0%,#fffaf1_46%,#ffffff_100%)] px-4 py-8 sm:px-6 lg:px-10">
+      <section className="mx-auto grid w-full max-w-7xl items-start gap-5 lg:grid-cols-[0.82fr_1.58fr]">
+        <aside className="relative self-start overflow-hidden rounded-[28px] bg-[#0f2742] p-6 text-white shadow-[0_24px_64px_rgba(15,39,66,0.22)] sm:p-6 lg:sticky lg:top-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.3),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.22),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]" />
           <div className="relative z-10">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-300">ArenaPilot Onboarding</p>
-            <h1 className="mt-3 text-3xl font-bold leading-tight">Register Academy In One Flow</h1>
-            <p className="mt-3 text-sm text-slate-200">
-              Fill details, pick plan, verify OTP, and create your academy from this single screen.
+            <h1 className="mt-3 text-3xl font-black leading-tight tracking-tight">Build Your Academy Setup In Two Clear Steps</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-200/95">
+              Choose the right plan first, then complete registration, payment, and OTP verification without losing your place.
             </p>
 
-            <div className="mt-5 rounded-2xl border border-white/20 bg-white/10 p-4">
+            <div className="mt-5 rounded-[24px] border border-white/15 bg-white/10 p-4 backdrop-blur">
               <div className="flex items-center justify-between">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Onboarding Readiness</p>
-                <p className="text-lg font-bold text-white">{completionPercent}%</p>
+                <p className="text-xl font-black text-white">{completionPercent}%</p>
               </div>
-              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/20">
+              <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-white/15">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-indigo-300 to-emerald-300 transition-all"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#7dd3fc_0%,#60a5fa_38%,#34d399_100%)] transition-all duration-500"
                   style={{ width: `${completionPercent}%` }}
                 />
               </div>
             </div>
 
-            <div className="mt-6 space-y-2 rounded-2xl border border-white/15 bg-white/5 p-4">
+            <div className="mt-5 space-y-2.5 rounded-[24px] border border-white/12 bg-white/5 p-4">
               {detailChecks.map((item) => (
                 <div key={item.label} className="flex items-center gap-2 text-sm">
                   <span className={`inline-block h-2.5 w-2.5 rounded-full ${item.pass ? 'bg-emerald-400' : 'bg-slate-500'}`} />
@@ -512,72 +587,197 @@ export default function RegisterPage() {
               ))}
             </div>
 
-            <div className="mt-6 space-y-2">
-              {planOptions.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`rounded-xl px-3 py-2 text-sm ${
-                    planName === plan.name ? 'bg-white/25 text-white' : 'bg-white/10 text-slate-200'
-                  }`}
-                >
-                  {plan.name} - {plan.studentLimit === null ? 'Unlimited Students' : `Up to ${plan.studentLimit} Students`}
+            <div className="mt-5 rounded-[24px] border border-white/12 bg-white/5 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Selected Plan</p>
+                  <p className="mt-1 text-base font-bold text-white">{selectedPlan?.name || 'Choose a plan'}</p>
                 </div>
-              ))}
+                <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100">
+                  {selectedPlan ? (selectedPlan.monthlyPrice === 0 ? 'Free' : `Rs ${selectedPlan.monthlyPrice}/mo`) : 'Pending'}
+                </div>
+              </div>
+              <div className="space-y-2">
+              {plansLoading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="h-10 animate-pulse rounded-xl bg-white/10" />
+                  ))
+                : planOptions.map((plan) => (
+                    <div
+                      key={plan.id}
+                      className={`rounded-2xl border px-3.5 py-2.5 text-sm transition ${
+                        selectedPlanId === plan.id
+                          ? 'border-white/30 bg-white/18 text-white'
+                          : 'border-white/10 bg-white/6 text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold">{plan.name}</span>
+                        <span className="text-xs text-slate-300">{formatStudentLimit(plan.studentLimit)}</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         </aside>
 
-        <section className="glass-panel soft-shadow rounded-3xl p-6 sm:p-8">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <section className="glass-panel rounded-[28px] border border-white/70 bg-white/92 p-5 shadow-[0_24px_64px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900">Register Academy</h2>
-              <p className="mt-1 text-sm text-slate-600">Premium onboarding with live field validation and inline OTP verification</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Registration Workspace</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">Create your academy account</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                A cleaner onboarding experience with dynamic plan selection, guided setup, payment, and OTP verification.
+              </p>
             </div>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                otpVerified ? 'bg-emerald-100 text-emerald-700' : otpSent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {otpVerified ? 'OTP Verified' : otpSent ? 'OTP Sent' : 'OTP Pending'}
-            </span>
-          </div>
-
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            {planOptions.map((plan) => (
-              <button
-                key={plan.name}
-                type="button"
-                onClick={() => setPlanName(plan.name)}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${
-                  planName === plan.name
-                    ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentStep === 1 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                Step 1: Plan
+              </span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentStep === 2 ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                Step 2: Setup
+              </span>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  otpVerified ? 'bg-emerald-100 text-emerald-700' : otpSent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
                 }`}
               >
-                <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
-                <p className="mt-1 text-xs text-slate-600">
-                  {plan.studentLimit === null ? 'Unlimited students' : `${plan.studentLimit} students`}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-700">
-                  {plan.monthlyPrice === 0 ? 'Free' : `INR ${plan.monthlyPrice}/month`}
-                </p>
-              </button>
-            ))}
-          </div>
-
-          <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-700">
-            Selected Plan: <span className="font-semibold">{selectedPlan.name}</span> - {selectedPlan.note}
-          </div>
-
-          <div className="mb-4 grid gap-3 sm:grid-cols-[120px_1fr]">
-            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Progress</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{completionPercent}%</p>
+                {otpVerified ? 'OTP Verified' : otpSent ? 'OTP Sent' : 'OTP Pending'}
+              </span>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2">
-              <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          </div>
+
+          <div className="mb-6 rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#fffdf7_0%,#ffffff_100%)] p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Step 1</p>
+                <h3 className="mt-2 text-[2rem] font-black tracking-tight text-slate-900">Choose the plan that fits your academy</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  These plans load from backend data, so pricing and student limits always stay current.
+                </p>
+              </div>
+              {currentStep === 2 && selectedPlan ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  Change Plan
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
+              {plansLoading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="animate-pulse rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div className="h-4 w-24 rounded bg-slate-200" />
+                      <div className="mt-5 h-9 w-28 rounded bg-slate-200" />
+                      <div className="mt-4 h-4 w-32 rounded bg-slate-200" />
+                      <div className="mt-7 h-10 rounded-2xl bg-slate-200" />
+                    </div>
+                  ))
+                : planOptions.map((plan) => {
+                    const isSelected = selectedPlanId === plan.id;
+
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPlanId(plan.id);
+                          setError('');
+                          setMessage('');
+                        }}
+                        className={`group relative overflow-hidden rounded-[24px] border p-5 text-left transition duration-300 ${
+                          isSelected
+                            ? 'scale-[1.02] border-sky-500 bg-sky-50 shadow-[0_20px_50px_rgba(14,165,233,0.18)]'
+                            : plan.isRecommended
+                              ? 'border-amber-300 bg-amber-50/70 shadow-[0_18px_45px_rgba(245,158,11,0.14)] hover:-translate-y-1 hover:border-amber-400'
+                              : 'border-slate-200 bg-white hover:-translate-y-1 hover:border-slate-300 hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]'
+                        }`}
+                      >
+                        <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#38bdf8_0%,#f59e0b_50%,#34d399_100%)] opacity-80" />
+                        {plan.isRecommended ? (
+                          <span className="absolute right-5 top-5 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-800">
+                            Recommended
+                          </span>
+                        ) : null}
+
+                        <p className="text-lg font-bold text-slate-900">{plan.name}</p>
+                        <p className="mt-3 text-[2.45rem] font-black tracking-tight text-slate-900">
+                          {plan.monthlyPrice === 0 ? 'Free' : `\u20B9${plan.monthlyPrice}`}
+                          {plan.monthlyPrice > 0 ? <span className="ml-1 text-sm font-medium text-slate-500">/month</span> : null}
+                        </p>
+                        <p className="mt-3 text-sm font-medium text-slate-700">{formatStudentLimit(plan.studentLimit)}</p>
+                        <p className="mt-2 min-h-[38px] text-sm leading-6 text-slate-600">{plan.note}</p>
+
+                        <div
+                          className={`mt-5 flex items-center justify-between rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                            isSelected
+                              ? 'border-sky-200 bg-white text-sky-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600 group-hover:border-slate-300 group-hover:bg-white'
+                          }`}
+                        >
+                          <span>{isSelected ? 'Selected for onboarding' : 'Click to select plan'}</span>
+                          <span
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border ${
+                              isSelected ? 'border-sky-500 bg-sky-500 text-white' : 'border-slate-300 bg-white text-transparent'
+                            }`}
+                          >
+                            {'\u2713'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+            </div>
+
+            {plansError ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                Unable to load plans. Please try again.
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-slate-200 bg-white px-4 py-3.5">
+              <div className="text-sm text-slate-600">
+                {selectedPlan ? (
+                  <>
+                    Selected plan: <span className="font-semibold text-slate-900">{selectedPlan.name}</span>
+                  </>
+                ) : (
+                  'Select a plan to continue to Step 2.'
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                disabled={!selectedPlan || plansLoading || Boolean(plansError)}
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+
+          {currentStep === 2 && selectedPlan ? (
+            <div className="mb-5 rounded-[24px] border border-sky-100 bg-sky-50/80 px-5 py-4 text-sm text-sky-800">
+              Step 2 is unlocked. <span className="font-semibold">{selectedPlan.name}</span> is selected, so you can finish setup, payment, and OTP verification below.
+            </div>
+          ) : null}
+
+          {currentStep === 2 && selectedPlan ? (
+            <>
+          <div className="mb-5 grid gap-3 sm:grid-cols-[140px_1fr]">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Progress</p>
+              <p className="mt-1 text-3xl font-black text-slate-900">{completionPercent}%</p>
+            </div>
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="mb-2 h-2.5 w-full overflow-hidden rounded-full bg-white">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500 transition-all"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#0f172a_0%,#0ea5e9_55%,#34d399_100%)] transition-all duration-500"
                   style={{ width: `${completionPercent}%` }}
                 />
               </div>
@@ -594,10 +794,10 @@ export default function RegisterPage() {
           ) : null}
 
           {paymentRequired ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm">
               <div>
                 <p className="font-semibold text-slate-900">Plan Payment Required</p>
-                <p className="text-slate-700">Pay INR {selectedPlan.monthlyPrice} to continue with {selectedPlan.name}.</p>
+                <p className="mt-1 text-slate-700">Pay INR {selectedPlan.monthlyPrice} to continue with {selectedPlan.name}.</p>
               </div>
               <button
                 type="button"
@@ -614,14 +814,14 @@ export default function RegisterPage() {
                   }
                 }}
                 disabled={paymentLoading || paymentDone}
-                className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                className="rounded-2xl bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
               >
                 {paymentLoading ? 'Opening Checkout...' : paymentDone ? 'Payment Done' : `Pay INR ${selectedPlan.monthlyPrice}`}
               </button>
             </div>
           ) : (
-            <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              Starter plan selected. No payment required.
+            <div className="mb-5 rounded-[24px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">
+              {selectedPlan.name} selected. No payment required.
             </div>
           )}
 
@@ -639,6 +839,36 @@ export default function RegisterPage() {
               {touchedFields.academyName && fieldErrors.academyName ? (
                 <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.academyName}</p>
               ) : null}
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Organization Type</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setOrganizationType('SPORTS')}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    organizationType === 'SPORTS'
+                      ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-slate-900">Sports Academy</p>
+                  <p className="mt-1 text-xs text-slate-600">Use batches, coaches, training, and sports workflows.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrganizationType('SCHOOL')}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    organizationType === 'SCHOOL'
+                      ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-slate-900">School</p>
+                  <p className="mt-1 text-xs text-slate-600">Use classes, teachers, subjects, and school workflows.</p>
+                </button>
+              </div>
             </div>
 
             <div>
@@ -732,21 +962,23 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-lg font-bold text-slate-900">OTP Verification</h3>
+          <section className="mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">OTP Verification</h3>
+                <p className="mt-1 text-sm text-slate-600">OTP will be sent to admin email: {normalizedAdminEmail || '-'}</p>
+              </div>
               <button
                 type="button"
                 onClick={sendOtp}
                 disabled={sendingOtp || verifyingOtp || !detailsReady}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sendingOtp ? 'Sending OTP...' : otpSent ? 'Resend OTP' : 'Send OTP'}
               </button>
             </div>
-            <p className="mt-1 text-sm text-slate-600">OTP will be sent to admin email: {normalizedAdminEmail || '-'}</p>
 
-            <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="mt-5 grid gap-4 rounded-[24px] border border-slate-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Validate OTP</p>
@@ -768,7 +1000,7 @@ export default function RegisterPage() {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   placeholder="Enter 6 digit OTP"
-                  className={`w-full rounded-xl border bg-white px-4 py-3 text-lg tracking-[0.35em] outline-none transition ${
+                  className={`w-full rounded-2xl border bg-white px-4 py-3 text-lg tracking-[0.35em] outline-none transition ${
                     otpVerified
                       ? 'border-emerald-300 focus:border-emerald-500'
                       : otpDigitsEntered === 6
@@ -789,7 +1021,7 @@ export default function RegisterPage() {
                 type="button"
                 onClick={verifyOtp}
                 disabled={otpBusy || !otpSent || otpCode.length !== 6 || otpVerified}
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {verifyingOtp ? 'Verifying OTP...' : otpVerified ? 'OTP Verified' : 'Verify OTP'}
               </button>
@@ -806,7 +1038,7 @@ export default function RegisterPage() {
             type="button"
             onClick={registerAcademy}
             disabled={loading || !otpVerified || otpSnapshotMismatch}
-            className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 w-full rounded-[24px] bg-[linear-gradient(90deg,#0f172a_0%,#0ea5e9_52%,#10b981_100%)] px-5 py-4 text-sm font-bold text-white shadow-[0_18px_40px_rgba(14,165,233,0.18)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? 'Creating Academy...' : 'Create Academy'}
           </button>
@@ -820,6 +1052,8 @@ export default function RegisterPage() {
               Login
             </Link>
           </p>
+          </>
+          ) : null}
         </section>
       </section>
     </main>

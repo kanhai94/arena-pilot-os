@@ -40,6 +40,8 @@ export const ensureSuperAdminBootstrap = async () => {
 
   const existingUser = await User.findOne({ email }).select('+passwordHash').lean();
   if (existingUser) {
+    const passwordHash = await hashPassword(password);
+
     if (existingUser.role !== ROLES.SUPER_ADMIN) {
       await User.updateOne(
         { _id: existingUser._id },
@@ -47,17 +49,24 @@ export const ensureSuperAdminBootstrap = async () => {
           $set: {
             role: ROLES.SUPER_ADMIN,
             permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.SUPER_ADMIN],
-            isActive: true
+            isActive: true,
+            passwordHash
           }
         }
       );
-      logger.info({ email }, 'Existing user elevated to SuperAdmin');
+      logger.info({ email }, 'Existing user elevated to SuperAdmin and password synced from environment');
     } else {
       await User.updateOne(
         { _id: existingUser._id },
-        { $set: { permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.SUPER_ADMIN], isActive: true } }
+        {
+          $set: {
+            permissions: ROLE_DEFAULT_PERMISSIONS[ROLES.SUPER_ADMIN],
+            isActive: true,
+            passwordHash
+          }
+        }
       );
-      logger.info({ email }, 'Super admin already present');
+      logger.info({ email }, 'Super admin already present and password synced from environment');
     }
     return;
   }

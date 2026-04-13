@@ -1,6 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import { apiSuccess } from '../../utils/apiResponse.js';
 import {
+  assignStudentClassSchema,
   createStudentSchema,
   listStudentsQuerySchema,
   parseOrThrow,
@@ -45,6 +46,17 @@ export const createStudentController = (studentService) => {
         const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
         const payload = parseOrThrow(updateStudentSchema, req.body);
         const data = await studentService.updateStudent(studentId, payload);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    assignClass: async (req, res, next) => {
+      try {
+        const { studentId } = parseOrThrow(studentIdParamSchema, req.params);
+        const payload = parseOrThrow(assignStudentClassSchema, req.body);
+        const data = await studentService.assignClass(studentId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

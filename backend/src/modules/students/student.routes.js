@@ -6,6 +6,7 @@ import { authorizeRoles } from '../../middleware/authorizeRoles.js';
 import { subscriptionGuard } from '../../middleware/subscriptionGuard.js';
 import { checkPlanLimit } from '../../middleware/checkPlanLimit.js';
 import { tenantAccessGuard } from '../../middleware/tenantAccessGuard.js';
+import { checkOrgType } from '../../middleware/checkOrgType.js';
 import { ROLES } from '../../constants/roles.js';
 import { billingService } from '../billing/billing.container.js';
 import { tenantMetricsService } from '../tenantMetrics/tenantMetrics.container.js';
@@ -43,6 +44,13 @@ studentRouter.put(
   '/:studentId',
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   studentController.updateStudent
+);
+
+studentRouter.put(
+  '/:studentId/assign-class',
+  checkOrgType('SCHOOL'),
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  studentController.assignClass
 );
 
 studentRouter.patch(

@@ -1,7 +1,12 @@
 import { Plan } from '../../models/plan.model.js';
+import { Tenant } from '../../models/tenant.model.js';
 import { TenantBillingPayment } from '../../models/tenantBillingPayment.model.js';
 
 export const tenantRepository = {
+  findTenantById(tenantId) {
+    return Tenant.findOne({ _id: tenantId }).lean();
+  },
+
   listActivePlans() {
     return Plan.find({ status: 'active' }).sort({ priceMonthly: 1, createdAt: 1 }).lean();
   },

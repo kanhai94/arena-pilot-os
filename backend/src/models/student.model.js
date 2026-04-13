@@ -60,6 +60,16 @@ const studentSchema = new mongoose.Schema(
       ref: 'Batch',
       default: null
     },
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Class',
+      default: null
+    },
+    rollNumber: {
+      type: String,
+      trim: true,
+      default: null
+    },
     feeStatus: {
       type: String,
       enum: ['paid', 'pending'],
@@ -105,5 +115,15 @@ studentSchema.index({ tenantId: 1, status: 1 });
 studentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 studentSchema.index({ tenantId: 1, normalizedName: 1, normalizedParentPhone: 1, status: 1 });
 studentSchema.index({ tenantId: 1, name: 'text' });
+studentSchema.index(
+  { tenantId: 1, classId: 1, rollNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      classId: { $type: 'objectId' },
+      rollNumber: { $type: 'string' }
+    }
+  }
+);
 
 export const Student = mongoose.model('Student', studentSchema);

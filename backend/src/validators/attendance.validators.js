@@ -5,7 +5,8 @@ const objectIdRegex = /^[a-f0-9]{24}$/i;
 
 export const markAttendanceSchema = z
   .object({
-    batchId: z.string().regex(objectIdRegex, 'Invalid batchId'),
+    batchId: z.string().regex(objectIdRegex, 'Invalid batchId').optional(),
+    classId: z.string().regex(objectIdRegex, 'Invalid classId').optional(),
     date: z.string().datetime({ offset: true }).or(z.string().date()),
     records: z
       .array(
@@ -19,14 +20,42 @@ export const markAttendanceSchema = z
       .min(1)
       .max(1000)
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (!value.batchId && !value.classId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['batchId'],
+        message: 'Either batchId or classId is required'
+      });
+    }
 
-export const attendanceByDateQuerySchema = z.object({
-  date: z.string().datetime({ offset: true }).or(z.string().date()),
-  batchId: z.string().regex(objectIdRegex, 'Invalid batchId').optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(200).default(50)
-});
+    if (value.batchId && value.classId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['classId'],
+        message: 'Provide only one of batchId or classId'
+      });
+    }
+  });
+
+export const attendanceByDateQuerySchema = z
+  .object({
+    date: z.string().datetime({ offset: true }).or(z.string().date()),
+    batchId: z.string().regex(objectIdRegex, 'Invalid batchId').optional(),
+    classId: z.string().regex(objectIdRegex, 'Invalid classId').optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50)
+  })
+  .superRefine((value, ctx) => {
+    if (value.batchId && value.classId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['classId'],
+        message: 'Provide only one of batchId or classId'
+      });
+    }
+  });
 
 export const attendanceStatsQuerySchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),

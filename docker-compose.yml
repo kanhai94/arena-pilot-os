@@ -76,7 +76,7 @@ services:
     ports:
       - '3000:3000'
     env_file:
-      - ./frontend/.env
+      - ./frontend/.env.docker
     volumes:
       - ./frontend:/app
       - /app/node_modules

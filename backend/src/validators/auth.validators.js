@@ -7,6 +7,7 @@ const planNameRule = z.string().trim().min(2).max(120);
 export const registerTenantSchema = z.object({
   name: z.string().min(2).max(120),
   ownerName: z.string().min(2).max(120),
+  organizationType: z.enum(['SPORTS', 'SCHOOL']).default('SPORTS'),
   planName: planNameRule,
   email: z.string().email(),
   adminName: z.string().min(2).max(120),
