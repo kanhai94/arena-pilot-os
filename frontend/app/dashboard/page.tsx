@@ -5865,43 +5865,49 @@ export default function DashboardPage() {
                           </section>
 
                           <section className="rounded-3xl border border-slate-200 bg-white p-5">
-                            <h4 className="text-lg font-bold text-slate-900">Subscription Details</h4>
+                            <h4 className="text-lg font-bold text-slate-900">
+                              {organizationType === 'SCHOOL' ? `${uiLabels.plan} Details` : 'Subscription Details'}
+                            </h4>
                             <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                              {organizationType === 'SPORTS' ? (
+                                <>
+                                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                    Level
+                                    <input
+                                      value={subscriptionLevel}
+                                      onChange={(e) => setSubscriptionLevel(e.target.value)}
+                                      placeholder="Level"
+                                      className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                                    />
+                                  </label>
+                                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-300 px-3 py-2">
+                                    <label className="flex min-w-0 items-center gap-2 text-sm">
+                                      <input
+                                        type="radio"
+                                        checked={subscriptionType === 'subscription'}
+                                        onChange={() => setSubscriptionType('subscription')}
+                                      />
+                                      Subscription
+                                    </label>
+                                    <label className="flex min-w-0 items-center gap-2 text-sm">
+                                      <input
+                                        type="radio"
+                                        checked={subscriptionType === 'trial'}
+                                        onChange={() => setSubscriptionType('trial')}
+                                      />
+                                      Trial
+                                    </label>
+                                  </div>
+                                </>
+                              ) : null}
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                                Level
-                                <input
-                                  value={subscriptionLevel}
-                                  onChange={(e) => setSubscriptionLevel(e.target.value)}
-                                  placeholder="Level"
-                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
-                                />
-                              </label>
-                              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-300 px-3 py-2">
-                                <label className="flex min-w-0 items-center gap-2 text-sm">
-                                  <input
-                                    type="radio"
-                                    checked={subscriptionType === 'subscription'}
-                                    onChange={() => setSubscriptionType('subscription')}
-                                  />
-                                  Subscription
-                                </label>
-                                <label className="flex min-w-0 items-center gap-2 text-sm">
-                                  <input
-                                    type="radio"
-                                    checked={subscriptionType === 'trial'}
-                                    onChange={() => setSubscriptionType('trial')}
-                                  />
-                                  Trial
-                                </label>
-                              </div>
-                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                                Plan
+                                {uiLabels.plan}
                                 <select
                                   value={subscriptionPlanId}
                                   onChange={(e) => setSubscriptionPlanId(e.target.value)}
                                   className={composerLongSelectClassName}
                                 >
-                                  <option value="">Select plan</option>
+                                  <option value="">{`Select ${uiLabels.plan.toLowerCase()}`}</option>
                                   {feePlans.map((plan) => (
                                     <option key={plan._id} value={plan._id}>
                                       {compactSelectLabel(`${plan.name} - ${formatCurrency(plan.amount)}`, 16)}
@@ -5910,7 +5916,8 @@ export default function DashboardPage() {
                                 </select>
                                 {subscriptionPlanId ? (
                                   <p className="text-xs font-medium text-slate-500">
-                                    Selected plan: <span className="text-slate-700">{getFeePlanSelectLabel(subscriptionPlanId)}</span>
+                                    {`Selected ${uiLabels.plan.toLowerCase()}: `}
+                                    <span className="text-slate-700">{getFeePlanSelectLabel(subscriptionPlanId)}</span>
                                   </p>
                                 ) : null}
                               </label>
@@ -5963,12 +5970,12 @@ export default function DashboardPage() {
                                 ) : null}
                               </label>
                             </div>
-                            <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
-                              <input
-                                type="checkbox"
-                                checked={subscriptionAutoRenew}
-                                onChange={(e) => setSubscriptionAutoRenew(e.target.checked)}
-                              />
+                              <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={subscriptionAutoRenew}
+                                  onChange={(e) => setSubscriptionAutoRenew(e.target.checked)}
+                                />
                               Auto renew
                             </label>
                           </section>
