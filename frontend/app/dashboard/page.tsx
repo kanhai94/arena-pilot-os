@@ -3926,10 +3926,8 @@ export default function DashboardPage() {
     const rows = students.map((student) => {
       const meta = clientMetaByStudentId[student._id];
       const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
-      const selectedClass =
-        organizationType === 'SCHOOL'
-          ? schoolClasses.find((item) => item._id === meta?.subscriptionClassId)
-          : academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
+      const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
+      const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
       const invoiceAmountNumber = Number(meta?.invoiceAmount || 0);
       const receivable = Math.max(
         0,
@@ -3943,10 +3941,10 @@ export default function DashboardPage() {
         student.parentPhone || '',
         selectedPlan?.name || '',
         organizationType === 'SCHOOL'
-          ? selectedClass
-            ? `${selectedClass.name}-${selectedClass.section}`
+          ? schoolSelectedClass
+            ? `${schoolSelectedClass.name}-${schoolSelectedClass.section}`
             : ''
-          : selectedClass?.title || '',
+          : sportsSelectedClass?.title || '',
         0,
         0,
         meta?.rollNo || '',
@@ -6068,10 +6066,8 @@ export default function DashboardPage() {
                             {students.map((student) => {
                               const meta = clientMetaByStudentId[student._id];
                               const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
-                              const selectedClass =
-                                organizationType === 'SCHOOL'
-                                  ? schoolClasses.find((item) => item._id === meta?.subscriptionClassId)
-                                  : academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
+                              const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
+                              const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
                               const receivable = Math.max(0, Number(meta?.invoiceAmount || 0) - (student.feeStatus === 'paid' ? Number(meta?.invoiceAmount || 0) : 0));
                               return (
                                 <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
@@ -6113,10 +6109,10 @@ export default function DashboardPage() {
                                   </td>
                                   <td className="px-2 py-2 text-slate-700">
                                     {organizationType === 'SCHOOL'
-                                      ? selectedClass
-                                        ? `${selectedClass.name}-${selectedClass.section}`
+                                      ? schoolSelectedClass
+                                        ? `${schoolSelectedClass.name}-${schoolSelectedClass.section}`
                                         : '-'
-                                      : selectedClass?.title || '-'}
+                                      : sportsSelectedClass?.title || '-'}
                                   </td>
                                   <td className="px-2 py-2 text-slate-700">
                                     <span className="font-semibold text-emerald-600">0</span>
