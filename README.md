@@ -90,4 +90,7 @@ Prerequisites:
 ## Backup Strategy
 See detailed Atlas backup and restore plan:
 - [backup-strategy.md](/Users/kanhaikumar/Desktop/New project/docs/backup-strategy.md)
+
+## Architecture Docs
+- [docs/architecture-overview.md](C:\Users\kanha\OneDrive\Desktop\arena-pilot-os\docs\architecture-overview.md)
 # arena-pilot-os
