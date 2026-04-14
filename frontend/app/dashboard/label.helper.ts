@@ -11,10 +11,10 @@ export const getUILabels = (orgType: OrganizationType) => {
       planPlural: 'Fee Structures',
       subject: 'Subject',
       subjectPlural: 'Subjects',
-      trainingMenu: 'Curriculum',
+      trainingMenu: 'Subjects',
       studentsMenu: 'Students',
-      financeMenu: 'Finance',
-      automationsMenu: 'Automations',
+      financeMenu: 'Payments',
+      automationsMenu: 'Workflows',
       reportsMenu: 'Reports'
     };
   }
@@ -30,8 +30,8 @@ export const getUILabels = (orgType: OrganizationType) => {
     subjectPlural: 'Subjects',
     trainingMenu: 'Training Grid',
     studentsMenu: 'Students',
-    financeMenu: 'Finance',
-    automationsMenu: 'Automations',
+    financeMenu: 'Payments',
+    automationsMenu: 'Workflows',
     reportsMenu: 'Reports'
   };
 };

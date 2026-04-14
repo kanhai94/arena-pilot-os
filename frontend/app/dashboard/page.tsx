@@ -424,8 +424,8 @@ const tabDefaultMenu: Record<TabId, MenuItem> = {
 
 const tabLabels: Record<TabId, string> = {
   pulse: 'Pulse',
-  studio: 'Student Roster',
-  automations: 'Automations',
+  studio: 'Students',
+  automations: 'Workflows',
   'academy-pro': 'Academy Pro',
   'platform-control': 'Platform Control'
 };
@@ -740,6 +740,8 @@ const getSidebarMenuLabel = (menu: MenuItem, labels: ReturnType<typeof getUILabe
       return labels.automationsMenu;
     case 'Growth Reports':
       return labels.reportsMenu;
+    case 'Integrations':
+      return 'Connected Apps';
     default:
       return menu;
   }
@@ -751,6 +753,76 @@ const getSidebarMenuIcon = (menu: MenuItem, orgType: OrganizationType) => {
   }
 
   return null;
+};
+
+const renderSidebarMenuIcon = (menu: MenuItem) => {
+  const iconClassName = 'h-[18px] w-[18px] shrink-0';
+
+  switch (menu) {
+    case 'Pulse Board':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M3 12h4l2.5-5 5 10 2.5-5H21" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Academy Pro':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8 8h8M8 12h8M8 16h5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Student Roster':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M16 19a4 4 0 0 0-8 0" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 13a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 19a8 8 0 0 1 16 0" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Training Grid':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4H19v16H7.5A2.5 2.5 0 0 0 5 22V6.5Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M7.5 4A2.5 2.5 0 0 0 5 6.5V20" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Access Control':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M12 3l7 3v5c0 4.5-2.8 8.4-7 10-4.2-1.6-7-5.5-7-10V6l7-3Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9.5 12.5 11 14l3.5-4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Finance Deck':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M4 7h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 9h16M15.5 14h.01" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Alert Center':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M6 7.5A3.5 3.5 0 0 1 9.5 4H18v8.5A3.5 3.5 0 0 1 14.5 16H10l-4 4v-4a3.5 3.5 0 0 1-3-3.5V7.5Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Growth Reports':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M5 19V9M12 19V5M19 19v-7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 19h16" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case 'Integrations':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={iconClassName} aria-hidden="true">
+          <path d="M8 8h3v3H8zM13 13h3v3h-3zM13 8h3v3h-3zM8 13h3v3H8z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 };
 
 export default function DashboardPage() {
@@ -1107,6 +1179,7 @@ export default function DashboardPage() {
   );
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const useDarkFinanceTheme = visualMode === 'dark';
+  const useDarkStudioTheme = visualMode === 'dark';
   const classStartTimeParts = useMemo(() => parse24hTo12h(classStartTime), [classStartTime]);
   const classEndTimeParts = useMemo(() => parse24hTo12h(classEndTime), [classEndTime]);
   const classCapacityError = useMemo(() => {
@@ -4230,10 +4303,11 @@ const getNameInitials = (value: string) =>
               }
               if (item === 'Academy Pro') {
                 return (
-                  <div
-                    key={item}
-                    className="rounded-xl border border-slate-200 bg-slate-50/80 p-1.5 dark-nav-container dark:border-slate-700 dark:bg-slate-900/70"
-                  >
+                  <div key={item}>
+                    <p className="mb-2 mt-1 px-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Workspace
+                    </p>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-1.5 dark-nav-container dark:border-slate-700 dark:bg-slate-900/70">
                     <button
                       onClick={handleAcademyProToggle}
                       className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm font-medium ${
@@ -4242,7 +4316,10 @@ const getNameInitials = (value: string) =>
                           : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
                       }`}
                     >
-                      <span>{getSidebarMenuLabel(item, uiLabels)}</span>
+                      <span className="inline-flex items-center gap-2.5">
+                        {renderSidebarMenuIcon(item)}
+                        <span>{getSidebarMenuLabel(item, uiLabels)}</span>
+                      </span>
                       <span
                         className={`inline-block text-base leading-none transition-transform duration-200 ${
                           academyProExpanded ? 'rotate-90' : ''
@@ -4297,25 +4374,37 @@ const getNameInitials = (value: string) =>
                         ))}
                       </div>
                     ) : null}
+                    </div>
                   </div>
                 );
               }
 
               return (
-                <button
-                  key={item}
-                  onClick={() => handleMenuClick(item)}
-                  className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium ${
-                    activeMenu === item
-                      ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
-                      : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    {getSidebarMenuIcon(item, organizationType) ? <span aria-hidden="true">{getSidebarMenuIcon(item, organizationType)}</span> : null}
-                    <span>{getSidebarMenuLabel(item, uiLabels)}</span>
-                  </span>
-                </button>
+                <div key={item}>
+                  {item === 'Student Roster' ? (
+                    <p className="mb-2 mt-3 px-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Academic
+                    </p>
+                  ) : null}
+                  {item === 'Finance Deck' ? (
+                    <p className="mb-2 mt-3 px-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Operations
+                    </p>
+                  ) : null}
+                  <button
+                    onClick={() => handleMenuClick(item)}
+                    className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium ${
+                      activeMenu === item
+                        ? 'bg-emerald-100 text-emerald-900 dark-nav-active'
+                        : 'text-slate-700 hover:bg-slate-100 dark-nav-hover dark:text-slate-200'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2.5">
+                      {renderSidebarMenuIcon(item)}
+                      <span>{getSidebarMenuLabel(item, uiLabels)}</span>
+                    </span>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -4380,7 +4469,13 @@ const getNameInitials = (value: string) =>
           ) : null}
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Operator</p>
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-4 w-4" aria-hidden="true">
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5 20a7 7 0 0 1 14 0" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Account
+            </p>
             <p className="mt-2 text-sm font-bold text-slate-900">{user?.fullName || '...'}</p>
             <p className="text-xs text-slate-600">{roleLabel(user?.role)}</p>
             <button onClick={logout} className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
@@ -4393,10 +4488,10 @@ const getNameInitials = (value: string) =>
           <header className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur sm:p-5">
               <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Live Operations</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Overview</p>
                   <h2 className="mt-2 text-2xl font-bold text-slate-900">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Monitor schedules, fee status, and communication events—all from one dashboard.
+                    Track classes, fees, and updates in one place.
                   </p>
                   <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-700">
                 Active: {activeTab === 'platform-control' ? 'Platform Control' : getSidebarMenuLabel(activeMenu, uiLabels)}
@@ -6579,16 +6674,24 @@ const getNameInitials = (value: string) =>
 
           {!loading && activeTab === 'studio' && activeMenu !== 'Finance Deck' ? (
             <div className="space-y-4">
-              <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
+              <article className={`ops-panel rounded-2xl border p-5 ${
+                useDarkStudioTheme
+                  ? 'border-white/15 bg-[#101827] shadow-[0_20px_40px_-28px_rgba(56,189,248,0.35)]'
+                  : 'border-slate-200 bg-white'
+              }`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-2xl font-bold text-slate-900">{studioShellCopy.title}</h3>
-                    <p className="text-sm text-slate-600">{studioShellCopy.description}</p>
+                    <h3 className={`text-2xl font-bold ${useDarkStudioTheme ? 'text-white' : 'text-slate-900'}`}>{studioShellCopy.title}</h3>
+                    <p className={`text-sm ${useDarkStudioTheme ? 'text-slate-300' : 'text-slate-600'}`}>{studioShellCopy.description}</p>
                   </div>
                   {canManageStudents ? (
                     <button
                       onClick={openClientComposerForCreate}
-                      className="ops-primary-button rounded-xl bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 hover:opacity-95"
+                      className={`ops-primary-button rounded-xl px-5 py-2.5 text-sm font-semibold text-white hover:opacity-95 ${
+                        useDarkStudioTheme
+                          ? 'bg-[linear-gradient(135deg,#4f46e5,#818cf8)] shadow-[0_18px_35px_-20px_rgba(129,140,248,0.85)]'
+                          : 'bg-[linear-gradient(135deg,#1d4ed8,#6366f1)] shadow-lg shadow-indigo-200'
+                      }`}
                     >
                       {studioShellCopy.cta}
                     </button>
@@ -6597,42 +6700,62 @@ const getNameInitials = (value: string) =>
               </article>
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <article className="ops-stat-card ops-stat-card-neutral rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Total Students</p>
-                  <p className="mt-1 text-3xl font-extrabold text-slate-900">{attendanceStudents.length}</p>
+                <article className={`ops-stat-card ops-stat-card-neutral rounded-2xl border p-4 ${
+                  useDarkStudioTheme ? 'border-cyan-400/20 bg-[#101b2d]' : 'border-slate-200 bg-white'
+                }`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkStudioTheme ? 'text-cyan-200/85' : 'text-slate-500'}`}>Total Students</p>
+                  <p className={`mt-1 text-3xl font-extrabold ${useDarkStudioTheme ? 'text-white' : 'text-slate-900'}`}>{attendanceStudents.length}</p>
                 </article>
-                <article className="ops-stat-card ops-stat-card-emerald rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-emerald-700">Active</p>
-                  <p className="mt-1 text-3xl font-extrabold text-emerald-800">
+                <article className={`ops-stat-card ops-stat-card-emerald rounded-2xl border p-4 ${
+                  useDarkStudioTheme ? 'border-emerald-300/20 bg-emerald-400/12' : 'border-emerald-200 bg-emerald-50'
+                }`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkStudioTheme ? 'text-emerald-200' : 'text-emerald-700'}`}>Active</p>
+                  <p className={`mt-1 text-3xl font-extrabold ${useDarkStudioTheme ? 'text-white' : 'text-emerald-800'}`}>
                     {attendanceStudents.filter((s) => s.status === 'active').length}
                   </p>
                 </article>
-                <article className="ops-stat-card ops-stat-card-indigo rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Paid</p>
-                  <p className="mt-1 text-3xl font-extrabold text-indigo-800">
+                <article className={`ops-stat-card ops-stat-card-indigo rounded-2xl border p-4 ${
+                  useDarkStudioTheme ? 'border-indigo-300/20 bg-indigo-400/12' : 'border-indigo-200 bg-indigo-50'
+                }`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkStudioTheme ? 'text-indigo-200' : 'text-indigo-700'}`}>Paid</p>
+                  <p className={`mt-1 text-3xl font-extrabold ${useDarkStudioTheme ? 'text-white' : 'text-indigo-800'}`}>
                     {attendanceStudents.filter((s) => s.feeStatus === 'paid').length}
                   </p>
                 </article>
-                <article className="ops-stat-card ops-stat-card-amber rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-amber-700">Pending</p>
-                  <p className="mt-1 text-3xl font-extrabold text-amber-800">
+                <article className={`ops-stat-card ops-stat-card-amber rounded-2xl border p-4 ${
+                  useDarkStudioTheme ? 'border-amber-300/20 bg-amber-400/12' : 'border-amber-200 bg-amber-50'
+                }`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkStudioTheme ? 'text-amber-200' : 'text-amber-700'}`}>Pending</p>
+                  <p className={`mt-1 text-3xl font-extrabold ${useDarkStudioTheme ? 'text-white' : 'text-amber-800'}`}>
                     {attendanceStudents.filter((s) => s.feeStatus === 'pending').length}
                   </p>
                 </article>
               </div>
 
-              <article className="ops-panel rounded-2xl border border-slate-200 bg-white p-5">
+              <article className={`ops-panel rounded-2xl border p-5 ${
+                useDarkStudioTheme
+                  ? 'border-white/15 bg-[#101827] shadow-[0_20px_40px_-28px_rgba(99,102,241,0.28)]'
+                  : 'border-slate-200 bg-white'
+              }`}>
                 <div className="grid gap-3 md:grid-cols-[1fr_170px_170px]">
                   <input
                     value={rosterSearchText}
                     onChange={(e) => setRosterSearchText(e.target.value)}
                     placeholder="Search name, parent, mobile, email, class, center"
-                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
+                    className={`ops-control rounded-xl border px-4 py-2.5 ${
+                      useDarkStudioTheme
+                        ? 'border-white/15 bg-[#172235] text-white placeholder:text-slate-400'
+                        : 'border-slate-300'
+                    }`}
                   />
                   <select
                     value={rosterStatusFilter}
                     onChange={(e) => setRosterStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
+                    className={`ops-control rounded-xl border px-4 py-2.5 ${
+                      useDarkStudioTheme
+                        ? 'border-white/15 bg-[#172235] text-white'
+                        : 'border-slate-300'
+                    }`}
                   >
                     <option value="all">All Status</option>
                     <option value="active">Active</option>
@@ -6641,7 +6764,11 @@ const getNameInitials = (value: string) =>
                   <select
                     value={rosterFeeFilter}
                     onChange={(e) => setRosterFeeFilter(e.target.value as 'all' | 'paid' | 'pending')}
-                    className="ops-control rounded-xl border border-slate-300 px-4 py-2.5"
+                    className={`ops-control rounded-xl border px-4 py-2.5 ${
+                      useDarkStudioTheme
+                        ? 'border-white/15 bg-[#172235] text-white'
+                        : 'border-slate-300'
+                    }`}
                   >
                     <option value="all">All Fee Status</option>
                     <option value="paid">Paid</option>
@@ -6649,10 +6776,12 @@ const getNameInitials = (value: string) =>
                   </select>
                 </div>
 
-                <div className="ops-table-shell mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <div className={`ops-table-shell mt-4 overflow-x-auto rounded-2xl border ${
+                  useDarkStudioTheme ? 'border-white/15 bg-[#0f1728]' : 'border-slate-200'
+                }`}>
                   <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50">
-                      <tr className="border-b border-slate-200 text-slate-600">
+                    <thead className={useDarkStudioTheme ? 'bg-[#162033]' : 'bg-slate-50'}>
+                      <tr className={`border-b ${useDarkStudioTheme ? 'border-white/10 text-slate-200' : 'border-slate-200 text-slate-600'}`}>
                         <th className="px-3 py-3 font-semibold">Student</th>
                         <th className="px-3 py-3 font-semibold">Parent</th>
                         <th className="px-3 py-3 font-semibold">Mobile</th>
@@ -6667,7 +6796,7 @@ const getNameInitials = (value: string) =>
                     <tbody>
                       {studioRosterRows.length === 0 ? (
                         <tr>
-                          <td className="px-3 py-6 text-center text-slate-500" colSpan={9}>
+                          <td className={`px-3 py-6 text-center ${useDarkStudioTheme ? 'text-slate-400' : 'text-slate-500'}`} colSpan={9}>
                             No students found.
                           </td>
                         </tr>
@@ -6676,20 +6805,36 @@ const getNameInitials = (value: string) =>
                         const batchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
                         const classInfo = academyClassRows.find((row) => row.id === batchId);
                         return (
-                          <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
-                            <td className="px-3 py-3 font-semibold text-slate-900">{student.name}</td>
-                            <td className="px-3 py-3 text-slate-700">{student.parentName}</td>
-                            <td className="px-3 py-3 text-slate-700">{student.parentPhone}</td>
-                            <td className="px-3 py-3 text-slate-700">{student.email || '-'}</td>
-                            <td className="px-3 py-3 text-slate-700">{classInfo?.title || '-'}</td>
-                            <td className="px-3 py-3 text-slate-700">{classInfo?.centerName || '-'}</td>
+                          <tr key={student._id} className={`registry-row border-b ${useDarkStudioTheme ? 'border-white/8 hover:bg-[#172235]' : 'border-slate-100 hover:bg-slate-50/70'}`}>
+                            <td className={`px-3 py-3 font-semibold ${useDarkStudioTheme ? 'text-white' : 'text-slate-900'}`}>{student.name}</td>
+                            <td className={`px-3 py-3 ${useDarkStudioTheme ? 'text-slate-200' : 'text-slate-700'}`}>{student.parentName}</td>
+                            <td className={`px-3 py-3 ${useDarkStudioTheme ? 'text-slate-200' : 'text-slate-700'}`}>{student.parentPhone}</td>
+                            <td className={`px-3 py-3 ${useDarkStudioTheme ? 'text-slate-200' : 'text-slate-700'}`}>{student.email || '-'}</td>
+                            <td className={`px-3 py-3 ${useDarkStudioTheme ? 'text-slate-200' : 'text-slate-700'}`}>{classInfo?.title || '-'}</td>
+                            <td className={`px-3 py-3 ${useDarkStudioTheme ? 'text-slate-200' : 'text-slate-700'}`}>{classInfo?.centerName || '-'}</td>
                             <td className="px-3 py-3">
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${student.feeStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                student.feeStatus === 'paid'
+                                  ? useDarkStudioTheme
+                                    ? 'bg-emerald-400/16 text-emerald-200 ring-1 ring-emerald-300/15'
+                                    : 'bg-emerald-100 text-emerald-700'
+                                  : useDarkStudioTheme
+                                    ? 'bg-amber-300/22 text-amber-100 ring-1 ring-amber-200/20'
+                                    : 'bg-amber-100 text-amber-700'
+                              }`}>
                                 {student.feeStatus}
                               </span>
                             </td>
                             <td className="px-3 py-3">
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${student.status === 'active' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-700'}`}>
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                student.status === 'active'
+                                  ? useDarkStudioTheme
+                                    ? 'bg-indigo-400/18 text-indigo-100 ring-1 ring-indigo-300/15'
+                                    : 'bg-indigo-100 text-indigo-700'
+                                  : useDarkStudioTheme
+                                    ? 'bg-slate-700 text-slate-200 ring-1 ring-white/10'
+                                    : 'bg-slate-200 text-slate-700'
+                              }`}>
                                 {student.status}
                               </span>
                             </td>
@@ -6697,12 +6842,16 @@ const getNameInitials = (value: string) =>
                               {canManageStudents ? (
                                 <button
                                   onClick={() => openClientComposerForEdit(student)}
-                                  className="registry-action-button rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  className={`registry-action-button rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                                    useDarkStudioTheme
+                                      ? 'border-indigo-300/20 bg-[#1a2640] text-indigo-100 hover:bg-[#223152] hover:border-indigo-300/35'
+                                      : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                                  }`}
                                 >
                                   Edit
                                 </button>
                               ) : (
-                                <span className="text-xs text-slate-500">View only</span>
+                                <span className={`text-xs ${useDarkStudioTheme ? 'text-slate-400' : 'text-slate-500'}`}>View only</span>
                               )}
                             </td>
                           </tr>
@@ -7788,3 +7937,4 @@ const getNameInitials = (value: string) =>
     </div>
   );
 }
+
