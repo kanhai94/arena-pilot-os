@@ -1095,7 +1095,7 @@ export default function DashboardPage() {
   }, [coachRole, isSchoolOrganization]);
   const academyProNav = useMemo<Array<{ id: AcademyProItem; label: string }>>(
     () => [
-      { id: 'plans', label: 'Plans' },
+      { id: 'plans', label: uiLabels.plan },
       { id: 'classes', label: uiLabels.batchPlural },
       { id: 'class-schedule', label: `${uiLabels.batch} Schedule` },
       { id: 'clients', label: 'Student Registry' },
@@ -1129,24 +1129,26 @@ export default function DashboardPage() {
   }, [classStartTime, classEndTime]);
   const classFormHasRequiredMissing =
     !classBatchName.trim() ||
-    !classSkill.trim() ||
-    !classCenter.trim() ||
-    classScheduleDays.length === 0 ||
-    !classStartTime.trim() ||
-    !classEndTime.trim();
+    (organizationType === 'SPORTS' &&
+      (!classSkill.trim() ||
+        !classCenter.trim() ||
+        classScheduleDays.length === 0 ||
+        !classStartTime.trim() ||
+        !classEndTime.trim()));
   const classRequiredFieldErrors = useMemo(() => {
     const errors: Record<string, string> = {};
-      if (!classBatchName.trim()) errors.batchName = `${uiLabels.batch} name is required.`;
-    if (!classSkill.trim()) errors.skill = 'Sport / Skill is required.';
-    if (!classCenter.trim()) errors.center = 'Center name is required.';
-    if (classScheduleDays.length === 0) errors.scheduleDays = 'Please select at least one schedule day.';
+    if (!classBatchName.trim()) errors.batchName = `${uiLabels.batch} name is required.`;
+    if (organizationType === 'SPORTS') {
+      if (!classSkill.trim()) errors.skill = 'Sport / Skill is required.';
+      if (!classCenter.trim()) errors.center = 'Center name is required.';
+      if (classScheduleDays.length === 0) errors.scheduleDays = 'Please select at least one schedule day.';
+    }
     return errors;
-  }, [classBatchName, classCenter, classScheduleDays, classSkill, uiLabels.batch]);
+  }, [classBatchName, classCenter, classScheduleDays, classSkill, organizationType, uiLabels.batch]);
   const canSubmitClassForm =
     !actionLoading &&
     !classFormHasRequiredMissing &&
-    classCapacityError.length === 0 &&
-    classTimeError.length === 0;
+    (organizationType === 'SCHOOL' || (classCapacityError.length === 0 && classTimeError.length === 0));
   const clientValidationErrors = useMemo(() => {
     const errors: Record<string, string> = {};
     const normalizedName = clientFullName.trim();
@@ -4589,7 +4591,7 @@ export default function DashboardPage() {
                   <p className="mt-1 text-xs text-amber-700">Needs follow-up</p>
                 </article>
                 <article className="growth-metric-card growth-metric-card-indigo rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">Active Batches</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-indigo-700">{`Active ${uiLabels.batchPlural}`}</p>
                   <p className="mt-1 text-3xl font-extrabold text-indigo-800">{activeBatchesCount}</p>
                   <p className="mt-1 text-xs text-indigo-700">Running groups</p>
                 </article>
@@ -4642,7 +4644,7 @@ export default function DashboardPage() {
                     <p className="mt-1 text-xs text-amber-700">Students with pending receivables</p>
                   </article>
                   <article className="growth-subcard growth-subcard-orange rounded-xl border border-orange-200 bg-orange-50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Full Capacity Batches</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">{`Full Capacity ${uiLabels.batchPlural}`}</p>
                     <p className="mt-1 text-2xl font-bold text-orange-800">{fullCapacityBatchRows.length}</p>
                     <p className="mt-1 text-xs text-orange-700">
                       {fullCapacityBatchRows.slice(0, 1).map((row) => row.title).join(', ') || 'Capacity under control'}
@@ -4710,7 +4712,7 @@ export default function DashboardPage() {
               <section className="growth-panel rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-slate-900">Academy Growth Pulse</h3>
-                  <span className="text-xs text-slate-500">Student, attendance, batch activity</span>
+                  <span className="text-xs text-slate-500">{`Student, attendance, ${uiLabels.batch.toLowerCase()} activity`}</span>
                 </div>
                 <div className="growth-chart-shell overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <svg viewBox="0 0 520 190" className="h-[190px] w-full min-w-[460px]">
@@ -4722,7 +4724,7 @@ export default function DashboardPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                   <span className="inline-flex items-center gap-1 text-indigo-700"><span className="h-2 w-2 rounded-full bg-indigo-600" />Student Growth</span>
                   <span className="inline-flex items-center gap-1 text-sky-700"><span className="h-2 w-2 rounded-full bg-sky-500" />Attendance Trend</span>
-                  <span className="inline-flex items-center gap-1 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />Batch Activity</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />{`${uiLabels.batch} Activity`}</span>
                 </div>
               </section>
             </div>
@@ -4759,10 +4761,12 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academy Pro</p>
                             <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-                              {feePlanEditingId ? 'Edit Plan' : 'Add New Plan'}
+                              {feePlanEditingId ? `Edit ${uiLabels.plan}` : `Add New ${uiLabels.plan}`}
                             </h3>
                             <p className="mt-2 text-lg text-slate-500">
-                              {feePlanEditingId ? 'Update plan details for Academy Pro catalog.' : 'Create plan for Academy Pro catalog.'}
+                              {feePlanEditingId
+                                ? `Update ${uiLabels.plan.toLowerCase()} details for Academy Pro catalog.`
+                                : `Create ${uiLabels.plan.toLowerCase()} for Academy Pro catalog.`}
                             </p>
                           </div>
                           <button
@@ -4772,7 +4776,7 @@ export default function DashboardPage() {
                             }}
                             className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
-                            Back to Plans
+                            {`Back to ${uiLabels.planPlural}`}
                           </button>
                         </div>
 
@@ -4781,7 +4785,7 @@ export default function DashboardPage() {
                             className="rounded-3xl border border-slate-300 px-6 py-5 text-2xl text-slate-900 placeholder:text-slate-400"
                             value={feePlanName}
                             onChange={(e) => setFeePlanName(e.target.value)}
-                            placeholder="Plan title"
+                            placeholder={`${uiLabels.plan} title`}
                           />
                           <div>
                             <div className="relative">
@@ -4853,7 +4857,9 @@ export default function DashboardPage() {
                                         },
                                         token
                                       ),
-                                feePlanEditingId ? 'Plan updated in Academy Pro' : 'Plan created in Academy Pro'
+                                feePlanEditingId
+                                  ? `${uiLabels.plan} updated in Academy Pro`
+                                  : `${uiLabels.plan} created in Academy Pro`
                               );
 
                               if (created) {
@@ -4863,7 +4869,7 @@ export default function DashboardPage() {
                             }}
                             className="rounded-2xl bg-indigo-600 px-8 py-3 text-2xl font-bold text-white hover:bg-indigo-500 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Processing...' : feePlanEditingId ? 'Update Plan' : 'Create Plan'}
+                            {actionLoading ? 'Processing...' : feePlanEditingId ? `Update ${uiLabels.plan}` : `Create ${uiLabels.plan}`}
                           </button>
                           <button
                             onClick={() => {
@@ -4880,9 +4886,9 @@ export default function DashboardPage() {
                   ) : (
                     <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-900">Academy Pro Plans</h3>
+                        <h3 className="text-lg font-bold text-slate-900">{`Academy Pro ${uiLabels.planPlural}`}</h3>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500">{feePlans.length} plans</span>
+                          <span className="text-xs text-slate-500">{`${feePlans.length} ${uiLabels.planPlural.toLowerCase()}`}</span>
                           {canManagePlansAndFinance ? (
                             <button
                               onClick={openPlanComposer}
@@ -4909,7 +4915,7 @@ export default function DashboardPage() {
                             {feePlans.length === 0 ? (
                               <tr>
                                 <td className="px-2 py-3 text-slate-500" colSpan={canManagePlansAndFinance ? 5 : 4}>
-                                  No plans yet. Click + to create your first plan.
+                                  {`No ${uiLabels.planPlural.toLowerCase()} yet. Click + to create your first ${uiLabels.plan.toLowerCase()}.`}
                                 </td>
                               </tr>
                             ) : null}
@@ -4969,7 +4975,9 @@ export default function DashboardPage() {
                               {classEditBatchId ? `Edit ${uiLabels.batch}` : `Add New ${uiLabels.batch}`}
                             </h3>
                             <p className="mt-2 text-lg text-slate-500">
-                              {`Create ${uiLabels.batch.toLowerCase()} with schedule, plan and optional ${uiLabels.coach.toLowerCase()} assignment.`}
+                              {organizationType === 'SCHOOL'
+                                ? `Create ${uiLabels.batch.toLowerCase()} with fee structure and optional ${uiLabels.coach.toLowerCase()} assignment.`
+                                : `Create ${uiLabels.batch.toLowerCase()} with schedule, plan and optional ${uiLabels.coach.toLowerCase()} assignment.`}
                             </p>
                           </div>
                           <button
@@ -5271,7 +5279,7 @@ export default function DashboardPage() {
                   ) : (
                     <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-lg font-bold text-slate-900">Class Registry</h3>
+                        <h3 className="text-lg font-bold text-slate-900">{`${uiLabels.batch} Registry`}</h3>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{filteredClassRows.length} classes</span>
                           {canManageBatches ? (
@@ -5313,12 +5321,12 @@ export default function DashboardPage() {
                         <table className="min-w-full text-left text-sm">
                           <thead>
                             <tr className="border-b border-slate-200 text-slate-500">
-                              <th className="px-2 py-2 font-semibold">Title</th>
-                              <th className="px-2 py-2 font-semibold">Center</th>
-                              <th className="px-2 py-2 font-semibold">Skill</th>
+                              <th className="px-2 py-2 font-semibold">{uiLabels.batch}</th>
+                              {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Center</th> : null}
+                              {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Skill</th> : null}
                               <th className="px-2 py-2 font-semibold">{uiLabels.coach}</th>
                               <th className="px-2 py-2 font-semibold">Plan</th>
-                              <th className="px-2 py-2 font-semibold">Timing</th>
+                              {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Timing</th> : null}
                               <th className="px-2 py-2 font-semibold">Status</th>
                               <th className="px-2 py-2 font-semibold">Actions</th>
                             </tr>
@@ -5334,8 +5342,8 @@ export default function DashboardPage() {
                             {filteredClassRows.map((row) => (
                               <tr key={row.id} className="border-b border-slate-100">
                                 <td className="px-2 py-2 font-semibold text-slate-900">{row.title}</td>
-                                <td className="px-2 py-2 text-slate-700">{row.centerName}</td>
-                                <td className="px-2 py-2 text-slate-700">{row.skill}</td>
+                                {organizationType === 'SPORTS' ? <td className="px-2 py-2 text-slate-700">{row.centerName}</td> : null}
+                                {organizationType === 'SPORTS' ? <td className="px-2 py-2 text-slate-700">{row.skill}</td> : null}
                                 <td className="px-2 py-2 text-slate-700">
                                   {canManageBatches ? (
                                     <select
@@ -5355,7 +5363,7 @@ export default function DashboardPage() {
                                   )}
                                 </td>
                                 <td className="px-2 py-2 text-slate-700">{row.planName}</td>
-                                <td className="px-2 py-2 text-slate-700">{row.timing}</td>
+                                {organizationType === 'SPORTS' ? <td className="px-2 py-2 text-slate-700">{row.timing}</td> : null}
                                 <td className="px-2 py-2">
                                   {canManageBatches ? (
                                     <button
