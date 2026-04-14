@@ -6316,7 +6316,7 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'coach' ? (
-                <article className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
+                <article className="relative rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Access Directory</h3>
                     <div className="flex items-center gap-2">
