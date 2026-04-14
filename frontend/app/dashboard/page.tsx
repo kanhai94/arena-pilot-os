@@ -4975,9 +4975,7 @@ export default function DashboardPage() {
                               {classEditBatchId ? `Edit ${uiLabels.batch}` : `Add New ${uiLabels.batch}`}
                             </h3>
                             <p className="mt-2 text-lg text-slate-500">
-                              {organizationType === 'SCHOOL'
-                                ? `Create ${uiLabels.batch.toLowerCase()} with fee structure and optional ${uiLabels.coach.toLowerCase()} assignment.`
-                                : `Create ${uiLabels.batch.toLowerCase()} with schedule, plan and optional ${uiLabels.coach.toLowerCase()} assignment.`}
+                              {`Create ${uiLabels.batch.toLowerCase()} with schedule, plan and optional ${uiLabels.coach.toLowerCase()} assignment.`}
                             </p>
                           </div>
                           <button
@@ -6383,94 +6381,134 @@ export default function DashboardPage() {
                   </div>
 
                   {showCoachComposer ? (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/35 p-4">
-                      <div className="mt-8 mb-6 w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h4 className="text-lg font-bold text-slate-900">Add Access User</h4>
+                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/45 px-4 py-6 backdrop-blur-sm">
+                      <div className="mt-6 mb-8 w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.45)] sm:p-7">
+                        <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                          <div>
+                            <h4 className="text-2xl font-bold text-slate-900">Add Access User</h4>
+                            <p className="mt-1 text-sm text-slate-500">
+                              Create secure dashboard access with the right role, title, and temporary password.
+                            </p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => setShowCoachComposer(false)}
-                            className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
                           >
                             Close
                           </button>
                         </div>
-                        <div className="grid gap-3">
-                          <input
-                            value={coachName}
-                            onChange={(e) => setCoachName(e.target.value)}
-                            placeholder="Full name"
-                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
-                          />
+                        <div className="grid gap-6">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                              Full name
+                              <input
+                                value={coachName}
+                                onChange={(e) => setCoachName(e.target.value)}
+                                placeholder="Full name"
+                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
+                              />
+                            </label>
+                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                              Email
+                              <input
+                                value={coachEmail}
+                                onChange={(e) => setCoachEmail(e.target.value)}
+                                placeholder="Email"
+                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
+                              />
+                            </label>
+                          </div>
                           {coachSubmitAttempted && coachValidationErrors.name ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.name}</p>
                           ) : null}
-                          <input
-                            value={coachEmail}
-                            onChange={(e) => setCoachEmail(e.target.value)}
-                            placeholder="Email"
-                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
-                          />
                           {coachSubmitAttempted && coachValidationErrors.email ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.email}</p>
                           ) : null}
-                          <select
-                            value={coachRole}
-                            onChange={(e) => setCoachRole(e.target.value as TeamRole)}
-                            className="rounded-xl border border-slate-300 px-3 py-2"
-                          >
-                            {accessRoleOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            value={coachTitle}
-                            onChange={(e) => setCoachTitle(e.target.value)}
-                            placeholder="Title"
-                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.title ? 'border-rose-400' : 'border-slate-300'}`}
-                          />
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                              Role
+                              <select
+                                value={coachRole}
+                                onChange={(e) => setCoachRole(e.target.value as TeamRole)}
+                                className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                              >
+                                {accessRoleOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                              Title
+                              <input
+                                value={coachTitle}
+                                onChange={(e) => setCoachTitle(e.target.value)}
+                                placeholder="Title"
+                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.title ? 'border-rose-400' : 'border-slate-300'}`}
+                              />
+                            </label>
+                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                              Designation
+                              <input
+                                value={coachDesignation}
+                                onChange={(e) => setCoachDesignation(e.target.value)}
+                                placeholder="Designation"
+                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.designation ? 'border-rose-400' : 'border-slate-300'}`}
+                              />
+                            </label>
+                          </div>
                           {coachSubmitAttempted && coachValidationErrors.title ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.title}</p>
                           ) : null}
-                          <input
-                            value={coachDesignation}
-                            onChange={(e) => setCoachDesignation(e.target.value)}
-                            placeholder="Designation"
-                            className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.designation ? 'border-rose-400' : 'border-slate-300'}`}
-                          />
                           {coachSubmitAttempted && coachValidationErrors.designation ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.designation}</p>
                           ) : null}
-                          <div className="grid grid-cols-[1fr_auto] gap-2">
-                            <input
-                              value={coachPassword}
-                              onChange={(e) => setCoachPassword(e.target.value)}
-                              placeholder="Temporary login password"
-                              className={`rounded-xl border px-3 py-2 ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setCoachPassword(generateAccessPassword())}
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                            >
-                              Regenerate
-                            </button>
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                                Temporary login password
+                                <input
+                                  value={coachPassword}
+                                  onChange={(e) => setCoachPassword(e.target.value)}
+                                  placeholder="Temporary login password"
+                                  className={`rounded-2xl border bg-white px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setCoachPassword(generateAccessPassword())}
+                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                              >
+                                Regenerate
+                              </button>
+                            </div>
                           </div>
                           {coachSubmitAttempted && coachValidationErrors.password ? (
                             <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
                           ) : null}
-                          <button
-                            onClick={submitCoach}
-                            disabled={actionLoading}
-                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
-                          >
-                            {actionLoading ? 'Saving...' : 'Add'}
-                          </button>
                           {coachServerError ? (
-                            <p className="-mt-1 text-xs font-medium text-rose-600">{coachServerError}</p>
+                            <p className="-mt-1 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                              {coachServerError}
+                            </p>
                           ) : null}
+                          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
+                            <button
+                              type="button"
+                              onClick={() => setShowCoachComposer(false)}
+                              className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={submitCoach}
+                              disabled={actionLoading}
+                              className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
+                            >
+                              {actionLoading ? 'Saving...' : 'Add Access User'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
