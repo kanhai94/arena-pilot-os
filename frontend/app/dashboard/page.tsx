@@ -6534,7 +6534,7 @@ const getNameInitials = (value: string) =>
                   </div>
 
                   {showCoachComposer ? (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/45 px-4 py-6 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 px-4 py-6">
                       <div className="mt-6 mb-8 w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.45)] sm:p-7">
                         <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
                           <div>
