@@ -106,6 +106,7 @@ export const adminRepository = {
             id: { $toString: '$_id' },
             academyName: '$name',
             ownerName: 1,
+            organizationType: { $ifNull: ['$organizationType', 'SPORTS'] },
             planName: { $ifNull: ['$planName', 'Unassigned'] },
             workspaceId: { $ifNull: ['$academyCode', null] },
             academyCode: { $ifNull: ['$academyCode', null] },

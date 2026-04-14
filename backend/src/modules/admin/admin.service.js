@@ -31,6 +31,7 @@ export const createAdminService = (repository) => {
     id: String(tenantDoc._id),
     academyName: tenantDoc.name,
     ownerName: tenantDoc.ownerName,
+    organizationType: tenantDoc.organizationType || 'SPORTS',
     planName: tenantDoc.planName || 'Unassigned',
     workspaceId: tenantDoc.academyCode || null,
     academyCode: tenantDoc.academyCode || null,
@@ -208,6 +209,7 @@ export const createAdminService = (repository) => {
       const tenant = await repository.createTenant({
         name: payload.academyName,
         ownerName: payload.ownerName,
+        organizationType: payload.organizationType || 'SPORTS',
         academyCode,
         email: (payload.billingEmail || `tenant+${academyCode}@arenapilot.local`).toLowerCase(),
         billingEmail: payload.billingEmail || null,
@@ -233,6 +235,7 @@ export const createAdminService = (repository) => {
       const updated = await repository.updateTenantById(tenantId, {
         name: payload.academyName,
         ownerName: payload.ownerName,
+        organizationType: payload.organizationType || 'SPORTS',
         billingEmail: payload.billingEmail || null,
         subscriptionStatus: payload.subscriptionStatus,
         tenantStatus: payload.tenantStatus,

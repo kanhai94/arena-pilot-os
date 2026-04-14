@@ -230,6 +230,7 @@ type PlatformTenant = {
   id?: string;
   academyName: string;
   ownerName: string;
+  organizationType?: OrganizationType;
   planName: string;
   workspaceId?: string | null;
   academyCode?: string | null;
@@ -487,6 +488,8 @@ const roleLabel = (role?: string | null) => {
   if (normalized === 'STAFF') return 'Staff';
   return role || '';
 };
+
+const generateAccessPassword = () => `Access@${Math.random().toString(36).slice(-6)}A1`;
 const hour12Options = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
 const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
 
@@ -916,7 +919,7 @@ export default function DashboardPage() {
   const [coachTitle, setCoachTitle] = useState('');
   const [coachDesignation, setCoachDesignation] = useState('');
   const [coachRole, setCoachRole] = useState<TeamRole>('COACH');
-  const [coachPassword, setCoachPassword] = useState(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+  const [coachPassword, setCoachPassword] = useState(generateAccessPassword());
   const [coachSubmitAttempted, setCoachSubmitAttempted] = useState(false);
   const [coachServerError, setCoachServerError] = useState('');
 
@@ -953,6 +956,7 @@ export default function DashboardPage() {
   const [editingTenantId, setEditingTenantId] = useState('');
   const [tenantAcademyName, setTenantAcademyName] = useState('');
   const [tenantOwnerName, setTenantOwnerName] = useState('');
+  const [tenantOrganizationType, setTenantOrganizationType] = useState<OrganizationType>('SPORTS');
   const [tenantPlanName, setTenantPlanName] = useState('Starter');
   const [tenantBillingEmail, setTenantBillingEmail] = useState('');
   const [tenantSubscriptionStatus, setTenantSubscriptionStatus] = useState('trial');
@@ -1069,6 +1073,26 @@ export default function DashboardPage() {
   const canManageIntegrations = isAdmin;
   const uiLabels = useMemo(() => getUILabels(organizationType), [organizationType]);
   const leftMenu = useMemo(() => getSidebarMenuItems(organizationType), [organizationType]);
+  const isSchoolOrganization = organizationType === 'SCHOOL';
+  const accessRoleOptions = useMemo(
+    () =>
+      isSchoolOrganization
+        ? [
+            { value: 'ADMIN' as TeamRole, label: 'ADMIN' },
+            { value: 'STAFF' as TeamRole, label: 'TEACHER' }
+          ]
+        : [
+            { value: 'ADMIN' as TeamRole, label: 'ADMIN' },
+            { value: 'COACH' as TeamRole, label: 'COACH' },
+            { value: 'STAFF' as TeamRole, label: 'STAFF' }
+          ],
+    [isSchoolOrganization]
+  );
+  useEffect(() => {
+    if (isSchoolOrganization && coachRole === 'COACH') {
+      setCoachRole('STAFF');
+    }
+  }, [coachRole, isSchoolOrganization]);
   const academyProNav = useMemo<Array<{ id: AcademyProItem; label: string }>>(
     () => [
       { id: 'plans', label: 'Plans' },
@@ -2159,6 +2183,10 @@ export default function DashboardPage() {
     return plan ? `${plan.name} - ${formatCurrency(plan.amount)}` : fallback;
   };
   const getClassSelectLabel = (classId: string) => {
+    if (organizationType === 'SCHOOL') {
+      const schoolClass = schoolClasses.find((item) => item._id === classId);
+      return schoolClass ? `${schoolClass.name}-${schoolClass.section}` : 'Select class';
+    }
     const row = academyClassRows.find((item) => item.id === classId);
     return row ? row.title : 'Select class';
   };
@@ -3040,6 +3068,7 @@ export default function DashboardPage() {
     setEditingTenantId('');
     setTenantAcademyName('');
     setTenantOwnerName('');
+    setTenantOrganizationType('SPORTS');
     setTenantPlanName('Starter');
     setTenantBillingEmail('');
     setTenantSubscriptionStatus('trial');
@@ -3054,6 +3083,7 @@ export default function DashboardPage() {
     setEditingTenantId(tenant.id || '');
     setTenantAcademyName(tenant.academyName || '');
     setTenantOwnerName(tenant.ownerName || '');
+    setTenantOrganizationType(tenant.organizationType || 'SPORTS');
     setTenantPlanName(tenant.planName || 'Starter');
     setTenantBillingEmail(tenant.billingEmail || '');
     setTenantSubscriptionStatus(tenant.subscriptionStatus || 'active');
@@ -3070,6 +3100,7 @@ export default function DashboardPage() {
     const payload = {
       academyName: tenantAcademyName.trim(),
       ownerName: tenantOwnerName.trim(),
+      organizationType: tenantOrganizationType,
       planName: tenantPlanName,
       billingEmail: tenantBillingEmail.trim() || null,
       subscriptionStatus: tenantSubscriptionStatus,
@@ -3446,8 +3477,8 @@ export default function DashboardPage() {
     setCoachEmail('');
     setCoachTitle('');
     setCoachDesignation('');
-    setCoachRole('COACH');
-    setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+    setCoachRole(isSchoolOrganization ? 'STAFF' : 'COACH');
+    setCoachPassword(generateAccessPassword());
     setCoachSubmitAttempted(false);
     setCoachServerError('');
     setActiveMenu('Access Control');
@@ -3683,8 +3714,9 @@ export default function DashboardPage() {
 
   const openClientComposerForEdit = (student: Student) => {
     const meta = clientMetaByStudentId[student._id] || {};
-    const batchId =
-      typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
+    const linkedBatchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
+    const linkedClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+    const resolvedStudentClassId = organizationType === 'SCHOOL' ? linkedClassId : linkedBatchId;
 
     setClientEditingId(student._id);
     setClientFullName(student.name || '');
@@ -3704,7 +3736,7 @@ export default function DashboardPage() {
     setSubscriptionLevel(meta.subscriptionLevel || '');
     setSubscriptionType(meta.subscriptionType || 'subscription');
     setSubscriptionPlanId(meta.subscriptionPlanId || feePlans[0]?._id || '');
-    setSubscriptionClassId(meta.subscriptionClassId || batchId || '');
+    setSubscriptionClassId(meta.subscriptionClassId || resolvedStudentClassId || '');
     setSubscriptionStartDate(meta.subscriptionStartDate || new Date().toISOString().slice(0, 10));
     setSubscriptionEndDate(meta.subscriptionEndDate || '');
     setSubscriptionAutoRenew(Boolean(meta.subscriptionAutoRenew));
@@ -3754,8 +3786,16 @@ export default function DashboardPage() {
           parentName: clientFullName.trim(),
           parentPhone: normalizedPhone,
           ...(normalizedEmail ? { email: normalizedEmail } : {}),
-          batchId: subscriptionClassId || null,
-          feeStatus: Number(invoiceAmount || '0') > 0 ? 'paid' : 'pending'
+          ...(organizationType === 'SCHOOL'
+            ? {
+                classId: subscriptionClassId || null,
+                batchId: null,
+                rollNumber: clientRollNo.trim() || null
+              }
+            : {
+                batchId: subscriptionClassId || null
+              }),
+          feeStatus: Number(invoiceAmount || '0') > 0 ? 'pending' : 'paid'
         };
 
         const studentResult = clientEditingId
@@ -3822,6 +3862,7 @@ export default function DashboardPage() {
     }
     setActionLoading(true);
     setToast('');
+    const submittedAccessRole = isSchoolOrganization && coachRole === 'COACH' ? 'STAFF' : coachRole;
     try {
       const data = await apiPostWithAuth(
         '/team-members',
@@ -3830,21 +3871,21 @@ export default function DashboardPage() {
           email: coachEmail.trim().toLowerCase(),
           title: coachTitle.trim(),
           designation: coachDesignation.trim(),
-          role: coachRole,
+          role: submittedAccessRole,
           password: coachPassword
         },
         token
       );
       setDebugOutput(JSON.stringify(data, null, 2));
-      setToast(`${coachRole} user added successfully`);
+      setToast('Access user added successfully');
       await loadDashboardData(token);
       setShowCoachComposer(false);
       setCoachName('');
       setCoachEmail('');
       setCoachTitle('');
       setCoachDesignation('');
-      setCoachRole('COACH');
-      setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`);
+      setCoachRole(isSchoolOrganization ? 'STAFF' : 'COACH');
+      setCoachPassword(generateAccessPassword());
       setCoachSubmitAttempted(false);
       setCoachServerError('');
     } catch (err) {
@@ -3885,7 +3926,10 @@ export default function DashboardPage() {
     const rows = students.map((student) => {
       const meta = clientMetaByStudentId[student._id];
       const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
-      const selectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
+      const selectedClass =
+        organizationType === 'SCHOOL'
+          ? schoolClasses.find((item) => item._id === meta?.subscriptionClassId)
+          : academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
       const invoiceAmountNumber = Number(meta?.invoiceAmount || 0);
       const receivable = Math.max(
         0,
@@ -3898,7 +3942,11 @@ export default function DashboardPage() {
         student.email || '',
         student.parentPhone || '',
         selectedPlan?.name || '',
-        selectedClass?.title || '',
+        organizationType === 'SCHOOL'
+          ? selectedClass
+            ? `${selectedClass.name}-${selectedClass.section}`
+            : ''
+          : selectedClass?.title || '',
         0,
         0,
         meta?.rollNo || '',
@@ -4320,7 +4368,7 @@ export default function DashboardPage() {
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Live Operations</p>
                   <h2 className="mt-2 text-2xl font-bold text-slate-900">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Monitor schedule flow, fee pressure and communication events from one board.
+                    Monitor schedules, fee status, and communication events—all from one dashboard.
                   </p>
                   <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-700">
                 Active: {activeTab === 'platform-control' ? 'Platform Control' : getSidebarMenuLabel(activeMenu, uiLabels)}
@@ -5870,11 +5918,17 @@ export default function DashboardPage() {
                                   className={composerLongSelectClassName}
                                 >
                                   <option value="">Select class</option>
-                                  {academyClassRows.map((row) => (
-                                    <option key={row.id} value={row.id}>
-                                      {compactSelectLabel(row.title, 16)}
-                                    </option>
-                                  ))}
+                                  {organizationType === 'SCHOOL'
+                                    ? schoolClasses.map((schoolClass) => (
+                                        <option key={schoolClass._id} value={schoolClass._id}>
+                                          {compactSelectLabel(`${schoolClass.name}-${schoolClass.section}`, 16)}
+                                        </option>
+                                      ))
+                                    : academyClassRows.map((row) => (
+                                        <option key={row.id} value={row.id}>
+                                          {compactSelectLabel(row.title, 16)}
+                                        </option>
+                                      ))}
                                 </select>
                                 {subscriptionClassId ? (
                                   <p className="text-xs font-medium text-slate-500">
@@ -6014,7 +6068,10 @@ export default function DashboardPage() {
                             {students.map((student) => {
                               const meta = clientMetaByStudentId[student._id];
                               const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
-                              const selectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
+                              const selectedClass =
+                                organizationType === 'SCHOOL'
+                                  ? schoolClasses.find((item) => item._id === meta?.subscriptionClassId)
+                                  : academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
                               const receivable = Math.max(0, Number(meta?.invoiceAmount || 0) - (student.feeStatus === 'paid' ? Number(meta?.invoiceAmount || 0) : 0));
                               return (
                                 <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
@@ -6054,7 +6111,13 @@ export default function DashboardPage() {
                                       })()}
                                     </p>
                                   </td>
-                                  <td className="px-2 py-2 text-slate-700">{selectedClass?.title || '-'}</td>
+                                  <td className="px-2 py-2 text-slate-700">
+                                    {organizationType === 'SCHOOL'
+                                      ? selectedClass
+                                        ? `${selectedClass.name}-${selectedClass.section}`
+                                        : '-'
+                                      : selectedClass?.title || '-'}
+                                  </td>
                                   <td className="px-2 py-2 text-slate-700">
                                     <span className="font-semibold text-emerald-600">0</span>
                                     <span className="mx-1 text-slate-400">|</span>
@@ -6244,7 +6307,7 @@ export default function DashboardPage() {
               ) : null}
 
               {activeAcademyPro === 'coach' ? (
-                <article className="relative rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
+                <article className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Access Directory</h3>
                     <div className="flex items-center gap-2">
@@ -6252,7 +6315,7 @@ export default function DashboardPage() {
                       {canManageUsers ? (
                         <button
                           onClick={openCoachComposer}
-                          className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-lg font-semibold leading-none text-white transition-colors hover:bg-indigo-500"
                           aria-label="Add new access user"
                         >
                           +
@@ -6277,7 +6340,9 @@ export default function DashboardPage() {
                         {teamMembers.length === 0 ? (
                           <tr>
                             <td className="px-2 py-3 text-slate-500" colSpan={canDeleteClassAndAccess ? 7 : 6}>
-                              {`No access users yet. Click + to add ADMIN, ${uiLabels.coach.toUpperCase()}, or STAFF.`}
+                              {isSchoolOrganization
+                                ? 'No access users yet. Click + to add ADMIN or TEACHER.'
+                                : `No access users yet. Click + to add ADMIN, ${uiLabels.coach.toUpperCase()}, or STAFF.`}
                             </td>
                           </tr>
                         ) : null}
@@ -6285,7 +6350,11 @@ export default function DashboardPage() {
                           <tr key={member.id} className="border-b border-slate-100">
                             <td className="px-2 py-2 font-semibold text-slate-900">{member.fullName}</td>
                             <td className="px-2 py-2 text-slate-700">{member.email}</td>
-                            <td className="px-2 py-2 text-slate-700">{normalizeRole(member.role) || member.role}</td>
+                            <td className="px-2 py-2 text-slate-700">
+                              {isSchoolOrganization && normalizeRole(member.role) === 'STAFF'
+                                ? 'Teacher'
+                                : normalizeRole(member.role) || member.role}
+                            </td>
                             <td className="px-2 py-2 text-slate-700">{member.title || '-'}</td>
                             <td className="px-2 py-2 text-slate-700">{member.designation || '-'}</td>
                             <td className="px-2 py-2">
@@ -6310,14 +6379,14 @@ export default function DashboardPage() {
                   </div>
 
                   {showCoachComposer ? (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4">
-                      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/35 p-4">
+                      <div className="mt-8 mb-6 w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
                         <div className="mb-3 flex items-center justify-between">
                           <h4 className="text-lg font-bold text-slate-900">Add Access User</h4>
                           <button
                             type="button"
                             onClick={() => setShowCoachComposer(false)}
-                            className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                            className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                           >
                             Close
                           </button>
@@ -6346,9 +6415,11 @@ export default function DashboardPage() {
                             onChange={(e) => setCoachRole(e.target.value as TeamRole)}
                             className="rounded-xl border border-slate-300 px-3 py-2"
                           >
-                            <option value="ADMIN">ADMIN</option>
-                            <option value="COACH">COACH</option>
-                            <option value="STAFF">STAFF</option>
+                            {accessRoleOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                           <input
                             value={coachTitle}
@@ -6377,8 +6448,8 @@ export default function DashboardPage() {
                             />
                             <button
                               type="button"
-                              onClick={() => setCoachPassword(`Coach@${Math.random().toString(36).slice(-6)}A1`)}
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                              onClick={() => setCoachPassword(generateAccessPassword())}
+                              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                             >
                               Regenerate
                             </button>
@@ -6389,9 +6460,9 @@ export default function DashboardPage() {
                           <button
                             onClick={submitCoach}
                             disabled={actionLoading}
-                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Saving...' : `Add ${coachRole}`}
+                            {actionLoading ? 'Saving...' : 'Add'}
                           </button>
                           {coachServerError ? (
                             <p className="-mt-1 text-xs font-medium text-rose-600">{coachServerError}</p>
@@ -6915,6 +6986,14 @@ export default function DashboardPage() {
                           placeholder="Owner name"
                           className="ops-control rounded-xl border border-slate-300 px-3 py-2"
                         />
+                        <select
+                          value={tenantOrganizationType}
+                          onChange={(e) => setTenantOrganizationType(e.target.value as OrganizationType)}
+                          className="ops-control rounded-xl border border-slate-300 px-3 py-2"
+                        >
+                          <option value="SPORTS">Sports</option>
+                          <option value="SCHOOL">School</option>
+                        </select>
                         <select
                           value={tenantPlanName}
                           onChange={(e) => setTenantPlanName(e.target.value)}

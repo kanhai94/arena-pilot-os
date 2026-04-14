@@ -5,7 +5,7 @@ const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 
 export const createClassSchema = z
   .object({
-    name: z.string().min(2).max(120),
+    name: z.string().min(1).max(120),
     section: z.string().min(1).max(50)
   })
   .strict();

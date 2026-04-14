@@ -18,6 +18,7 @@ export const createOrUpdateTenantSchema = z
   .object({
     academyName: z.string().trim().min(2).max(120),
     ownerName: z.string().trim().min(2).max(120),
+    organizationType: z.enum(['SPORTS', 'SCHOOL']).default('SPORTS'),
     planName: z.string().trim().min(2).max(80).default('Starter'),
     billingEmail: z.string().email().nullable().optional(),
     subscriptionStatus: z.enum(['trial', 'active', 'expired', 'suspended', 'cancelled']).default('trial'),
