@@ -216,7 +216,7 @@ export function CurriculumPage({
             <button
               type="button"
               onClick={openAddModal}
-              className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
+              className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-indigo-500 dark:text-white dark:hover:bg-indigo-400 dark:shadow-[0_0_0_1px_rgba(99,102,241,0.28)]"
             >
               + Add Subject
             </button>
@@ -450,9 +450,18 @@ export function CurriculumPage({
                 type="button"
                 onClick={submitSubject}
                 disabled={saving}
-                className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
+                className="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-500 dark:text-white dark:hover:bg-indigo-400 dark:shadow-[0_0_0_1px_rgba(99,102,241,0.28)]"
               >
-                {saving ? 'Saving...' : editingSubjectId ? 'Update Subject' : 'Create Subject'}
+                {saving ? (
+                  <span className="inline-flex items-center gap-2 text-sm font-medium text-white/90">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                    {editingSubjectId ? 'Saving changes...' : 'Adding subject...'}
+                  </span>
+                ) : editingSubjectId ? (
+                  'Update Subject'
+                ) : (
+                  'Add Subject'
+                )}
               </button>
             </div>
           </div>

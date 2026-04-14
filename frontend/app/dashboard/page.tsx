@@ -1165,8 +1165,8 @@ export default function DashboardPage() {
     }
     if (!normalizedMobile) {
       errors.mobile = 'Mobile number is required.';
-    } else if (!/^\d{7,15}$/.test(normalizedMobile)) {
-      errors.mobile = 'Enter a valid mobile number.';
+    } else if (!/^\d{10}$/.test(normalizedMobile)) {
+      errors.mobile = 'Mobile number must be exactly 10 digits.';
     }
     if (normalizedInvoiceAmount && !/^\d+(\.\d{1,2})?$/.test(normalizedInvoiceAmount)) {
       errors.invoiceAmount = 'Enter valid amount (up to 2 decimals).';
@@ -1188,6 +1188,7 @@ export default function DashboardPage() {
     subscriptionStartDate
   ]);
   const canSubmitClientForm = Object.keys(clientValidationErrors).length === 0;
+  const showClientMobileError = clientSubmitAttempted || clientMobile.length > 0;
   const coachValidationErrors = useMemo(() => {
     const errors: Record<string, string> = {};
     const normalizedCoachName = coachName.trim();
@@ -2416,10 +2417,28 @@ export default function DashboardPage() {
     teacherId?: string | null;
     status: 'active' | 'inactive';
   }) => {
-    return runCurriculumAction(
-      () => apiPostWithAuth('/subjects', payload, token),
-      'Subject added to curriculum'
-    );
+    if (!user) return false;
+
+    setActionLoading(true);
+    setToast('');
+
+    try {
+      const createdSubject = await apiPostWithAuth<CurriculumSubject>('/subjects', payload, token);
+      setDebugOutput(JSON.stringify(createdSubject, null, 2));
+      setCurriculumSubjects((current) => [createdSubject, ...current.filter((item) => item._id !== createdSubject._id)]);
+      setToast('Subject added successfully');
+      void loadDashboardData(token);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Failed to add subject. Please try again.';
+      setDebugOutput(JSON.stringify({ error: message }, null, 2));
+      setToast(message);
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const updateCurriculumSubject = async (
@@ -3669,7 +3688,16 @@ export default function DashboardPage() {
     }
   };
 
-  const generateInvoiceNo = () => `INV-${Date.now().toString().slice(-6)}`;
+const generateInvoiceNo = () => `INV-${Date.now().toString().slice(-6)}`;
+
+const getNameInitials = (value: string) =>
+  value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'ST';
 
   const resetClientComposer = () => {
     setClientEditingId(null);
@@ -4760,7 +4788,7 @@ export default function DashboardPage() {
                         <div className="mb-5 flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Academy Pro</p>
-                            <h3 className="mt-1 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+                            <h3 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                               {feePlanEditingId ? `Edit ${uiLabels.plan}` : `Add New ${uiLabels.plan}`}
                             </h3>
                             <p className="mt-2 text-lg text-slate-500">
@@ -5707,12 +5735,12 @@ export default function DashboardPage() {
                           <section className="student-profile-card rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 dark:border-white/20 dark:bg-black dark:from-black dark:to-black">
                             <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Student Profile</h4>
                             <div className="mt-4 grid gap-4 lg:grid-cols-[200px_1fr] lg:items-start">
-                              <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white p-4 lg:mx-0 dark:border-white/25 dark:bg-black dark:from-black dark:to-black">
-                                <label className="group flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-indigo-200 bg-white shadow-sm dark:border-white/30 dark:bg-black">
+                              <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white p-4 lg:mx-0 dark:border-slate-700 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
+                                <label className="group flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-solid border-indigo-200 bg-white shadow-sm transition-all duration-200 hover:border-indigo-300 hover:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] focus-within:border-indigo-400 focus-within:shadow-[0_0_0_4px_rgba(99,102,241,0.14)] dark:border-slate-700 dark:bg-slate-800 dark:hover:border-indigo-400 dark:hover:shadow-[0_0_0_4px_rgba(99,102,241,0.14)] dark:focus-within:border-indigo-400 dark:focus-within:shadow-[0_0_0_4px_rgba(99,102,241,0.2)]">
                                   {clientPhotoDataUrl ? (
                                     <img src={clientPhotoDataUrl} alt="Client" className="h-full w-full object-cover" />
                                   ) : (
-                                    <span className="text-xs font-semibold text-slate-500 group-hover:text-indigo-700 dark:text-slate-300 dark:group-hover:text-emerald-200">
+                                    <span className="text-xs font-semibold text-indigo-600 transition-colors duration-200 group-hover:text-indigo-500 dark:text-indigo-500 dark:group-hover:text-indigo-400">
                                       Upload Photo
                                     </span>
                                   )}
@@ -5725,7 +5753,7 @@ export default function DashboardPage() {
                                 </label>
                                 <div className="text-center">
                                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-100">Student Photo</p>
-                                  <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-300">
+                                  <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
                                     {clientPhotoFileName || 'JPG/PNG up to 5MB'}
                                   </p>
                                 </div>
@@ -5801,12 +5829,21 @@ export default function DashboardPage() {
                                     </select>
                                     <input
                                       value={clientMobile}
-                                      onChange={(e) => setClientMobile(e.target.value.replace(/\D/g, '').slice(0, 15))}
+                                      onChange={(e) => setClientMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                      onPaste={(e) => {
+                                        e.preventDefault();
+                                        const pastedDigits = e.clipboardData.getData('text').replace(/\D/g, '');
+                                        const nextValue = `${clientMobile}${pastedDigits}`.slice(0, 10);
+                                        setClientMobile(nextValue);
+                                      }}
                                       placeholder="Mobile"
-                                      className={`rounded-2xl border px-4 py-3 font-normal ${clientSubmitAttempted && clientValidationErrors.mobile ? 'border-rose-400' : 'border-slate-300'}`}
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      maxLength={10}
+                                      className={`rounded-2xl border px-4 py-3 font-normal ${showClientMobileError && clientValidationErrors.mobile ? 'border-rose-400 bg-rose-50/40 text-slate-900 dark:border-rose-400 dark:bg-rose-500/10 dark:text-slate-100' : 'border-slate-300'}`}
                                     />
                                   </div>
-                                  {clientSubmitAttempted && clientValidationErrors.mobile ? (
+                                  {showClientMobileError && clientValidationErrors.mobile ? (
                                     <span className="text-xs font-medium text-rose-600">{clientValidationErrors.mobile}</span>
                                   ) : null}
                                 </label>
@@ -5984,10 +6021,19 @@ export default function DashboardPage() {
                           <div className="student-action-wrap mt-5 flex flex-wrap items-center gap-3 rounded-2xl p-2 dark:border dark:border-white/40 dark:bg-black/40">
                           <button
                             onClick={submitClientComposer}
-                            disabled={actionLoading}
-                            className="rounded-2xl bg-slate-900 px-8 py-3 text-2xl font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+                            disabled={actionLoading || !canSubmitClientForm}
+                            className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-slate-900 px-8 py-3 text-lg font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
                           >
-                            {actionLoading ? 'Processing...' : clientEditingId ? 'Update Student' : 'Add Student'}
+                            {actionLoading ? (
+                              <span className="inline-flex items-center gap-2 text-sm font-medium text-white/80">
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                                Saving changes...
+                              </span>
+                            ) : clientEditingId ? (
+                              'Update Student'
+                            ) : (
+                              'Add Student'
+                            )}
                           </button>
                           <button
                             onClick={() => setShowClientComposer(false)}
@@ -5999,11 +6045,11 @@ export default function DashboardPage() {
                       </div>
                     </article>
                   ) : (
-                    <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12">
+                    <article className="rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-12 dark:border-white/15 dark:bg-black">
                       <div className="mb-4 flex items-center justify-between">
                         <div>
-                          <h3 className="text-xl font-bold text-slate-900">Student Registry</h3>
-                          <p className="text-sm text-slate-600">
+                          <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Student Registry</h3>
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
                             Active learners: {studentsTotal}, paid: {paidStudentsCount}, pending: {pendingStudentsCount}
                           </p>
                         </div>
@@ -6021,7 +6067,7 @@ export default function DashboardPage() {
                               onClick={triggerImportStudents}
                               title="Import students CSV"
                               aria-label="Import students CSV"
-                              className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                              className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 dark:border-white/15 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                             >
                               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 21V9" />
@@ -6035,7 +6081,7 @@ export default function DashboardPage() {
                             onClick={exportClientsCsv}
                             title="Export students"
                             aria-label="Export students"
-                            className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                            className="registry-toolbar-button rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 dark:border-white/15 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M12 3v12" />
@@ -6046,7 +6092,7 @@ export default function DashboardPage() {
                           {canManageStudents ? (
                             <button
                               onClick={openClientComposerForCreate}
-                              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                             >
                               + Add Student
                             </button>
@@ -6057,7 +6103,7 @@ export default function DashboardPage() {
                       <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
                           <thead>
-                            <tr className="border-b border-slate-200 text-slate-500">
+                            <tr className="border-b border-slate-200 text-slate-500 dark:border-white/10 dark:text-slate-400">
                               <th className="px-2 py-2 font-semibold">Name</th>
                               <th className="px-2 py-2 font-semibold">Subscription</th>
                               <th className="px-2 py-2 font-semibold">Class</th>
@@ -6071,7 +6117,7 @@ export default function DashboardPage() {
                           <tbody>
                             {students.length === 0 ? (
                               <tr>
-                                <td className="px-2 py-3 text-slate-500" colSpan={8}>
+                                <td className="px-2 py-3 text-slate-500 dark:text-slate-400" colSpan={8}>
                                   No students found. Click Add Student.
                                 </td>
                               </tr>
@@ -6082,35 +6128,40 @@ export default function DashboardPage() {
                               const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
                               const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
                               const receivable = Math.max(0, Number(meta?.invoiceAmount || 0) - (student.feeStatus === 'paid' ? Number(meta?.invoiceAmount || 0) : 0));
+                              const studentInitials = getNameInitials(student.name);
                               return (
-                                <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70">
+                                <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70 dark:border-white/10 dark:hover:bg-slate-900/70">
                                   <td className="px-2 py-2">
                                     {canManageStudents ? (
                                       <button
                                         onClick={() => openClientComposerForEdit(student)}
                                         className="flex items-center gap-2 text-left"
                                       >
-                                        <span className="h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                                        <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                           {meta?.photoDataUrl ? (
                                             <img src={meta.photoDataUrl} alt={student.name} className="h-full w-full object-cover" />
-                                          ) : null}
+                                          ) : (
+                                            studentInitials
+                                          )}
                                         </span>
-                                        <span className="font-semibold text-slate-900">{student.name}</span>
+                                        <span className="font-semibold text-slate-900 dark:text-slate-100">{student.name}</span>
                                       </button>
                                     ) : (
                                       <div className="flex items-center gap-2">
-                                        <span className="h-9 w-9 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                                        <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                           {meta?.photoDataUrl ? (
                                             <img src={meta.photoDataUrl} alt={student.name} className="h-full w-full object-cover" />
-                                          ) : null}
+                                          ) : (
+                                            studentInitials
+                                          )}
                                         </span>
-                                        <span className="font-semibold text-slate-900">{student.name}</span>
+                                        <span className="font-semibold text-slate-900 dark:text-slate-100">{student.name}</span>
                                       </div>
                                     )}
                                   </td>
                                   <td className="px-2 py-2">
-                                    <p className="font-medium text-slate-800">{selectedPlan?.name || '-'}</p>
-                                    <p className="text-xs text-slate-500">
+                                    <p className="font-medium text-slate-800 dark:text-slate-100">{selectedPlan?.name || '-'}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
                                       {(() => {
                                         const start = fmtShortUiDate(meta?.subscriptionStartDate);
                                         const end = fmtShortUiDate(meta?.subscriptionEndDate);
@@ -6120,22 +6171,22 @@ export default function DashboardPage() {
                                       })()}
                                     </p>
                                   </td>
-                                  <td className="px-2 py-2 text-slate-700">
+                                  <td className="px-2 py-2 text-slate-700 dark:text-slate-300">
                                     {organizationType === 'SCHOOL'
                                       ? schoolSelectedClass
                                         ? `${schoolSelectedClass.name}-${schoolSelectedClass.section}`
                                         : '-'
                                       : sportsSelectedClass?.title || '-'}
                                   </td>
-                                  <td className="px-2 py-2 text-slate-700">
+                                  <td className="px-2 py-2 text-slate-700 dark:text-slate-300">
                                     <span className="font-semibold text-emerald-600">0</span>
-                                    <span className="mx-1 text-slate-400">|</span>
-                                    <span className="font-semibold text-rose-600">0</span>
+                                    <span className="mx-1 text-slate-400 dark:text-slate-500">|</span>
+                                    <span className="font-semibold text-rose-400">0</span>
                                   </td>
-                                  <td className="px-2 py-2 text-slate-700">{meta?.rollNo || '-'}</td>
-                                  <td className="px-2 py-2 text-slate-700">{meta?.subscriptionLevel || '-'}</td>
+                                  <td className="px-2 py-2 text-slate-700 dark:text-slate-300">{meta?.rollNo || '-'}</td>
+                                  <td className="px-2 py-2 text-slate-700 dark:text-slate-300">{meta?.subscriptionLevel || '-'}</td>
                                   <td className="px-2 py-2">
-                                    <span className={`font-semibold ${receivable > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                                    <span className={`font-semibold ${receivable > 0 ? 'text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
                                       {formatCurrency(receivable)}
                                     </span>
                                   </td>
@@ -6144,7 +6195,7 @@ export default function DashboardPage() {
                                       {canManageStudents ? (
                                         <button
                                           onClick={() => openClientComposerForEdit(student)}
-                                          className="registry-action-button rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                          className="registry-action-button rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/15 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                                         >
                                           Edit
                                         </button>
@@ -6152,7 +6203,7 @@ export default function DashboardPage() {
                                       {canDeleteStudents ? (
                                         <button
                                           onClick={() => deleteStudentWithConfirmation(student)}
-                                          className="registry-danger-button rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                          className="registry-danger-button rounded-lg border border-rose-400/25 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-rose-400 transition hover:bg-[rgba(248,113,113,0.10)] hover:text-rose-300 dark:border-rose-400/25 dark:bg-slate-800 dark:text-rose-400 dark:hover:bg-[rgba(248,113,113,0.10)] dark:hover:text-rose-300"
                                         >
                                           Delete
                                         </button>
