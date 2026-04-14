@@ -1097,13 +1097,13 @@ export default function DashboardPage() {
     () => [
       { id: 'plans', label: uiLabels.plan },
       { id: 'classes', label: uiLabels.batchPlural },
-      { id: 'class-schedule', label: `${uiLabels.batch} Schedule` },
+      { id: 'class-schedule', label: organizationType === 'SCHOOL' ? 'Timetable' : `${uiLabels.batch} Schedule` },
       { id: 'clients', label: 'Student Registry' },
       { id: 'attendance', label: 'Attendance' },
       { id: 'renewals', label: 'Renewals' },
       { id: 'coach', label: uiLabels.coachPlural }
     ],
-    [uiLabels]
+    [organizationType, uiLabels]
   );
   const headerTabs: TabId[] = isSuperAdmin ? [...baseHeaderTabs, 'platform-control'] : baseHeaderTabs;
   const useDarkFinanceTheme = visualMode === 'dark';
@@ -5279,12 +5279,12 @@ export default function DashboardPage() {
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-lg font-bold text-slate-900">{`${uiLabels.batch} Registry`}</h3>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500">{filteredClassRows.length} classes</span>
+                          <span className="text-xs text-slate-500">{`${filteredClassRows.length} ${uiLabels.batchPlural.toLowerCase()}`}</span>
                           {canManageBatches ? (
                             <button
                               onClick={openClassComposer}
                               className="rounded-full bg-indigo-600 px-2.5 py-1 text-lg font-semibold leading-none text-white hover:bg-indigo-500"
-                              aria-label="Add new class"
+                              aria-label={`Add new ${uiLabels.batch.toLowerCase()}`}
                             >
                               +
                             </button>
@@ -5312,7 +5312,7 @@ export default function DashboardPage() {
                           value={classSearchText}
                           onChange={(e) => setClassSearchText(e.target.value)}
                           className="ml-auto min-w-[220px] rounded-full border border-slate-300 px-4 py-1.5 text-sm"
-                          placeholder="Search classes"
+                          placeholder={`Search ${uiLabels.batchPlural.toLowerCase()}`}
                         />
                       </div>
                       <div className="overflow-x-auto">
@@ -5323,7 +5323,7 @@ export default function DashboardPage() {
                               {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Center</th> : null}
                               {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Skill</th> : null}
                               <th className="px-2 py-2 font-semibold">{uiLabels.coach}</th>
-                              <th className="px-2 py-2 font-semibold">Plan</th>
+                              <th className="px-2 py-2 font-semibold">{uiLabels.plan}</th>
                               {organizationType === 'SPORTS' ? <th className="px-2 py-2 font-semibold">Timing</th> : null}
                               <th className="px-2 py-2 font-semibold">Status</th>
                               <th className="px-2 py-2 font-semibold">Actions</th>
@@ -5332,8 +5332,8 @@ export default function DashboardPage() {
                           <tbody>
                             {filteredClassRows.length === 0 ? (
                               <tr>
-                                <td className="px-2 py-3 text-slate-500" colSpan={8}>
-                                  No classes in this view.
+                                <td className="px-2 py-3 text-slate-500" colSpan={organizationType === 'SPORTS' ? 8 : 5}>
+                                  {`No ${uiLabels.batchPlural.toLowerCase()} in this view.`}
                                 </td>
                               </tr>
                             ) : null}
@@ -5349,7 +5349,7 @@ export default function DashboardPage() {
                                       onChange={(e) => handleClassCoachAssign(row.id, e.target.value)}
                                       className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
                                     >
-                                      <option value="">Unassigned</option>
+                                      <option value="">{`No ${uiLabels.coach.toLowerCase()} assigned`}</option>
                                       {coaches.map((coach) => (
                                         <option key={coach.id} value={coach.id}>
                                           {coach.fullName}
@@ -5357,7 +5357,7 @@ export default function DashboardPage() {
                                       ))}
                                     </select>
                                   ) : (
-                                    <span>{row.coachName || 'Unassigned'}</span>
+                                    <span>{row.coachName || `No ${uiLabels.coach.toLowerCase()} assigned`}</span>
                                   )}
                                 </td>
                                 <td className="px-2 py-2 text-slate-700">{row.planName}</td>
