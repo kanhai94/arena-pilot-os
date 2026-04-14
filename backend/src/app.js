@@ -42,7 +42,8 @@ const corsOptions = {
   credentials: runtimeConfig.cors.allowCredentials,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id']
-};
+}; 
+//kan
 
 export const createApp = () => {
   const app = express();
