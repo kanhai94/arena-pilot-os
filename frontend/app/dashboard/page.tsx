@@ -199,6 +199,7 @@ type TeamMembersResponse = {
 type AttendanceEntry = {
   _id: string;
   batchId?: string | { _id: string } | null;
+  classId?: string | { _id: string } | null;
   studentId?: string | { _id: string } | null;
   status: 'present' | 'absent';
   date: string;
@@ -1891,6 +1892,19 @@ export default function DashboardPage() {
     return stats;
   }, [attendanceEntries]);
 
+  const attendanceBySchoolClass = useMemo(() => {
+    const stats = new Map<string, { present: number; absent: number }>();
+    attendanceEntries.forEach((entry) => {
+      const classId = typeof entry.classId === 'string' ? entry.classId : entry.classId?._id;
+      if (!classId) return;
+      const current = stats.get(classId) || { present: 0, absent: 0 };
+      if (entry.status === 'present') current.present += 1;
+      if (entry.status === 'absent') current.absent += 1;
+      stats.set(classId, current);
+    });
+    return stats;
+  }, [attendanceEntries]);
+
   const academyAttendanceRows = useMemo(() => {
     return academyClassRows.map((row) => {
       const enrolled = attendanceStudents.filter((student) => {
@@ -1906,26 +1920,70 @@ export default function DashboardPage() {
     });
   }, [academyClassRows, attendanceStudents, attendanceByBatch]);
 
+  const schoolAttendanceRows = useMemo(() => {
+    const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+    const selectedDate = new Date(`${academyAttendanceDate}T00:00:00`);
+    const selectedDay = dayMap[selectedDate.getDay()];
+
+    return schoolClasses
+      .filter((row) => (row.scheduleDays || []).includes(selectedDay))
+      .map((row) => {
+        const enrolled = attendanceStudents.filter((student) => {
+          const studentClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+          return studentClassId === row._id;
+        }).length;
+        const attendanceStat = attendanceBySchoolClass.get(row._id) || { present: 0, absent: 0 };
+
+        return {
+          id: row._id,
+          title: [row.name, row.section].filter(Boolean).join('-'),
+          centerName: row.startTime && row.endTime ? `${row.startTime} - ${row.endTime}` : 'Scheduled',
+          capacity: row.strength || enrolled,
+          enrolled,
+          attendanceText: `${attendanceStat.present}P | ${attendanceStat.absent}A`
+        };
+      });
+  }, [academyAttendanceDate, attendanceBySchoolClass, attendanceStudents, schoolClasses]);
+
+  const attendanceRows = useMemo(
+    () => (organizationType === 'SCHOOL' ? schoolAttendanceRows : academyAttendanceRows),
+    [academyAttendanceRows, organizationType, schoolAttendanceRows]
+  );
+
   useEffect(() => {
     if (!selectedAttendanceClassId) return;
-    const exists = academyAttendanceRows.some((row) => row.id === selectedAttendanceClassId);
+    const exists = attendanceRows.some((row) => row.id === selectedAttendanceClassId);
     if (!exists) setSelectedAttendanceClassId('');
-  }, [academyAttendanceRows, selectedAttendanceClassId]);
+  }, [attendanceRows, selectedAttendanceClassId]);
 
   const selectedAttendanceRows = useMemo(() => {
-    if (!selectedAttendanceClassId) return academyAttendanceRows;
-    return academyAttendanceRows.filter((row) => row.id === selectedAttendanceClassId);
-  }, [academyAttendanceRows, selectedAttendanceClassId]);
+    if (!selectedAttendanceClassId) return attendanceRows;
+    return attendanceRows.filter((row) => row.id === selectedAttendanceClassId);
+  }, [attendanceRows, selectedAttendanceClassId]);
   const selectedAttendanceSummary = useMemo(() => {
-    const selectedBatchIds = new Set(selectedAttendanceRows.map((row) => row.id));
+    const selectedScopeIds = new Set(selectedAttendanceRows.map((row) => row.id));
     const totalStudents = selectedAttendanceRows.reduce((sum, row) => sum + row.enrolled, 0);
     const presentCount = attendanceEntries.filter((entry) => {
-      const batchId = typeof entry.batchId === 'string' ? entry.batchId : entry.batchId?._id;
-      return Boolean(batchId && selectedBatchIds.has(batchId) && entry.status === 'present');
+      const scopeId =
+        organizationType === 'SCHOOL'
+          ? typeof entry.classId === 'string'
+            ? entry.classId
+            : entry.classId?._id
+          : typeof entry.batchId === 'string'
+            ? entry.batchId
+            : entry.batchId?._id;
+      return Boolean(scopeId && selectedScopeIds.has(scopeId) && entry.status === 'present');
     }).length;
     const absentCount = attendanceEntries.filter((entry) => {
-      const batchId = typeof entry.batchId === 'string' ? entry.batchId : entry.batchId?._id;
-      return Boolean(batchId && selectedBatchIds.has(batchId) && entry.status === 'absent');
+      const scopeId =
+        organizationType === 'SCHOOL'
+          ? typeof entry.classId === 'string'
+            ? entry.classId
+            : entry.classId?._id
+          : typeof entry.batchId === 'string'
+            ? entry.batchId
+            : entry.batchId?._id;
+      return Boolean(scopeId && selectedScopeIds.has(scopeId) && entry.status === 'absent');
     }).length;
 
     return {
@@ -1934,7 +1992,7 @@ export default function DashboardPage() {
       presentCount,
       absentCount
     };
-  }, [attendanceEntries, selectedAttendanceRows]);
+  }, [attendanceEntries, organizationType, selectedAttendanceRows]);
 
   const studioRosterRows = useMemo(() => {
     const search = rosterSearchText.trim().toLowerCase();
@@ -3634,24 +3692,35 @@ export default function DashboardPage() {
     router.replace('/dashboard?section=academy-pro-coach');
   };
 
-  const openAttendanceMarker = async (batchId: string) => {
+  const openAttendanceMarker = async (scopeId: string) => {
     if (!canMarkAttendance) {
       setToast('You do not have permission to mark attendance.');
       return;
     }
-    const targetRow = academyClassRows.find((row) => row.id === batchId);
+    const targetRow = attendanceRows.find((row) => row.id === scopeId);
     if (!targetRow) return;
 
     const assignedStudents = attendanceStudents
       .filter((student) => {
+        if (organizationType === 'SCHOOL') {
+          const studentClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+          return studentClassId === scopeId;
+        }
         const studentBatchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
-        return studentBatchId === batchId;
+        return studentBatchId === scopeId;
       })
       .map((student) => {
         const existing = attendanceEntries.find((entry) => {
           const entryStudentId = typeof entry.studentId === 'string' ? entry.studentId : entry.studentId?._id;
-          const entryBatchId = typeof entry.batchId === 'string' ? entry.batchId : entry.batchId?._id;
-          return entryStudentId === student._id && entryBatchId === batchId;
+          const entryScopeId =
+            organizationType === 'SCHOOL'
+              ? typeof entry.classId === 'string'
+                ? entry.classId
+                : entry.classId?._id
+              : typeof entry.batchId === 'string'
+                ? entry.batchId
+                : entry.batchId?._id;
+          return entryStudentId === student._id && entryScopeId === scopeId;
         });
 
         return {
@@ -3663,7 +3732,7 @@ export default function DashboardPage() {
       });
 
     setActiveAttendanceBatch({
-      id: batchId,
+      id: scopeId,
       title: targetRow.title,
       centerName: targetRow.centerName
     });
@@ -3692,7 +3761,9 @@ export default function DashboardPage() {
         apiPostWithAuth(
           '/attendance/mark',
           {
-            batchId: activeAttendanceBatch.id,
+            ...(organizationType === 'SCHOOL'
+              ? { classId: activeAttendanceBatch.id }
+              : { batchId: activeAttendanceBatch.id }),
             date: academyAttendanceDate,
             records: attendanceDraftRecords.map((record) => ({
               studentId: record.studentId,
@@ -5754,14 +5825,14 @@ const getNameInitials = (value: string) =>
                         </tr>
                       </thead>
                       <tbody>
-                        {academyAttendanceRows.length === 0 ? (
+                        {attendanceRows.length === 0 ? (
                           <tr>
                             <td className="px-3 py-5 text-center text-slate-500" colSpan={6}>
                               No classes found.
                             </td>
                           </tr>
                         ) : null}
-                        {academyAttendanceRows.map((row) => (
+                        {attendanceRows.map((row) => (
                           <tr
                             key={row.id}
                             onClick={() => setSelectedAttendanceClassId((prev) => (prev === row.id ? '' : row.id))}
