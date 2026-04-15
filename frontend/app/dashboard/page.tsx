@@ -150,6 +150,7 @@ type TeamMember = {
 };
 
 type TeamRole = 'ADMIN' | 'COACH' | 'STAFF';
+type AccessRoleValue = TeamRole | 'TEACHER';
 
 type StudentsListResponse = {
   items: Student[];
@@ -990,7 +991,7 @@ export default function DashboardPage() {
   const [coachEmail, setCoachEmail] = useState('');
   const [coachTitle, setCoachTitle] = useState('');
   const [coachDesignation, setCoachDesignation] = useState('');
-  const [coachRole, setCoachRole] = useState<TeamRole>('COACH');
+  const [coachRole, setCoachRole] = useState<AccessRoleValue>('COACH');
   const [coachPassword, setCoachPassword] = useState(generateAccessPassword());
   const [coachSubmitAttempted, setCoachSubmitAttempted] = useState(false);
   const [coachServerError, setCoachServerError] = useState('');
@@ -1151,7 +1152,8 @@ export default function DashboardPage() {
       isSchoolOrganization
         ? [
             { value: 'ADMIN' as TeamRole, label: 'ADMIN' },
-            { value: 'STAFF' as TeamRole, label: 'TEACHER' }
+            { value: 'TEACHER' as AccessRoleValue, label: 'TEACHER' },
+            { value: 'STAFF' as TeamRole, label: 'STAFF' }
           ]
         : [
             { value: 'ADMIN' as TeamRole, label: 'ADMIN' },
@@ -1162,7 +1164,7 @@ export default function DashboardPage() {
   );
   useEffect(() => {
     if (isSchoolOrganization && coachRole === 'COACH') {
-      setCoachRole('STAFF');
+      setCoachRole('TEACHER');
     }
   }, [coachRole, isSchoolOrganization]);
   const academyProNav = useMemo<Array<{ id: AcademyProItem; label: string }>>(
@@ -3616,7 +3618,7 @@ export default function DashboardPage() {
     setCoachEmail('');
     setCoachTitle('');
     setCoachDesignation('');
-    setCoachRole(isSchoolOrganization ? 'STAFF' : 'COACH');
+    setCoachRole(isSchoolOrganization ? 'TEACHER' : 'COACH');
     setCoachPassword(generateAccessPassword());
     setCoachSubmitAttempted(false);
     setCoachServerError('');
@@ -4010,7 +4012,8 @@ const getNameInitials = (value: string) =>
     }
     setActionLoading(true);
     setToast('');
-    const submittedAccessRole = isSchoolOrganization && coachRole === 'COACH' ? 'STAFF' : coachRole;
+    const submittedAccessRole =
+      isSchoolOrganization && (coachRole === 'COACH' || coachRole === 'TEACHER') ? 'STAFF' : coachRole;
     try {
       const data = await apiPostWithAuth(
         '/team-members',
@@ -4032,7 +4035,7 @@ const getNameInitials = (value: string) =>
       setCoachEmail('');
       setCoachTitle('');
       setCoachDesignation('');
-      setCoachRole(isSchoolOrganization ? 'STAFF' : 'COACH');
+      setCoachRole(isSchoolOrganization ? 'TEACHER' : 'COACH');
       setCoachPassword(generateAccessPassword());
       setCoachSubmitAttempted(false);
       setCoachServerError('');
@@ -6637,7 +6640,7 @@ const getNameInitials = (value: string) =>
                           Role
                           <select
                             value={coachRole}
-                            onChange={(e) => setCoachRole(e.target.value as TeamRole)}
+                            onChange={(e) => setCoachRole(e.target.value as AccessRoleValue)}
                             className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
                           >
                             {accessRoleOptions.map((option) => (
