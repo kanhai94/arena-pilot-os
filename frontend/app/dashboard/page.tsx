@@ -994,6 +994,7 @@ export default function DashboardPage() {
   const [coachDesignation, setCoachDesignation] = useState('');
   const [coachRole, setCoachRole] = useState<AccessRoleValue>('COACH');
   const [coachPassword, setCoachPassword] = useState(generateAccessPassword());
+  const [coachEditingId, setCoachEditingId] = useState<string | null>(null);
   const [coachSubmitAttempted, setCoachSubmitAttempted] = useState(false);
   const [coachServerError, setCoachServerError] = useState('');
 
@@ -1269,6 +1270,7 @@ export default function DashboardPage() {
     const errors: Record<string, string> = {};
     const normalizedCoachName = coachName.trim();
     const normalizedCoachEmail = coachEmail.trim().toLowerCase();
+    const editingMember = coachEditingId ? teamMembers.find((member) => member.id === coachEditingId) : null;
 
     if (!normalizedCoachName) {
       errors.name = `${uiLabels.coach} name is required.`;
@@ -1276,7 +1278,8 @@ export default function DashboardPage() {
       errors.name = `${uiLabels.coach} name must contain at least 2 characters.`;
     } else {
       const nameExists = teamMembers.some(
-        (member) => member.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
+        (member) =>
+          member.id !== coachEditingId && member.fullName.trim().toLowerCase() === normalizedCoachName.toLowerCase()
       );
       if (nameExists) {
         errors.name = 'This team member name already exists. Use a different name.';
@@ -1287,6 +1290,13 @@ export default function DashboardPage() {
       errors.email = `${uiLabels.coach} email is required.`;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCoachEmail)) {
       errors.email = `Enter a valid ${uiLabels.coach.toLowerCase()} email address.`;
+    } else {
+      const emailExists = teamMembers.some(
+        (member) => member.id !== coachEditingId && member.email.trim().toLowerCase() === normalizedCoachEmail
+      );
+      if (emailExists) {
+        errors.email = 'This email is already used by another access user.';
+      }
     }
 
     if (!coachTitle.trim()) {
@@ -1299,10 +1309,10 @@ export default function DashboardPage() {
     } else if (coachDesignation.trim().length < 2) {
       errors.designation = 'Designation must contain at least 2 characters.';
     }
-    if (!coachPassword.trim()) errors.password = 'Temporary password is required.';
+    if (!coachEditingId && !coachPassword.trim()) errors.password = 'Temporary password is required.';
 
     return errors;
-  }, [coachDesignation, coachEmail, coachName, coachPassword, coachTitle, teamMembers, uiLabels.coach]);
+  }, [coachDesignation, coachEditingId, coachEmail, coachName, coachPassword, coachTitle, teamMembers, uiLabels.coach]);
   const canSubmitCoachForm = Object.keys(coachValidationErrors).length === 0;
 
   const loadPlatformTenants = async (accessToken: string) => {
@@ -3698,12 +3708,43 @@ export default function DashboardPage() {
       setToast('Only admin can manage access users.');
       return;
     }
+    setCoachEditingId(null);
     setCoachName('');
     setCoachEmail('');
     setCoachTitle('');
     setCoachDesignation('');
     setCoachRole(isSchoolOrganization ? 'TEACHER' : 'COACH');
     setCoachPassword(generateAccessPassword());
+    setCoachSubmitAttempted(false);
+    setCoachServerError('');
+    setActiveMenu('Access Control');
+    setActiveTab('academy-pro');
+    setActiveAcademyPro('coach');
+    setAcademyProExpanded(true);
+    setShowPlanComposer(false);
+    setShowClassComposer(false);
+    setShowClientComposer(false);
+    setShowCoachComposer(true);
+    setActiveAttendanceBatch(null);
+    router.replace('/dashboard?section=academy-pro-coach');
+  };
+
+  const openCoachComposerForEdit = (member: TeamMember) => {
+    if (!canManageUsers) {
+      setToast('Only admin can manage access users.');
+      return;
+    }
+    setCoachEditingId(member.id);
+    setCoachName(member.fullName || '');
+    setCoachEmail(member.email || '');
+    setCoachTitle(member.title || '');
+    setCoachDesignation(member.designation || '');
+    setCoachRole(
+      isSchoolOrganization && normalizeRole(member.role) === 'STAFF'
+        ? 'TEACHER'
+        : ((normalizeRole(member.role) || member.role) as AccessRoleValue)
+    );
+    setCoachPassword('');
     setCoachSubmitAttempted(false);
     setCoachServerError('');
     setActiveMenu('Access Control');
@@ -4098,7 +4139,7 @@ const getNameInitials = (value: string) =>
 
   const submitCoach = async () => {
     if (!canManageUsers) {
-      setToast('Only admin can add users.');
+      setToast('Only admin can manage users.');
       return;
     }
     setCoachSubmitAttempted(true);
@@ -4112,22 +4153,28 @@ const getNameInitials = (value: string) =>
     const submittedAccessRole =
       isSchoolOrganization && (coachRole === 'COACH' || coachRole === 'TEACHER') ? 'STAFF' : coachRole;
     try {
-      const data = await apiPostWithAuth(
-        '/team-members',
-        {
-          fullName: coachName.trim(),
-          email: coachEmail.trim().toLowerCase(),
-          title: coachTitle.trim(),
-          designation: coachDesignation.trim(),
-          role: submittedAccessRole,
-          password: coachPassword
-        },
-        token
-      );
+      const payload = {
+        fullName: coachName.trim(),
+        email: coachEmail.trim().toLowerCase(),
+        title: coachTitle.trim(),
+        designation: coachDesignation.trim(),
+        role: submittedAccessRole
+      };
+      const data = coachEditingId
+        ? await apiPatchWithAuth(`/team-members/${coachEditingId}/access`, payload, token)
+        : await apiPostWithAuth(
+            '/team-members',
+            {
+              ...payload,
+              password: coachPassword
+            },
+            token
+          );
       setDebugOutput(JSON.stringify(data, null, 2));
-      setToast('Access user added successfully');
+      setToast(coachEditingId ? 'Access user updated successfully' : 'Access user added successfully');
       await loadDashboardData(token);
       setShowCoachComposer(false);
+      setCoachEditingId(null);
       setCoachName('');
       setCoachEmail('');
       setCoachTitle('');
@@ -4137,7 +4184,7 @@ const getNameInitials = (value: string) =>
       setCoachSubmitAttempted(false);
       setCoachServerError('');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to add access user.';
+      const message = err instanceof Error ? err.message : coachEditingId ? 'Failed to update access user.' : 'Failed to add access user.';
       setToast(message);
       setCoachServerError(message);
       setDebugOutput(JSON.stringify({ error: message }, null, 2));
@@ -6671,12 +6718,20 @@ const getNameInitials = (value: string) =>
                             </td>
                             {canDeleteClassAndAccess ? (
                               <td className="px-2 py-2">
-                                <button
-                                  onClick={() => deleteTeamMemberWithConfirmation(member)}
-                                  className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                                >
-                                  Delete
-                                </button>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => openCoachComposerForEdit(member)}
+                                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteTeamMemberWithConfirmation(member)}
+                                    className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
                               </td>
                             ) : null}
                           </tr>
@@ -6692,9 +6747,13 @@ const getNameInitials = (value: string) =>
                   <div className="mt-6 mb-8 w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.45)] sm:p-7">
                     <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
                       <div>
-                        <h4 className="text-2xl font-bold text-slate-900">Add Access User</h4>
+                        <h4 className="text-2xl font-bold text-slate-900">
+                          {coachEditingId ? 'Edit Access User' : 'Add Access User'}
+                        </h4>
                         <p className="mt-1 text-sm text-slate-500">
-                          Create secure dashboard access with the right role, title, and temporary password.
+                          {coachEditingId
+                            ? 'Update role, title, designation, and contact details for this access user.'
+                            : 'Create secure dashboard access with the right role, title, and temporary password.'}
                         </p>
                       </div>
                       <button
@@ -6772,28 +6831,32 @@ const getNameInitials = (value: string) =>
                       {coachSubmitAttempted && coachValidationErrors.designation ? (
                         <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.designation}</p>
                       ) : null}
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                            Temporary login password
-                            <input
-                              value={coachPassword}
-                              onChange={(e) => setCoachPassword(e.target.value)}
-                              placeholder="Temporary login password"
-                              className={`rounded-2xl border bg-white px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setCoachPassword(generateAccessPassword())}
-                            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                          >
-                            Regenerate
-                          </button>
-                        </div>
-                      </div>
-                      {coachSubmitAttempted && coachValidationErrors.password ? (
-                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
+                      {!coachEditingId ? (
+                        <>
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                                Temporary login password
+                                <input
+                                  value={coachPassword}
+                                  onChange={(e) => setCoachPassword(e.target.value)}
+                                  placeholder="Temporary login password"
+                                  className={`rounded-2xl border bg-white px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setCoachPassword(generateAccessPassword())}
+                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                              >
+                                Regenerate
+                              </button>
+                            </div>
+                          </div>
+                          {coachSubmitAttempted && coachValidationErrors.password ? (
+                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
+                          ) : null}
+                        </>
                       ) : null}
                       {coachServerError ? (
                         <p className="-mt-1 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
@@ -6803,7 +6866,10 @@ const getNameInitials = (value: string) =>
                       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
                         <button
                           type="button"
-                          onClick={() => setShowCoachComposer(false)}
+                          onClick={() => {
+                            setShowCoachComposer(false);
+                            setCoachEditingId(null);
+                          }}
                           className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                         >
                           Cancel
@@ -6813,7 +6879,7 @@ const getNameInitials = (value: string) =>
                           disabled={actionLoading}
                           className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
                         >
-                          {actionLoading ? 'Saving...' : 'Add Access User'}
+                          {actionLoading ? 'Saving...' : coachEditingId ? 'Update Access User' : 'Add Access User'}
                         </button>
                       </div>
                     </div>

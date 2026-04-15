@@ -39,6 +39,10 @@ export const createTeamMemberSchema = z
 
 export const updateTeamMemberAccessSchema = z
   .object({
+    fullName: z.string().min(2).max(120).optional(),
+    title: z.string().min(2).max(120).optional(),
+    designation: z.string().min(2).max(120).optional(),
+    email: z.string().email().optional(),
     role: teamRoleSchema.optional(),
     permissions: z.array(permissionEnum).optional(),
     isActive: z.boolean().optional()

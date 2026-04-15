@@ -85,6 +85,13 @@ export const createTeamService = (repository) => {
         throw new AppError('Team member not found', StatusCodes.NOT_FOUND);
       }
 
+      if (payload.email && payload.email.toLowerCase() !== existing.email) {
+        const duplicate = await repository.findActiveUserByEmail(tenantId, payload.email);
+        if (duplicate && String(duplicate._id) !== String(userId)) {
+          throw new AppError('User with this email already exists', StatusCodes.CONFLICT);
+        }
+      }
+
       const nextRole = payload.role || existing.role;
       const roleDefaults = ROLE_DEFAULT_PERMISSIONS[nextRole] || [];
       const selectedPermissions = payload.permissions
@@ -99,6 +106,10 @@ export const createTeamService = (repository) => {
       }
 
       const updated = await repository.updateTeamMemberById(tenantId, userId, {
+        ...(payload.fullName !== undefined ? { fullName: payload.fullName.trim() } : {}),
+        ...(payload.title !== undefined ? { title: payload.title.trim() } : {}),
+        ...(payload.designation !== undefined ? { designation: payload.designation.trim() } : {}),
+        ...(payload.email !== undefined ? { email: payload.email.toLowerCase().trim() } : {}),
         ...(payload.role ? { role: payload.role } : {}),
         ...(payload.permissions ? { permissions: selectedPermissions } : {}),
         ...(typeof payload.isActive === 'boolean' ? { isActive: payload.isActive } : {})
