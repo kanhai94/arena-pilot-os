@@ -2076,16 +2076,22 @@ export default function DashboardPage() {
 
         const diffMs = dueDate.getTime() - now.getTime();
         const dueInDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        const classId =
-          meta.subscriptionClassId ||
-          (typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '');
-        const classRow = academyClassRows.find((row) => row.id === classId);
+        const linkedBatchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
+        const linkedSchoolClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+        const classId = meta.subscriptionClassId || (organizationType === 'SCHOOL' ? linkedSchoolClassId : linkedBatchId);
+        const schoolClass = organizationType === 'SCHOOL' ? schoolClasses.find((row) => row._id === classId) : null;
+        const sportsClass = organizationType === 'SCHOOL' ? null : academyClassRows.find((row) => row.id === classId);
+        const classLabel =
+          organizationType === 'SCHOOL'
+            ? [schoolClass?.name, schoolClass?.section].filter(Boolean).join('-') || '-'
+            : sportsClass?.title || '-';
+        const locationLabel = organizationType === 'SCHOOL' ? 'School' : sportsClass?.centerName || '-';
 
         return {
           id: student._id,
           name: student.name,
-          batchName: classRow?.title || '-',
-          centerName: classRow?.centerName || '-',
+          batchName: classLabel,
+          centerName: locationLabel,
           email: student.email || '-',
           mobile: student.parentPhone,
           paymentDate: meta.invoiceDate || '-',
@@ -2095,7 +2101,7 @@ export default function DashboardPage() {
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
       .sort((a, b) => a.dueInDays - b.dueInDays);
-  }, [students, clientMetaByStudentId, academyClassRows]);
+  }, [students, clientMetaByStudentId, academyClassRows, organizationType, schoolClasses]);
 
   const renewalRows = useMemo(
     () => renewalCandidates.filter((row) => matchesRenewalWindow(row.dueInDays, renewalDueFilter)),
