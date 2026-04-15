@@ -2581,7 +2581,7 @@ export default function DashboardPage() {
 
   const createCurriculumSubject = async (payload: {
     name: string;
-    classId: string;
+    classIds: string[];
     teacherId?: string | null;
     status: 'active' | 'inactive';
   }) => {
@@ -2591,10 +2591,30 @@ export default function DashboardPage() {
     setToast('');
 
     try {
-      const createdSubject = await apiPostWithAuth<CurriculumSubject>('/subjects', payload, token);
-      setDebugOutput(JSON.stringify(createdSubject, null, 2));
-      setCurriculumSubjects((current) => [createdSubject, ...current.filter((item) => item._id !== createdSubject._id)]);
-      setToast('Subject added successfully');
+      const createdSubjects = await Promise.all(
+        payload.classIds.map((classId) =>
+          apiPostWithAuth<CurriculumSubject>(
+            '/subjects',
+            {
+              name: payload.name,
+              classId,
+              teacherId: payload.teacherId || null,
+              status: payload.status
+            },
+            token
+          )
+        )
+      );
+      setDebugOutput(JSON.stringify(createdSubjects, null, 2));
+      setCurriculumSubjects((current) => [
+        ...createdSubjects,
+        ...current.filter((item) => !createdSubjects.some((created) => created._id === item._id))
+      ]);
+      setToast(
+        createdSubjects.length > 1
+          ? `Subject added successfully to ${createdSubjects.length} classes`
+          : 'Subject added successfully'
+      );
       void loadDashboardData(token);
       return true;
     } catch (err) {

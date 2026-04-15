@@ -30,7 +30,7 @@ export type CurriculumSubject = {
 
 type SubjectDraft = {
   name: string;
-  classId: string;
+  classIds: string[];
   teacherId: string;
   status: 'active' | 'inactive';
 };
@@ -43,7 +43,7 @@ type CurriculumPageProps = {
   saving: boolean;
   onCreateSubject: (payload: {
     name: string;
-    classId: string;
+    classIds: string[];
     teacherId?: string | null;
     status: 'active' | 'inactive';
   }) => Promise<boolean>;
@@ -61,7 +61,7 @@ type CurriculumPageProps = {
 
 const EMPTY_DRAFT: SubjectDraft = {
   name: '',
-  classId: '',
+  classIds: [],
   teacherId: '',
   status: 'active'
 };
@@ -103,8 +103,12 @@ export function CurriculumPage({
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const selectedClass = useMemo(
-    () => classes.find((item) => item._id === draft.classId) || null,
-    [classes, draft.classId]
+    () => classes.find((item) => item._id === draft.classIds[0]) || null,
+    [classes, draft.classIds]
+  );
+  const selectedClasses = useMemo(
+    () => classes.filter((item) => draft.classIds.includes(item._id)),
+    [classes, draft.classIds]
   );
   const selectedTeacher = useMemo(
     () => teachers.find((item) => item._id === draft.teacherId) || null,
@@ -116,11 +120,11 @@ export function CurriculumPage({
     if (!draft.name.trim()) {
       errors.name = 'Subject name is required.';
     }
-    if (!draft.classId) {
-      errors.classId = 'Class is required.';
+    if (draft.classIds.length === 0) {
+      errors.classIds = 'Select at least one class.';
     }
     return errors;
-  }, [draft.classId, draft.name]);
+  }, [draft.classIds, draft.name]);
 
   const isFormValid = Object.keys(validationErrors).length === 0;
 
@@ -151,7 +155,7 @@ export function CurriculumPage({
     setEditingSubjectId(null);
     setDraft({
       ...EMPTY_DRAFT,
-      classId: classes[0]?._id || ''
+      classIds: classes[0]?._id ? [classes[0]._id] : []
     });
     setSubmitAttempted(false);
     setShowModal(true);
@@ -163,7 +167,7 @@ export function CurriculumPage({
     setEditingSubjectId(subject._id);
     setDraft({
       name: subject.name,
-      classId: classMeta?._id || '',
+      classIds: classMeta?._id ? [classMeta._id] : [],
       teacherId: teacherMeta?._id || '',
       status: subject.status
     });
@@ -179,13 +183,18 @@ export function CurriculumPage({
 
     const payload = {
       name: draft.name.trim(),
-      classId: draft.classId,
+      classIds: draft.classIds,
       teacherId: draft.teacherId || null,
       status: draft.status
     };
 
     const success = editingSubjectId
-      ? await onUpdateSubject(editingSubjectId, payload)
+      ? await onUpdateSubject(editingSubjectId, {
+          name: payload.name,
+          classId: payload.classIds[0] || '',
+          teacherId: payload.teacherId,
+          status: payload.status
+        })
       : await onCreateSubject(payload);
 
     if (success) {
@@ -376,25 +385,69 @@ export function CurriculumPage({
               </label>
 
               <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Class
-                <select
-                  value={draft.classId}
-                  onChange={(event) => setDraft((current) => ({ ...current, classId: event.target.value }))}
-                  className={`rounded-2xl border px-4 py-3 font-normal outline-none transition ${
-                    submitAttempted && validationErrors.classId
-                      ? 'border-rose-400'
-                      : 'border-slate-300 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100'
-                  }`}
-                >
-                  <option value="">Select class</option>
-                  {classes.map((item) => (
-                    <option key={item._id} value={item._id}>
-                      {item.name} {item.section}
-                    </option>
-                  ))}
-                </select>
-                {submitAttempted && validationErrors.classId ? (
-                  <span className="text-xs font-medium text-rose-600">{validationErrors.classId}</span>
+                {editingSubjectId ? 'Class' : 'Classes'}
+                {editingSubjectId ? (
+                  <select
+                    value={draft.classIds[0] || ''}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        classIds: event.target.value ? [event.target.value] : []
+                      }))
+                    }
+                    className={`rounded-2xl border px-4 py-3 font-normal outline-none transition ${
+                      submitAttempted && validationErrors.classIds
+                        ? 'border-rose-400'
+                        : 'border-slate-300 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100'
+                    }`}
+                  >
+                    <option value="">Select class</option>
+                    {classes.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.name} {item.section}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div
+                    className={`max-h-52 space-y-2 overflow-y-auto rounded-2xl border px-4 py-3 ${
+                      submitAttempted && validationErrors.classIds
+                        ? 'border-rose-400'
+                        : 'border-slate-300 dark:border-white/15 dark:bg-slate-900'
+                    }`}
+                  >
+                    {classes.map((item) => {
+                      const checked = draft.classIds.includes(item._id);
+                      return (
+                        <label
+                          key={item._id}
+                          className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setDraft((current) => ({
+                                ...current,
+                                classIds: checked
+                                  ? current.classIds.filter((id) => id !== item._id)
+                                  : [...current.classIds, item._id]
+                              }))
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span>{[item.name, item.section].filter(Boolean).join(' ')}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {submitAttempted && validationErrors.classIds ? (
+                  <span className="text-xs font-medium text-rose-600">{validationErrors.classIds}</span>
+                ) : !editingSubjectId ? (
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    You can assign the same subject to multiple classes.
+                  </span>
                 ) : null}
               </label>
 
@@ -434,7 +487,16 @@ export function CurriculumPage({
 
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300">
               <p>
-                Class: <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedClass ? `${selectedClass.name} ${selectedClass.section}`.trim() : '-'}</span>
+                {editingSubjectId ? 'Class' : 'Classes'}:{' '}
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {editingSubjectId
+                    ? selectedClass
+                      ? `${selectedClass.name} ${selectedClass.section}`.trim()
+                      : '-'
+                    : selectedClasses.length > 0
+                      ? selectedClasses.map((item) => [item.name, item.section].filter(Boolean).join(' ')).join(', ')
+                      : '-'}
+                </span>
               </p>
               <p className="mt-1">
                 Teacher: <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTeacher?.name || 'Not assigned'}</span>
