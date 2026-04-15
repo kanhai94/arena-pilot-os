@@ -132,6 +132,30 @@ export const classRepository = {
     return resolved || null;
   },
 
+  async updateClass(tenantId, id, payload) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const updated = await Class.findOneAndUpdate(
+      { _id: id, tenantId: scopedTenantId },
+      {
+        $set: {
+          name: payload.name,
+          section: payload.section,
+          scheduleDays: payload.scheduleDays,
+          startTime: payload.startTime,
+          endTime: payload.endTime
+        }
+      },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return null;
+    }
+
+    const [resolved] = await attachTeacherRefs(scopedTenantId, [updated]);
+    return resolved || null;
+  },
+
   async syncClassStrength(tenantId, classId) {
     const scopedTenantId = resolveTenantId(tenantId);
     const strength = await Student.countDocuments({

@@ -3,6 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SchoolClass, SchoolTeacher } from '../curriculum/CurriculumPage';
 
+const DAY_OPTIONS = [
+  { value: 'mon', label: 'Mon' },
+  { value: 'tue', label: 'Tue' },
+  { value: 'wed', label: 'Wed' },
+  { value: 'thu', label: 'Thu' },
+  { value: 'fri', label: 'Fri' },
+  { value: 'sat', label: 'Sat' },
+  { value: 'sun', label: 'Sun' }
+] as const;
+
+const formatClassLabel = (name: string, section?: string | null) => [name, section].filter(Boolean).join('-');
+const formatScheduleDays = (days: string[] = []) =>
+  DAY_OPTIONS.filter((option) => days.includes(option.value))
+    .map((option) => option.label)
+    .join(', ');
+
 type AssignmentStudent = {
   _id: string;
   name: string;
@@ -20,6 +36,9 @@ export type SchoolClassDetails = {
   teacher: SchoolTeacher | null;
   totalStudents: number;
   strength: number;
+  scheduleDays?: string[];
+  startTime?: string;
+  endTime?: string;
   students: Array<{
     _id: string;
     name: string;
@@ -36,7 +55,20 @@ type SchoolClassesPageProps = {
   students: AssignmentStudent[];
   canManage: boolean;
   saving: boolean;
-  onCreateClass: (payload: { name: string; section: string }) => Promise<boolean>;
+  onCreateClass: (payload: {
+    name: string;
+    section?: string;
+    scheduleDays: string[];
+    startTime: string;
+    endTime: string;
+  }) => Promise<boolean>;
+  onUpdateClass: (id: string, payload: {
+    name: string;
+    section?: string;
+    scheduleDays: string[];
+    startTime: string;
+    endTime: string;
+  }) => Promise<boolean>;
   onFetchClassDetails: (id: string) => Promise<SchoolClassDetails | null>;
   onAssignTeacher: (classId: string, teacherId: string) => Promise<boolean>;
   onAssignStudent: (studentId: string, classId: string, rollNumber: string) => Promise<boolean>;
@@ -52,6 +84,7 @@ export function SchoolClassesPage({
   canManage,
   saving,
   onCreateClass,
+  onUpdateClass,
   onFetchClassDetails,
   onAssignTeacher,
   onAssignStudent
@@ -62,12 +95,16 @@ export function SchoolClassesPage({
   const [showTeacherModal, setShowTeacherModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [studentTargetClassId, setStudentTargetClassId] = useState('');
   const [rollNumber, setRollNumber] = useState('');
   const [newClassName, setNewClassName] = useState('');
   const [newClassSection, setNewClassSection] = useState('');
+  const [newClassScheduleDays, setNewClassScheduleDays] = useState<string[]>([]);
+  const [newClassStartTime, setNewClassStartTime] = useState('');
+  const [newClassEndTime, setNewClassEndTime] = useState('');
 
   useEffect(() => {
     if (!selectedClassId && classes.length > 0) {
@@ -156,16 +193,50 @@ export function SchoolClassesPage({
   };
 
   const submitCreateClass = async () => {
-    if (!newClassName.trim() || !newClassSection.trim()) return;
-    const success = await onCreateClass({
+    if (!newClassName.trim()) return;
+    const payload = {
       name: newClassName.trim(),
-      section: newClassSection.trim()
-    });
+      section: newClassSection.trim(),
+      scheduleDays: newClassScheduleDays,
+      startTime: newClassStartTime,
+      endTime: newClassEndTime
+    };
+    const success = editingClassId ? await onUpdateClass(editingClassId, payload) : await onCreateClass(payload);
     if (success) {
       setShowCreateModal(false);
+      setEditingClassId(null);
       setNewClassName('');
       setNewClassSection('');
+      setNewClassScheduleDays([]);
+      setNewClassStartTime('');
+      setNewClassEndTime('');
     }
+  };
+
+  const openCreateModal = () => {
+    setEditingClassId(null);
+    setNewClassName('');
+    setNewClassSection('');
+    setNewClassScheduleDays([]);
+    setNewClassStartTime('');
+    setNewClassEndTime('');
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (row: SchoolClass) => {
+    setEditingClassId(row._id);
+    setNewClassName(row.name || '');
+    setNewClassSection(row.section || '');
+    setNewClassScheduleDays(row.scheduleDays || []);
+    setNewClassStartTime(row.startTime || '');
+    setNewClassEndTime(row.endTime || '');
+    setShowCreateModal(true);
+  };
+
+  const toggleScheduleDay = (value: string) => {
+    setNewClassScheduleDays((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    );
   };
 
   return (
@@ -182,7 +253,7 @@ export function SchoolClassesPage({
           {canManage ? (
             <button
               type="button"
-              onClick={() => setShowCreateModal(true)}
+              onClick={openCreateModal}
               className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
             >
               + Add Class
@@ -230,7 +301,7 @@ export function SchoolClassesPage({
                     }`}
                   >
                     <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                      {row.name}-{row.section}
+                      {formatClassLabel(row.name, row.section)}
                     </td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{teacher?.name || 'Not assigned'}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.strength || 0}</td>
@@ -242,6 +313,14 @@ export function SchoolClassesPage({
                           className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
                         >
                           View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(row)}
+                          disabled={!canManage}
+                          className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
+                        >
+                          Edit
                         </button>
                         <button
                           type="button"
@@ -283,11 +362,19 @@ export function SchoolClassesPage({
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Section</p>
-                <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{classDetails.section}</p>
+                <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{classDetails.section || '-'}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Teacher</p>
                 <p className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{classDetails.teacher?.name || 'Not assigned'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900">
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Timetable</p>
+                <p className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {classDetails.scheduleDays?.length && classDetails.startTime && classDetails.endTime
+                    ? `${formatScheduleDays(classDetails.scheduleDays)} • ${classDetails.startTime} - ${classDetails.endTime}`
+                    : 'Not scheduled yet'}
+                </p>
               </div>
             </div>
           ) : (
@@ -355,7 +442,7 @@ export function SchoolClassesPage({
           <div className={modalShellClass}>
             <h4 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Assign Teacher</h4>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Select a teacher for {selectedClass ? `${selectedClass.name}-${selectedClass.section}` : 'this class'}.
+              Select a teacher for {selectedClass ? formatClassLabel(selectedClass.name, selectedClass.section) : 'this class'}.
             </p>
             <select
               value={selectedTeacherId}
@@ -420,7 +507,7 @@ export function SchoolClassesPage({
                   <option value="">Select class</option>
                   {classes.map((item) => (
                     <option key={item._id} value={item._id}>
-                      {item.name}-{item.section}
+                      {formatClassLabel(item.name, item.section)}
                     </option>
                   ))}
                 </select>
@@ -459,7 +546,9 @@ export function SchoolClassesPage({
       {showCreateModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className={modalShellClass}>
-            <h4 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Create Class</h4>
+            <h4 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {editingClassId ? 'Edit Class' : 'Create Class'}
+            </h4>
             <div className="mt-5 grid gap-4">
               <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 Class name
@@ -475,15 +564,70 @@ export function SchoolClassesPage({
                 <input
                   value={newClassSection}
                   onChange={(event) => setNewClassSection(event.target.value)}
-                  placeholder="A"
+                  placeholder="Optional"
                   className="rounded-2xl border border-slate-300 px-4 py-3 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100"
                 />
               </label>
+              <div className="grid gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <span>Class days</span>
+                <div className="flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map((day) => {
+                    const active = newClassScheduleDays.includes(day.value);
+                    return (
+                      <button
+                        key={day.value}
+                        type="button"
+                        onClick={() => toggleScheduleDay(day.value)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                            : 'border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-white/15 dark:text-slate-300 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Start time
+                  <input
+                    type="time"
+                    value={newClassStartTime}
+                    onChange={(event) => setNewClassStartTime(event.target.value)}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  End time
+                  <input
+                    type="time"
+                    value={newClassEndTime}
+                    onChange={(event) => setNewClassEndTime(event.target.value)}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300">
+              <p>
+                Timetable:{' '}
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {newClassScheduleDays.length && newClassStartTime && newClassEndTime
+                    ? `${formatScheduleDays(newClassScheduleDays)} • ${newClassStartTime} - ${newClassEndTime}`
+                    : 'Schedule can be added now or later'}
+                </span>
+              </p>
             </div>
             <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setEditingClassId(null);
+                }}
                 className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-white/15 dark:text-slate-200"
               >
                 Cancel
@@ -491,10 +635,10 @@ export function SchoolClassesPage({
               <button
                 type="button"
                 onClick={submitCreateClass}
-                disabled={saving || !newClassName.trim() || !newClassSection.trim()}
+                disabled={saving || !newClassName.trim()}
                 className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-500 dark:text-slate-950"
               >
-                {saving ? 'Saving...' : 'Create Class'}
+                {saving ? 'Saving...' : editingClassId ? 'Update Class' : 'Create Class'}
               </button>
             </div>
           </div>

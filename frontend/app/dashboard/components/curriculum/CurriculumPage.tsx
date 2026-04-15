@@ -8,6 +8,9 @@ export type SchoolClass = {
   section: string;
   classTeacherId?: SchoolTeacher | string | null;
   strength?: number;
+  scheduleDays?: string[];
+  startTime?: string;
+  endTime?: string;
 };
 
 export type SchoolTeacher = {

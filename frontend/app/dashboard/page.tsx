@@ -1960,13 +1960,42 @@ export default function DashboardPage() {
     const selectedDate = new Date(`${scheduleDate}T00:00:00`);
     const selectedDay = dayMap[selectedDate.getDay()];
 
+    if (organizationType === 'SCHOOL') {
+      return schoolClasses
+        .map((row) => {
+          const teacher =
+            typeof row.classTeacherId === 'string'
+              ? schoolTeachers.find((item) => item._id === row.classTeacherId)
+              : row.classTeacherId || null;
+          const dayLabels = (row.scheduleDays || [])
+            .map((day) => ({ sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' }[day] || day))
+            .join(', ');
+
+          return {
+            id: row._id,
+            title: [row.name, row.section].filter(Boolean).join('-'),
+            scheduleDayValues: row.scheduleDays || [],
+            scheduleDays: dayLabels,
+            timing: row.startTime && row.endTime ? `${row.startTime} - ${row.endTime}` : '-',
+            coachName: teacher?.name || 'Not assigned',
+            centerName: 'School',
+            status: 'active' as const
+          };
+        })
+        .filter((row) => {
+          const dayMatch = row.scheduleDayValues.includes(selectedDay);
+          const batchMatch = scheduleBatchFilter === 'all' || row.id === scheduleBatchFilter;
+          return dayMatch && batchMatch;
+        });
+    }
+
     return academyClassRows.filter((row) => {
       const dayMatch = row.scheduleDayValues.includes(selectedDay);
       const centerMatch = scheduleCenterFilter === 'all' || row.centerName === scheduleCenterFilter;
       const batchMatch = scheduleBatchFilter === 'all' || row.id === scheduleBatchFilter;
       return dayMatch && centerMatch && batchMatch;
     });
-  }, [academyClassRows, scheduleDate, scheduleCenterFilter, scheduleBatchFilter]);
+  }, [academyClassRows, organizationType, scheduleDate, scheduleCenterFilter, scheduleBatchFilter, schoolClasses, schoolTeachers]);
 
   const renewalCandidates = useMemo(() => {
     const now = new Date();
@@ -2536,10 +2565,26 @@ export default function DashboardPage() {
     );
   };
 
-  const createSchoolClass = async (payload: { name: string; section: string }) => {
+  const createSchoolClass = async (payload: {
+    name: string;
+    section?: string;
+    scheduleDays: string[];
+    startTime: string;
+    endTime: string;
+  }) => {
     return runCurriculumAction(
       () => apiPostWithAuth('/classes', payload, token),
       'Class created successfully'
+    );
+  };
+
+  const updateSchoolClass = async (
+    id: string,
+    payload: { name: string; section?: string; scheduleDays: string[]; startTime: string; endTime: string }
+  ) => {
+    return runCurriculumAction(
+      () => apiPutWithAuth(`/classes/${id}`, payload, token),
+      'Class updated successfully'
     );
   };
 
@@ -5081,6 +5126,7 @@ const getNameInitials = (value: string) =>
                       canManage={canManageBatches}
                       saving={actionLoading}
                       onCreateClass={createSchoolClass}
+                      onUpdateClass={updateSchoolClass}
                       onFetchClassDetails={fetchSchoolClassDetails}
                       onAssignTeacher={assignTeacherToSchoolClass}
                       onAssignStudent={assignStudentToSchoolClass}
@@ -5555,14 +5601,20 @@ const getNameInitials = (value: string) =>
                       />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                      Center
+                      {organizationType === 'SCHOOL' ? 'School' : 'Center'}
                       <select
                         value={scheduleCenterFilter}
                         onChange={(e) => setScheduleCenterFilter(e.target.value)}
                         className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
                       >
                         <option value="all">All centers</option>
-                        {Array.from(new Set(academyClassRows.map((row) => row.centerName))).map((centerName) => (
+                        {Array.from(
+                          new Set(
+                            organizationType === 'SCHOOL'
+                              ? scheduleRows.map((row) => row.centerName)
+                              : academyClassRows.map((row) => row.centerName)
+                          )
+                        ).map((centerName) => (
                           <option key={centerName} value={centerName}>
                             {centerName}
                           </option>
@@ -5577,7 +5629,7 @@ const getNameInitials = (value: string) =>
                         className="ops-control rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 truncate"
                       >
                         <option value="all">All classes</option>
-                        {academyClassRows.map((row) => (
+                        {(organizationType === 'SCHOOL' ? scheduleRows : academyClassRows).map((row) => (
                           <option key={row.id} value={row.id}>
                             {row.title.length > 42 ? `${row.title.slice(0, 42)}…` : row.title}
                           </option>
@@ -5592,8 +5644,8 @@ const getNameInitials = (value: string) =>
                           <th className="px-2 py-2 font-semibold">Class</th>
                           <th className="px-2 py-2 font-semibold">Days</th>
                           <th className="px-2 py-2 font-semibold">Time</th>
-                          <th className="px-2 py-2 font-semibold">Coach</th>
-                          <th className="px-2 py-2 font-semibold">Center</th>
+                          <th className="px-2 py-2 font-semibold">{organizationType === 'SCHOOL' ? 'Teacher' : 'Coach'}</th>
+                          <th className="px-2 py-2 font-semibold">{organizationType === 'SCHOOL' ? 'School' : 'Center'}</th>
                           <th className="px-2 py-2 font-semibold">Status</th>
                         </tr>
                       </thead>
@@ -6532,141 +6584,141 @@ const getNameInitials = (value: string) =>
                       </tbody>
                     </table>
                   </div>
+                </article>
+              ) : null}
 
-                  {showCoachComposer ? (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 px-4 py-6">
-                      <div className="mt-6 mb-8 w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.45)] sm:p-7">
-                        <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                          <div>
-                            <h4 className="text-2xl font-bold text-slate-900">Add Access User</h4>
-                            <p className="mt-1 text-sm text-slate-500">
-                              Create secure dashboard access with the right role, title, and temporary password.
-                            </p>
-                          </div>
+              {showCoachComposer ? (
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 px-4 py-6">
+                  <div className="mt-6 mb-8 w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.45)] sm:p-7">
+                    <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                      <div>
+                        <h4 className="text-2xl font-bold text-slate-900">Add Access User</h4>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Create secure dashboard access with the right role, title, and temporary password.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCoachComposer(false)}
+                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="grid gap-6">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                          Full name
+                          <input
+                            value={coachName}
+                            onChange={(e) => setCoachName(e.target.value)}
+                            placeholder="Full name"
+                            className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                          Email
+                          <input
+                            value={coachEmail}
+                            onChange={(e) => setCoachEmail(e.target.value)}
+                            placeholder="Email"
+                            className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
+                          />
+                        </label>
+                      </div>
+                      {coachSubmitAttempted && coachValidationErrors.name ? (
+                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.name}</p>
+                      ) : null}
+                      {coachSubmitAttempted && coachValidationErrors.email ? (
+                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.email}</p>
+                      ) : null}
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                          Role
+                          <select
+                            value={coachRole}
+                            onChange={(e) => setCoachRole(e.target.value as TeamRole)}
+                            className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
+                          >
+                            {accessRoleOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                          Title
+                          <input
+                            value={coachTitle}
+                            onChange={(e) => setCoachTitle(e.target.value)}
+                            placeholder="Title"
+                            className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.title ? 'border-rose-400' : 'border-slate-300'}`}
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                          Designation
+                          <input
+                            value={coachDesignation}
+                            onChange={(e) => setCoachDesignation(e.target.value)}
+                            placeholder="Designation"
+                            className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.designation ? 'border-rose-400' : 'border-slate-300'}`}
+                          />
+                        </label>
+                      </div>
+                      {coachSubmitAttempted && coachValidationErrors.title ? (
+                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.title}</p>
+                      ) : null}
+                      {coachSubmitAttempted && coachValidationErrors.designation ? (
+                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.designation}</p>
+                      ) : null}
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                            Temporary login password
+                            <input
+                              value={coachPassword}
+                              onChange={(e) => setCoachPassword(e.target.value)}
+                              placeholder="Temporary login password"
+                              className={`rounded-2xl border bg-white px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
+                            />
+                          </label>
                           <button
                             type="button"
-                            onClick={() => setShowCoachComposer(false)}
-                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                            onClick={() => setCoachPassword(generateAccessPassword())}
+                            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                           >
-                            Close
+                            Regenerate
                           </button>
                         </div>
-                        <div className="grid gap-6">
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                              Full name
-                              <input
-                                value={coachName}
-                                onChange={(e) => setCoachName(e.target.value)}
-                                placeholder="Full name"
-                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.name ? 'border-rose-400' : 'border-slate-300'}`}
-                              />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                              Email
-                              <input
-                                value={coachEmail}
-                                onChange={(e) => setCoachEmail(e.target.value)}
-                                placeholder="Email"
-                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.email ? 'border-rose-400' : 'border-slate-300'}`}
-                              />
-                            </label>
-                          </div>
-                          {coachSubmitAttempted && coachValidationErrors.name ? (
-                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.name}</p>
-                          ) : null}
-                          {coachSubmitAttempted && coachValidationErrors.email ? (
-                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.email}</p>
-                          ) : null}
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                              Role
-                              <select
-                                value={coachRole}
-                                onChange={(e) => setCoachRole(e.target.value as TeamRole)}
-                                className="rounded-2xl border border-slate-300 px-4 py-3 font-normal"
-                              >
-                                {accessRoleOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                              Title
-                              <input
-                                value={coachTitle}
-                                onChange={(e) => setCoachTitle(e.target.value)}
-                                placeholder="Title"
-                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.title ? 'border-rose-400' : 'border-slate-300'}`}
-                              />
-                            </label>
-                            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                              Designation
-                              <input
-                                value={coachDesignation}
-                                onChange={(e) => setCoachDesignation(e.target.value)}
-                                placeholder="Designation"
-                                className={`rounded-2xl border px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.designation ? 'border-rose-400' : 'border-slate-300'}`}
-                              />
-                            </label>
-                          </div>
-                          {coachSubmitAttempted && coachValidationErrors.title ? (
-                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.title}</p>
-                          ) : null}
-                          {coachSubmitAttempted && coachValidationErrors.designation ? (
-                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.designation}</p>
-                          ) : null}
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                                Temporary login password
-                                <input
-                                  value={coachPassword}
-                                  onChange={(e) => setCoachPassword(e.target.value)}
-                                  placeholder="Temporary login password"
-                                  className={`rounded-2xl border bg-white px-4 py-3 font-normal ${coachSubmitAttempted && coachValidationErrors.password ? 'border-rose-400' : 'border-slate-300'}`}
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => setCoachPassword(generateAccessPassword())}
-                                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                              >
-                                Regenerate
-                              </button>
-                            </div>
-                          </div>
-                          {coachSubmitAttempted && coachValidationErrors.password ? (
-                            <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
-                          ) : null}
-                          {coachServerError ? (
-                            <p className="-mt-1 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
-                              {coachServerError}
-                            </p>
-                          ) : null}
-                          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
-                            <button
-                              type="button"
-                              onClick={() => setShowCoachComposer(false)}
-                              className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={submitCoach}
-                              disabled={actionLoading}
-                              className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
-                            >
-                              {actionLoading ? 'Saving...' : 'Add Access User'}
-                            </button>
-                          </div>
-                        </div>
+                      </div>
+                      {coachSubmitAttempted && coachValidationErrors.password ? (
+                        <p className="-mt-2 text-xs font-medium text-rose-600">{coachValidationErrors.password}</p>
+                      ) : null}
+                      {coachServerError ? (
+                        <p className="-mt-1 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                          {coachServerError}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowCoachComposer(false)}
+                          className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={submitCoach}
+                          disabled={actionLoading}
+                          className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-60"
+                        >
+                          {actionLoading ? 'Saving...' : 'Add Access User'}
+                        </button>
                       </div>
                     </div>
-                  ) : null}
-                </article>
+                  </div>
+                </div>
               ) : null}
             </div>
           )

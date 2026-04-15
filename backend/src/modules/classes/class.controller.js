@@ -4,6 +4,7 @@ import {
   assignTeacherSchema,
   classIdParamSchema,
   createClassSchema,
+  updateClassSchema,
   parseOrThrow
 } from '../../validators/class.validators.js';
 
@@ -22,6 +23,17 @@ export const createClassController = (classService) => {
     listClasses: async (_req, res, next) => {
       try {
         const data = await classService.listClasses();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    updateClass: async (req, res, next) => {
+      try {
+        const { id } = parseOrThrow(classIdParamSchema, req.params);
+        const payload = parseOrThrow(updateClassSchema, req.body);
+        const data = await classService.updateClass(id, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

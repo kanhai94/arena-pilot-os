@@ -11,9 +11,12 @@ export const createClassService = (repository) => {
       const created = await repository.createClass({
         tenantId,
         name: payload.name.trim(),
-        section: payload.section.trim(),
+        section: payload.section?.trim() || '',
         classTeacherId: null,
-        strength: 0
+        strength: 0,
+        scheduleDays: payload.scheduleDays || [],
+        startTime: payload.startTime || '',
+        endTime: payload.endTime || ''
       });
 
       return repository.findClassById(tenantId, created._id);
@@ -40,6 +43,23 @@ export const createClassService = (repository) => {
       }
 
       return repository.assignTeacherToClass(tenantId, id, payload.teacherId);
+    },
+
+    async updateClass(id, payload) {
+      const tenantId = resolveTenantId();
+      const classDoc = await repository.findClassById(tenantId, id);
+
+      if (!classDoc) {
+        throw new AppError('Class not found', StatusCodes.NOT_FOUND);
+      }
+
+      return repository.updateClass(tenantId, id, {
+        name: payload.name.trim(),
+        section: payload.section?.trim() || '',
+        scheduleDays: payload.scheduleDays || [],
+        startTime: payload.startTime || '',
+        endTime: payload.endTime || ''
+      });
     },
 
     async getClassDetails(id) {
@@ -73,6 +93,9 @@ export const createClassService = (repository) => {
         teacher: classDoc.classTeacherId || null,
         totalStudents: linkedStudents.length,
         strength: linkedStudents.length,
+        scheduleDays: classDoc.scheduleDays || [],
+        startTime: classDoc.startTime || '',
+        endTime: classDoc.endTime || '',
         students: linkedStudents
       };
     }

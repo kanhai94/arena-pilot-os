@@ -15,8 +15,8 @@ const classSchema = new mongoose.Schema(
     },
     section: {
       type: String,
-      required: true,
-      trim: true
+      trim: true,
+      default: ''
     },
     classTeacherId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -28,6 +28,21 @@ const classSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0
+    },
+    scheduleDays: {
+      type: [String],
+      enum: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+      default: []
+    },
+    startTime: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    endTime: {
+      type: String,
+      trim: true,
+      default: ''
     }
   },
   {
