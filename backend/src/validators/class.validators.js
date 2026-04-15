@@ -15,6 +15,7 @@ export const createClassSchema = z
     startTime: z.union([timeValueSchema, z.literal('')]).optional().default(''),
     endTime: z.union([timeValueSchema, z.literal('')]).optional().default('')
   })
+  .strict()
   .superRefine((payload, ctx) => {
     const hasScheduleData =
       payload.scheduleDays.length > 0 || Boolean(payload.startTime) || Boolean(payload.endTime);
@@ -46,8 +47,7 @@ export const createClassSchema = z
         message: 'End time is required when schedule is set'
       });
     }
-  })
-  .strict();
+  });
 
 export const updateClassSchema = createClassSchema;
 
