@@ -114,6 +114,43 @@ export function CurriculumPage({
     () => teachers.find((item) => item._id === draft.teacherId) || null,
     [teachers, draft.teacherId]
   );
+  const groupedSubjects = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        status: 'active' | 'inactive';
+        teacher: SchoolTeacher | null;
+        subjects: Array<{ subject: CurriculumSubject; classLabel: string }>;
+      }
+    >();
+
+    for (const subject of subjects) {
+      const classMeta = getClassMeta(subject.classId, classes);
+      const teacherMeta = getTeacherMeta(subject.teacherId, teachers);
+      const teacherKey = teacherMeta?._id || (typeof subject.teacherId === 'string' ? subject.teacherId : 'none');
+      const groupKey = `${subject.name.toLowerCase()}::${teacherKey}::${subject.status}`;
+      const classLabel = classMeta ? [classMeta.name, classMeta.section].filter(Boolean).join(' ') : '-';
+      const current =
+        groups.get(groupKey) ||
+        {
+          id: groupKey,
+          name: subject.name,
+          status: subject.status,
+          teacher: teacherMeta,
+          subjects: []
+        };
+
+      current.subjects.push({ subject, classLabel });
+      groups.set(groupKey, current);
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      subjects: group.subjects.sort((a, b) => a.classLabel.localeCompare(b.classLabel))
+    }));
+  }, [classes, subjects, teachers]);
 
   const validationErrors = useMemo(() => {
     const errors: Record<string, string> = {};
@@ -244,7 +281,7 @@ export function CurriculumPage({
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Curriculum records linked to classes and teachers.</p>
             </div>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300">
-              {subjects.length} subjects
+              {groupedSubjects.length} subjects
             </span>
           </div>
 
@@ -258,52 +295,66 @@ export function CurriculumPage({
                 <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr className="border-b border-slate-200 text-slate-600 dark:border-white/10 dark:text-slate-300">
                     <th className="px-4 py-3 font-semibold">Subject Name</th>
-                    <th className="px-4 py-3 font-semibold">Class</th>
+                    <th className="px-4 py-3 font-semibold">Classes</th>
                     <th className="px-4 py-3 font-semibold">Teacher</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.map((subject) => {
-                    const classMeta = getClassMeta(subject.classId, classes);
-                    const teacherMeta = getTeacherMeta(subject.teacherId, teachers);
+                  {groupedSubjects.map((group) => {
                     return (
-                      <tr key={subject._id} className="border-b border-slate-100 dark:border-white/5">
-                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{subject.name}</td>
+                      <tr key={group.id} className="border-b border-slate-100 align-top dark:border-white/5">
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{group.name}</td>
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-                          {classMeta ? `${classMeta.name} ${classMeta.section}`.trim() : '-'}
+                          <div className="flex flex-wrap gap-2">
+                            {group.subjects.map((item) => (
+                              <span
+                                key={item.subject._id}
+                                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+                              >
+                                {item.classLabel}
+                              </span>
+                            ))}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{teacherMeta?.name || 'Not assigned'}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{group.teacher?.name || 'Not assigned'}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              subject.status === 'active'
+                              group.status === 'active'
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                                 : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                             }`}
                           >
-                            {subject.status}
+                            {group.status}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(subject)}
-                              disabled={!canManage}
-                              className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeSubject(subject)}
-                              disabled={!canManage}
-                              className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
-                            >
-                              Delete
-                            </button>
+                          <div className="space-y-2">
+                            {group.subjects.map((item) => (
+                              <div key={item.subject._id} className="flex flex-wrap items-center gap-2">
+                                <span className="min-w-[3rem] text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+                                  {item.classLabel}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(item.subject)}
+                                  disabled={!canManage}
+                                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSubject(item.subject)}
+                                  disabled={!canManage}
+                                  className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         </td>
                       </tr>
