@@ -1119,6 +1119,25 @@ export default function DashboardPage() {
   }, [activeMenu, activeTab, activeAcademyPro, activePlatformControl]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isMobileViewport = window.innerWidth < 1024;
+    if (!isMobileViewport) {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      return;
+    }
+
+    document.body.style.overflow = sidebarOpen ? 'hidden' : '';
+    document.body.style.touchAction = sidebarOpen ? 'none' : '';
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [sidebarOpen]);
+
+  useEffect(() => {
     const scriptId = 'razorpay-checkout-js';
     if (document.getElementById(scriptId)) {
       return;
@@ -2640,23 +2659,79 @@ export default function DashboardPage() {
   };
 
   const updateCurriculumSubject = async (
-    id: string,
     payload: {
+      subjectIds: string[];
+      existingClassIds: string[];
       name: string;
-      classId: string;
+      classIds: string[];
       teacherId?: string | null;
       status: 'active' | 'inactive';
     }
   ) => {
-    return runCurriculumAction(
-      () => apiPutWithAuth(`/subjects/${id}`, payload, token),
-      'Subject updated successfully'
-    );
+    if (!user) return false;
+
+    setActionLoading(true);
+    setToast('');
+
+    try {
+      const subjectIdsByClass = new Map<string, string>();
+      payload.existingClassIds.forEach((classId, index) => {
+        const subjectId = payload.subjectIds[index];
+        if (classId && subjectId) {
+          subjectIdsByClass.set(classId, subjectId);
+        }
+      });
+
+      const nextClassIds = payload.classIds.filter(Boolean);
+      const removedClassIds = payload.existingClassIds.filter((classId) => !nextClassIds.includes(classId));
+      const keptClassIds = nextClassIds.filter((classId) => subjectIdsByClass.has(classId));
+      const addedClassIds = nextClassIds.filter((classId) => !subjectIdsByClass.has(classId));
+
+      await Promise.all([
+        ...keptClassIds.map((classId) =>
+          apiPutWithAuth(
+            `/subjects/${subjectIdsByClass.get(classId)}`,
+            {
+              name: payload.name,
+              classId,
+              teacherId: payload.teacherId || null,
+              status: payload.status
+            },
+            token
+          )
+        ),
+        ...addedClassIds.map((classId) =>
+          apiPostWithAuth<CurriculumSubject>(
+            '/subjects',
+            {
+              name: payload.name,
+              classId,
+              teacherId: payload.teacherId || null,
+              status: payload.status
+            },
+            token
+          )
+        ),
+        ...removedClassIds.map((classId) => apiDeleteWithAuth(`/subjects/${subjectIdsByClass.get(classId)}`, token))
+      ]);
+
+      setToast('Subject updated successfully');
+      void loadDashboardData(token);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error && err.message.trim() ? err.message : 'Failed to update subject. Please try again.';
+      setToast(message);
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const deleteCurriculumSubject = async (id: string) => {
+  const deleteCurriculumSubject = async (ids: string[]) => {
+    if (!ids.length) return false;
+
     return runCurriculumAction(
-      () => apiDeleteWithAuth(`/subjects/${id}`, token),
+      () => Promise.all(ids.map((id) => apiDeleteWithAuth(`/subjects/${id}`, token))),
       'Subject removed from curriculum'
     );
   };
@@ -4432,7 +4507,7 @@ const getNameInitials = (value: string) =>
   };
 
   return (
-    <div className="dashboard-shell relative min-h-screen bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-3 py-3 sm:px-6 sm:py-4">
+    <div className="dashboard-shell relative min-h-screen overflow-x-hidden bg-[linear-gradient(115deg,#edf2ff_0%,#f8fbff_45%,#ecfff6_100%)] px-3 py-3 sm:px-6 sm:py-4">
       <div className="mx-auto mb-3 flex max-w-[1500px] items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:hidden">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">ArenaPilot OS</p>
@@ -4460,14 +4535,15 @@ const getNameInitials = (value: string) =>
           type="button"
           aria-label="Close sidebar"
           onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-900/35 lg:hidden"
+          className="fixed inset-0 z-30 bg-slate-950/55 lg:hidden"
         />
       ) : null}
       <div className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[280px_1fr]">
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[88vw] max-w-[330px] overflow-y-auto rounded-r-3xl border border-slate-200/70 bg-white/95 p-4 shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur transition-transform duration-300 lg:static lg:z-auto lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-3xl lg:bg-white/85 ${
+          className={`fixed inset-y-0 left-0 z-40 h-[100dvh] w-screen max-w-none overflow-y-auto overflow-x-hidden overscroll-contain border-r border-slate-200/80 bg-white px-4 pb-8 pt-4 shadow-[0_28px_60px_-28px_rgba(15,23,42,0.45)] transition-transform duration-300 ease-out sm:w-[26rem] sm:rounded-r-[2rem] sm:border-r sm:px-5 lg:static lg:z-auto lg:h-auto lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-3xl lg:border lg:border-slate-200/70 lg:bg-white/85 lg:p-4 lg:shadow-[0_22px_45px_-30px_rgba(15,23,42,0.55)] lg:backdrop-blur ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
         >
           <div className="mb-2 flex items-center justify-between lg:hidden">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Navigation</p>
@@ -4549,6 +4625,15 @@ const getNameInitials = (value: string) =>
                                 onClick={openClassComposer}
                                 className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
                                 aria-label={`Add new ${uiLabels.batch.toLowerCase()}`}
+                              >
+                                +
+                              </button>
+                            ) : null}
+                            {sub.id === 'clients' && canManageStudents ? (
+                              <button
+                                onClick={openClientComposerForCreate}
+                                className="rounded-lg px-2 py-1.5 text-lg font-semibold leading-none text-indigo-700 hover:bg-white dark:text-emerald-200 dark:hover:bg-slate-800/70"
+                                aria-label="Add new student"
                               >
                                 +
                               </button>

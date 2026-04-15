@@ -28,6 +28,14 @@ export type CurriculumSubject = {
   status: 'active' | 'inactive';
 };
 
+type GroupedSubject = {
+  id: string;
+  name: string;
+  status: 'active' | 'inactive';
+  teacher: SchoolTeacher | null;
+  subjects: Array<{ subject: CurriculumSubject; classLabel: string }>;
+};
+
 type SubjectDraft = {
   name: string;
   classIds: string[];
@@ -48,15 +56,16 @@ type CurriculumPageProps = {
     status: 'active' | 'inactive';
   }) => Promise<boolean>;
   onUpdateSubject: (
-    id: string,
     payload: {
+      subjectIds: string[];
+      existingClassIds: string[];
       name: string;
-      classId: string;
+      classIds: string[];
       teacherId?: string | null;
       status: 'active' | 'inactive';
     }
   ) => Promise<boolean>;
-  onDeleteSubject: (id: string) => Promise<boolean>;
+  onDeleteSubject: (ids: string[]) => Promise<boolean>;
 };
 
 const EMPTY_DRAFT: SubjectDraft = {
@@ -102,10 +111,6 @@ export function CurriculumPage({
   const [modalVisible, setModalVisible] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  const selectedClass = useMemo(
-    () => classes.find((item) => item._id === draft.classIds[0]) || null,
-    [classes, draft.classIds]
-  );
   const selectedClasses = useMemo(
     () => classes.filter((item) => draft.classIds.includes(item._id)),
     [classes, draft.classIds]
@@ -117,13 +122,7 @@ export function CurriculumPage({
   const groupedSubjects = useMemo(() => {
     const groups = new Map<
       string,
-      {
-        id: string;
-        name: string;
-        status: 'active' | 'inactive';
-        teacher: SchoolTeacher | null;
-        subjects: Array<{ subject: CurriculumSubject; classLabel: string }>;
-      }
+      GroupedSubject
     >();
 
     for (const subject of subjects) {
@@ -198,15 +197,19 @@ export function CurriculumPage({
     setShowModal(true);
   };
 
-  const openEditModal = (subject: CurriculumSubject) => {
-    const classMeta = getClassMeta(subject.classId, classes);
-    const teacherMeta = getTeacherMeta(subject.teacherId, teachers);
-    setEditingSubjectId(subject._id);
+  const openEditModalForGroup = (group: GroupedSubject) => {
+    const teacherMeta = group.teacher;
+    setEditingSubjectId(group.subjects[0]?.subject._id || null);
     setDraft({
-      name: subject.name,
-      classIds: classMeta?._id ? [classMeta._id] : [],
+      name: group.name,
+      classIds: group.subjects
+        .map((item) => {
+          const classMeta = getClassMeta(item.subject.classId, classes);
+          return classMeta?._id || '';
+        })
+        .filter(Boolean),
       teacherId: teacherMeta?._id || '',
-      status: subject.status
+      status: group.status
     });
     setSubmitAttempted(false);
     setShowModal(true);
@@ -225,10 +228,21 @@ export function CurriculumPage({
       status: draft.status
     };
 
+    const currentSubjects = editingSubjectId
+      ? groupedSubjects.find((group) => group.subjects.some((item) => item.subject._id === editingSubjectId))?.subjects || []
+      : [];
+
     const success = editingSubjectId
-      ? await onUpdateSubject(editingSubjectId, {
+      ? await onUpdateSubject({
+          subjectIds: currentSubjects.map((item) => item.subject._id),
+          existingClassIds: currentSubjects
+            .map((item) => {
+              const classMeta = getClassMeta(item.subject.classId, classes);
+              return classMeta?._id || '';
+            })
+            .filter(Boolean),
           name: payload.name,
-          classId: payload.classIds[0] || '',
+          classIds: payload.classIds,
           teacherId: payload.teacherId,
           status: payload.status
         })
@@ -239,12 +253,12 @@ export function CurriculumPage({
     }
   };
 
-  const removeSubject = async (subject: CurriculumSubject) => {
-    if (!window.confirm(`Delete ${subject.name}?`)) {
+  const removeSubjectGroup = async (group: GroupedSubject) => {
+    if (!window.confirm(`Delete ${group.name} from all linked classes?`)) {
       return;
     }
 
-    await onDeleteSubject(subject._id);
+    await onDeleteSubject(group.subjects.map((item) => item.subject._id));
   };
 
   return (
@@ -331,30 +345,23 @@ export function CurriculumPage({
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="space-y-2">
-                            {group.subjects.map((item) => (
-                              <div key={item.subject._id} className="flex flex-wrap items-center gap-2">
-                                <span className="min-w-[3rem] text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
-                                  {item.classLabel}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(item.subject)}
-                                  disabled={!canManage}
-                                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeSubject(item.subject)}
-                                  disabled={!canManage}
-                                  className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            ))}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModalForGroup(group)}
+                              disabled={!canManage}
+                              className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:text-slate-200 dark:hover:bg-slate-900"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeSubjectGroup(group)}
+                              disabled={!canManage}
+                              className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -436,70 +443,48 @@ export function CurriculumPage({
               </label>
 
               <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {editingSubjectId ? 'Class' : 'Classes'}
-                {editingSubjectId ? (
-                  <select
-                    value={draft.classIds[0] || ''}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        classIds: event.target.value ? [event.target.value] : []
-                      }))
-                    }
-                    className={`rounded-2xl border px-4 py-3 font-normal outline-none transition ${
-                      submitAttempted && validationErrors.classIds
-                        ? 'border-rose-400'
-                        : 'border-slate-300 dark:border-white/15 dark:bg-slate-900 dark:text-slate-100'
-                    }`}
-                  >
-                    <option value="">Select class</option>
-                    {classes.map((item) => (
-                      <option key={item._id} value={item._id}>
-                        {item.name} {item.section}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div
-                    className={`max-h-52 space-y-2 overflow-y-auto rounded-2xl border px-4 py-3 ${
-                      submitAttempted && validationErrors.classIds
-                        ? 'border-rose-400'
-                        : 'border-slate-300 dark:border-white/15 dark:bg-slate-900'
-                    }`}
-                  >
-                    {classes.map((item) => {
-                      const checked = draft.classIds.includes(item._id);
-                      return (
-                        <label
-                          key={item._id}
-                          className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-800/60"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              setDraft((current) => ({
-                                ...current,
-                                classIds: checked
-                                  ? current.classIds.filter((id) => id !== item._id)
-                                  : [...current.classIds, item._id]
-                              }))
-                            }
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span>{[item.name, item.section].filter(Boolean).join(' ')}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                Classes
+                <div
+                  className={`max-h-52 space-y-2 overflow-y-auto rounded-2xl border px-4 py-3 ${
+                    submitAttempted && validationErrors.classIds
+                      ? 'border-rose-400'
+                      : 'border-slate-300 dark:border-white/15 dark:bg-slate-900'
+                  }`}
+                >
+                  {classes.map((item) => {
+                    const checked = draft.classIds.includes(item._id);
+                    return (
+                      <label
+                        key={item._id}
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              classIds: checked
+                                ? current.classIds.filter((id) => id !== item._id)
+                                : [...current.classIds, item._id]
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>{[item.name, item.section].filter(Boolean).join(' ')}</span>
+                      </label>
+                    );
+                  })}
+                </div>
                 {submitAttempted && validationErrors.classIds ? (
                   <span className="text-xs font-medium text-rose-600">{validationErrors.classIds}</span>
-                ) : !editingSubjectId ? (
+                ) : (
                   <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                    You can assign the same subject to multiple classes.
+                    {editingSubjectId
+                      ? 'Select classes where this subject should stay active. Unselect to remove it from a class.'
+                      : 'You can assign the same subject to multiple classes.'}
                   </span>
-                ) : null}
+                )}
               </label>
 
               <label className="grid gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -538,15 +523,11 @@ export function CurriculumPage({
 
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300">
               <p>
-                {editingSubjectId ? 'Class' : 'Classes'}:{' '}
+                Classes:{' '}
                 <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  {editingSubjectId
-                    ? selectedClass
-                      ? `${selectedClass.name} ${selectedClass.section}`.trim()
-                      : '-'
-                    : selectedClasses.length > 0
-                      ? selectedClasses.map((item) => [item.name, item.section].filter(Boolean).join(' ')).join(', ')
-                      : '-'}
+                  {selectedClasses.length > 0
+                    ? selectedClasses.map((item) => [item.name, item.section].filter(Boolean).join(' ')).join(', ')
+                    : '-'}
                 </span>
               </p>
               <p className="mt-1">
