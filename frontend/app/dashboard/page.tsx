@@ -2013,6 +2013,12 @@ export default function DashboardPage() {
 
   const pendingStudentsCount = useMemo(() => pendingFees.filter((f) => f.summary.overallPending > 0).length, [pendingFees]);
   const paidStudentsCount = useMemo(() => attendanceStudents.filter((s) => s.feeStatus === 'paid').length, [attendanceStudents]);
+  const sportsBatchTitleById = useMemo(() => {
+    return batches.reduce<Record<string, string>>((acc, batch) => {
+      acc[batch._id] = batch.name;
+      return acc;
+    }, {});
+  }, [batches]);
   const feeCollectionStudentOptions = useMemo(() => {
     const classLabelForStudent = (student: Student) => {
       if (organizationType === 'SCHOOL') {
@@ -2021,7 +2027,7 @@ export default function DashboardPage() {
         return schoolClass ? formatSchoolClassLabel(schoolClass.name, schoolClass.section) : '-';
       }
       const batchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
-      return academyClassRows.find((row) => row.id === batchId)?.title || '-';
+      return sportsBatchTitleById[batchId] || '-';
     };
 
     return attendanceStudents
@@ -2037,7 +2043,7 @@ export default function DashboardPage() {
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [academyClassRows, attendanceStudents, organizationType, pendingFees, schoolClasses]);
+  }, [attendanceStudents, organizationType, pendingFees, schoolClasses, sportsBatchTitleById]);
 
   const normalizedFeeCollectionSearch = feeCollectionStudentQuery.trim().toLowerCase();
   const visibleFeeCollectionStudents = useMemo(() => {

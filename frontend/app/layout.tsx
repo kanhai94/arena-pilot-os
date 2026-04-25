@@ -13,7 +13,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Sports Academy SaaS',
+  title: 'CampusPilot OS',
   description: 'Production-ready multi-tenant sports academy management platform'
 };
 
