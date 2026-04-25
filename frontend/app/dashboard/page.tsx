@@ -1228,7 +1228,15 @@ export default function DashboardPage() {
   const safeFetch = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try {
       return await fn();
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Request failed';
+      if (
+        typeof message === 'string' &&
+        message.toLowerCase().includes('vercel security check blocked this request')
+      ) {
+        setToast('Browser verification blocked some data requests. Please open the site normally and retry.');
+        setDebugOutput(JSON.stringify({ error: message }, null, 2));
+      }
       return fallback;
     }
   };

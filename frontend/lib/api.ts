@@ -10,6 +10,9 @@ type ApiResponse<T> = {
 
 let refreshInFlight: Promise<boolean> | null = null;
 
+const VERCEL_CHECKPOINT_MESSAGE =
+  'Vercel security check blocked this request. Open the site in a normal browser tab, allow cookies, and try again.';
+
 const parseErrorMessage = (payload: any): string => {
   if (!payload) {
     return 'Request failed';
@@ -44,8 +47,23 @@ const sendRequest = async <T>(path: string, method: string, body?: unknown, acce
     credentials: 'include',
     ...(body !== undefined ? { body: JSON.stringify(body) } : {})
   });
+  const contentType = response.headers.get('content-type') || '';
+  let payload: ApiResponse<T>;
 
-  const payload: ApiResponse<T> = await response.json().catch(() => ({ success: false, message: 'Invalid response' }));
+  if (contentType.includes('application/json')) {
+    payload = await response.json().catch(() => ({ success: false, message: 'Invalid response' }));
+  } else {
+    const responseText = await response.text().catch(() => '');
+    const isVercelCheckpoint =
+      responseText.includes('Vercel Security Checkpoint') ||
+      responseText.includes('Failed to verify your browser') ||
+      response.headers.has('x-vercel-challenge-token');
+
+    payload = {
+      success: false,
+      message: isVercelCheckpoint ? VERCEL_CHECKPOINT_MESSAGE : 'Invalid response'
+    };
+  }
 
   return { response, payload };
 };
