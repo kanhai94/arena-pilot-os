@@ -2023,6 +2023,18 @@ export default function DashboardPage() {
     };
   }, [attendanceEntries, organizationType, selectedAttendanceRows]);
 
+  const attendanceDraftSummary = useMemo(() => {
+    const total = attendanceDraftRecords.length;
+    const present = attendanceDraftRecords.filter((record) => record.status === 'present').length;
+    const absent = attendanceDraftRecords.filter((record) => record.status === 'absent').length;
+
+    return {
+      total,
+      present,
+      absent
+    };
+  }, [attendanceDraftRecords]);
+
   const studioRosterRows = useMemo(() => {
     const search = rosterSearchText.trim().toLowerCase();
     return attendanceStudents.filter((student) => {
@@ -3881,13 +3893,9 @@ export default function DashboardPage() {
     setAttendanceDraftRecords(assignedStudents);
   };
 
-  const toggleDraftAttendance = (studentId: string) => {
+  const setDraftAttendanceStatus = (studentId: string, status: 'present' | 'absent') => {
     setAttendanceDraftRecords((prev) =>
-      prev.map((record) =>
-        record.studentId === studentId
-          ? { ...record, status: record.status === 'present' ? 'absent' : 'present' }
-          : record
-      )
+      prev.map((record) => (record.studentId === studentId ? { ...record, status } : record))
     );
   };
 
@@ -4766,8 +4774,8 @@ const getNameInitials = (value: string) =>
               <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Overview</p>
-                  <h2 className="mt-2 text-2xl font-bold text-slate-900">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <h2 className="mt-2 text-[1.9rem] leading-tight font-bold text-slate-900 sm:text-2xl">Welcome, {user?.fullName?.split(' ')[0] || 'Coach'}</h2>
+                  <p className="mt-1 max-w-xl text-sm text-slate-600">
                     Track classes, fees, and updates in one place.
                   </p>
                   <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-700">
@@ -4776,13 +4784,13 @@ const getNameInitials = (value: string) =>
                 </div>
 
               {isAdmin ? (
-                <div className="w-full max-w-[440px] justify-self-end rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)]">
+                <div className="w-full min-w-0 justify-self-stretch rounded-2xl border border-emerald-300/20 bg-[linear-gradient(135deg,#0b1220,#0f172a_50%,#0f5132)] p-4 text-white shadow-[0_18px_40px_-25px_rgba(0,229,168,0.8)] lg:max-w-[440px] lg:justify-self-end">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/80">Current Plan</p>
-                      <p className="mt-2 inline-flex max-w-full items-baseline gap-2 whitespace-nowrap text-3xl font-bold leading-tight">
-                        <span className="truncate">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</span>
-                        <span className="text-base font-semibold text-emerald-100/80">
+                      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="max-w-full truncate text-3xl font-bold leading-tight">{tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}</span>
+                        <span className="text-sm font-semibold text-emerald-100/80 sm:text-base">
                           (
                           {tenantSubscription
                             ? `${tenantSubscription.currentStudentCount}/${tenantSubscription.studentLimit ?? '∞'}`
@@ -4791,8 +4799,8 @@ const getNameInitials = (value: string) =>
                               : '0/∞'}
                           )
                         </span>
-                      </p>
-                      <p className="mt-2 text-xs text-emerald-50/80">
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-emerald-50/80">
                         {tenantSubscription
                           ? `${formatCurrency(tenantSubscription.planPrice)} / month`
                           : billing?.plan
@@ -4803,11 +4811,11 @@ const getNameInitials = (value: string) =>
                       </p>
                     </div>
                     <div className="relative mt-1.5 flex shrink-0 flex-col items-end gap-2">
-                      <div className="inline-flex items-center gap-2">
+                      <div className="inline-flex max-w-full items-center gap-2 self-end">
                         <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-emerald-50/80">
                           Workspace ID
                         </span>
-                        <span className="font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+                        <span className="max-w-[5.5rem] truncate font-mono text-xs font-semibold text-white sm:max-w-none">{user?.academyCode || 'N/A'}</span>
                       </div>
                       <button
                         type="button"
@@ -4851,7 +4859,7 @@ const getNameInitials = (value: string) =>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between gap-3">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <button
                       onClick={() => token && loadDashboardData(token)}
                       className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
@@ -4867,7 +4875,7 @@ const getNameInitials = (value: string) =>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1e293b_45%,#065f46)] p-4 text-white">
+                <div className="w-full min-w-0 rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1e293b_45%,#065f46)] p-4 text-white">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-200">Current Plan</p>
@@ -4876,7 +4884,7 @@ const getNameInitials = (value: string) =>
                         {billing?.plan ? `${billing.plan.studentLimit} learner cap` : 'Upgrade anytime'}
                       </p>
                     </div>
-                    <div className="relative">
+                    <div className="relative shrink-0">
                       <button
                         type="button"
                         onClick={() => setVisualMenuOpen((prev) => !prev)}
@@ -4918,28 +4926,28 @@ const getNameInitials = (value: string) =>
                       ) : null}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <button
                       onClick={() => token && loadDashboardData(token)}
                       className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
                     >
                       Refresh Snapshot
                     </button>
-                    <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                    <div className="inline-flex max-w-full items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
                       <span className="text-[10px] uppercase tracking-[0.16em] text-slate-200">Workspace ID</span>
-                      <span className="ml-2 font-mono text-xs font-semibold text-white">{user?.academyCode || 'N/A'}</span>
+                      <span className="ml-2 max-w-[5.5rem] truncate font-mono text-xs font-semibold text-white sm:max-w-none">{user?.academyCode || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
               {headerTabs.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => handleTabClick(tab)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${
+                  className={`shrink-0 snap-start rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${
                     activeTab === tab
                       ? 'bg-slate-900 text-white'
                       : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
@@ -6010,10 +6018,10 @@ const getNameInitials = (value: string) =>
                                     e.stopPropagation();
                                     openAttendanceMarker(row.id);
                                   }}
-                                  className="ops-icon-button rounded-full border border-slate-300 px-2.5 py-1 text-lg font-semibold leading-none text-slate-700 hover:bg-slate-100"
+                                  className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
                                   aria-label={`Mark attendance for ${row.title}`}
                                 >
-                                  +
+                                  Mark
                                 </button>
                               ) : (
                                 <span className="text-xs text-slate-500">No action</span>
@@ -6027,13 +6035,15 @@ const getNameInitials = (value: string) =>
 
                   {activeAttendanceBatch ? (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4">
-                      <div className="ops-panel w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                      <div className="ops-panel w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
                         <div className="mb-4 flex items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xl font-bold text-slate-900">Mark Attendance</h4>
-                            <p className="text-sm text-slate-600">
-                              {activeAttendanceBatch.title} | {activeAttendanceBatch.centerName} | {academyAttendanceDate}
-                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-700">{activeAttendanceBatch.title}</p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                              <span className="rounded-full bg-slate-100 px-3 py-1">{academyAttendanceDate}</span>
+                              <span className="rounded-full bg-slate-100 px-3 py-1">{activeAttendanceBatch.centerName}</span>
+                            </div>
                           </div>
                           <button
                             onClick={() => {
@@ -6041,46 +6051,85 @@ const getNameInitials = (value: string) =>
                               setAttendanceDraftRecords([]);
                             }}
                             className="registry-action-button rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            Close
-                          </button>
-                        </div>
+                            >
+                              Close
+                            </button>
+                          </div>
 
-                        <div className="ops-table-shell max-h-[420px] overflow-y-auto rounded-xl border border-slate-200">
-                          {attendanceDraftRecords.length === 0 ? (
-                            <div className="px-4 py-5 text-sm text-slate-500">No students assigned to this class.</div>
-                          ) : null}
-                          {attendanceDraftRecords.map((record) => (
-                            <div key={record.studentId} className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                              <div>
-                                <p className="font-semibold text-slate-900">{record.name}</p>
-                                <p className="text-xs text-slate-500">{record.phone}</p>
-                              </div>
-                              <button
-                                onClick={() => toggleDraftAttendance(record.studentId)}
-                                className={`h-9 min-w-9 rounded-full px-3 text-sm font-bold ${
-                                  record.status === 'present'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-rose-100 text-rose-700'
-                                }`}
-                                title="Toggle Present/Absent"
-                              >
-                                {record.status === 'present' ? 'P' : 'A'}
-                              </button>
+                          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Students</p>
+                              <p className="mt-1 text-2xl font-extrabold text-slate-900">{attendanceDraftSummary.total}</p>
                             </div>
-                          ))}
-                        </div>
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Present</p>
+                              <p className="mt-1 text-2xl font-extrabold text-emerald-800">{attendanceDraftSummary.present}</p>
+                            </div>
+                            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">Absent</p>
+                              <p className="mt-1 text-2xl font-extrabold text-rose-800">{attendanceDraftSummary.absent}</p>
+                            </div>
+                          </div>
 
-                        <div className="mt-4 flex items-center justify-between">
-                          <p className="text-xs text-slate-500">Tap P/A button to toggle status.</p>
-                          <button
-                            onClick={submitBatchAttendance}
-                            disabled={actionLoading || attendanceDraftRecords.length === 0}
-                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
-                          >
-                            {actionLoading ? 'Saving...' : 'Mark Attendance'}
-                          </button>
-                        </div>
+                          <div className="ops-table-shell max-h-[420px] space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                            {attendanceDraftRecords.length === 0 ? (
+                              <div className="rounded-2xl bg-white px-4 py-5 text-sm text-slate-500">No students assigned to this class.</div>
+                            ) : null}
+                            {attendanceDraftRecords.map((record) => (
+                              <div key={record.studentId} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-slate-900">{record.name}</p>
+                                    <p className="text-xs text-slate-500">{record.phone}</p>
+                                  </div>
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                      record.status === 'present'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-rose-100 text-rose-700'
+                                    }`}
+                                  >
+                                    {record.status === 'present' ? 'Present' : 'Absent'}
+                                  </span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDraftAttendanceStatus(record.studentId, 'present')}
+                                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                      record.status === 'present'
+                                        ? 'bg-emerald-600 text-white shadow-sm'
+                                        : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                    }`}
+                                  >
+                                    Present
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDraftAttendanceStatus(record.studentId, 'absent')}
+                                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                      record.status === 'absent'
+                                        ? 'bg-rose-600 text-white shadow-sm'
+                                        : 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                                    }`}
+                                  >
+                                    Absent
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-xs text-slate-500">Choose Present or Absent for each student, then save once.</p>
+                            <button
+                              onClick={submitBatchAttendance}
+                              disabled={actionLoading || attendanceDraftRecords.length === 0}
+                              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                            >
+                              {actionLoading ? 'Saving...' : 'Save Attendance'}
+                            </button>
+                          </div>
                       </div>
                     </div>
                   ) : null}
