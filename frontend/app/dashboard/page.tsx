@@ -4492,7 +4492,7 @@ const getNameInitials = (value: string) =>
       const sportsClassLookup = new Map(
         academyClassRows.flatMap((row) => {
           const keys = new Set(
-            [row.title?.trim(), row.batchName?.trim(), `${row.batchName || ''} ${row.title || ''}`.trim()]
+            [row.title?.trim()]
               .filter(Boolean)
               .map((value) => normalizeImportLookup(value))
           );
