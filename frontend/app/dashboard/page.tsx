@@ -341,6 +341,7 @@ type TenantBillingPayment = {
   id: string;
   date: string;
   amount: number;
+  totalAmount?: number;
   status: 'paid' | 'pending' | 'failed';
   planName: string;
   invoiceNumber: string;
