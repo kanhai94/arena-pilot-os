@@ -8322,7 +8322,7 @@ const getNameInitials = (value: string) =>
                   }`}
                 >
                   <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>Next Payment</p>
-                  <p className="mt-2 text-2xl font-bold">{tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}</p>
+                  <p className="mt-2 text-2xl font-bold">{tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription?.nextPaymentDate) : 'N/A'}</p>
                   <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
                     Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
                   </p>
