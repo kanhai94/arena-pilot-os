@@ -2,6 +2,7 @@ import { FeePlan } from '../../models/feePlan.model.js';
 import { StudentFee } from '../../models/studentFee.model.js';
 import { Payment } from '../../models/payment.model.js';
 import { Student } from '../../models/student.model.js';
+import { Notification } from '../../models/notification.model.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
 
 const resolveTenantId = (tenantId = null) => TenantContext.requireTenantId(tenantId);
@@ -28,7 +29,9 @@ export const feeRepository = {
 
   findStudentById(tenantId, studentId) {
     const scopedTenantId = resolveTenantId(tenantId);
-    return Student.findOne({ _id: studentId, tenantId: scopedTenantId, status: 'active' }).lean();
+    return Student.findOne({ _id: studentId, tenantId: scopedTenantId, status: 'active' })
+      .populate({ path: 'classId', select: '_id name section', options: { lean: true } })
+      .lean();
   },
 
   findActiveStudentFeeByStudentId(tenantId, studentId) {
@@ -135,7 +138,7 @@ export const feeRepository = {
               }
             },
             { $match: studentMatch },
-            { $project: { _id: 1, name: 1, parentPhone: 1, status: 1 } }
+            { $project: { _id: 1, name: 1, email: 1, parentPhone: 1, status: 1, classId: 1, monthlyFee: 1 } }
           ],
           as: 'student'
         }
@@ -198,5 +201,162 @@ export const feeRepository = {
   updateStudentFeeStatus(tenantId, studentId, feeStatus) {
     const scopedTenantId = resolveTenantId(tenantId);
     return Student.updateOne({ _id: studentId, tenantId: scopedTenantId }, { $set: { feeStatus } });
+  },
+
+  updateStudentById(tenantId, studentId, updatePayload) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.findOneAndUpdate(
+      { _id: studentId, tenantId: scopedTenantId },
+      { $set: updatePayload },
+      { new: true, lean: true }
+    );
+  },
+
+  findPaymentByStudentAndMonth(tenantId, studentId, month) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Payment.findOne({ tenantId: scopedTenantId, studentId, month }).lean();
+  },
+
+  async listPayments(tenantId, filters = {}) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const {
+      studentId,
+      status,
+      classId,
+      dueInDays,
+      page = 1,
+      limit = 50
+    } = filters;
+    const skip = (page - 1) * limit;
+    const match = { tenantId: scopedTenantId };
+
+    if (studentId) {
+      match.studentId = studentId;
+    }
+    if (status) {
+      match.status = status;
+    }
+
+    const studentPipeline = [];
+    if (classId) {
+      studentPipeline.push({ $match: { classId } });
+    }
+
+    if (Number.isFinite(dueInDays)) {
+      const now = new Date();
+      const dueCutoff = new Date(now);
+      dueCutoff.setDate(dueCutoff.getDate() + Number(dueInDays));
+      match.dueDate = { $lte: dueCutoff };
+    }
+
+    const [items, total] = await Promise.all([
+      Payment.find(match)
+        .sort({ dueDate: 1, paymentDate: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({ path: 'studentId', select: '_id name email parentPhone classId monthlyFee', match: studentPipeline[0]?.$match, options: { lean: true }, populate: { path: 'classId', select: '_id name section', options: { lean: true } } })
+        .populate({ path: 'recordedBy', select: '_id fullName role', options: { lean: true } })
+        .lean(),
+      Payment.countDocuments(match)
+    ]);
+
+    const filteredItems = items.filter((item) => item.studentId);
+
+    return {
+      items: filteredItems,
+      total: classId ? filteredItems.length : total
+    };
+  },
+
+  async getPaymentSummary(tenantId) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    nextMonthStart.setHours(0, 0, 0, 0);
+
+    const [pendingRows, paidThisMonthRows, overdueStudentsRows] = await Promise.all([
+      StudentFee.aggregate([
+        { $match: { tenantId: scopedTenantId, status: 'active' } },
+        {
+          $lookup: {
+            from: 'payments',
+            let: { studentId: '$studentId', tenantId: '$tenantId', startDate: '$startDate' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$studentId', '$$studentId'] },
+                      { $eq: ['$tenantId', '$$tenantId'] },
+                      { $gte: ['$paymentDate', '$$startDate'] }
+                    ]
+                  }
+                }
+              },
+              { $group: { _id: null, totalPaid: { $sum: '$amountPaid' } } }
+            ],
+            as: 'paymentSummary'
+          }
+        },
+        {
+          $project: {
+            totalAmount: 1,
+            startDate: 1,
+            nextDueDate: 1,
+            durationMonths: '$feePlan.durationMonths',
+            totalPaid: { $ifNull: [{ $arrayElemAt: ['$paymentSummary.totalPaid', 0] }, 0] }
+          }
+        }
+      ]),
+      Payment.aggregate([
+        { $match: { tenantId: scopedTenantId, paymentDate: { $gte: monthStart, $lt: nextMonthStart } } },
+        { $group: { _id: null, totalAmount: { $sum: '$amountPaid' } } }
+      ]),
+      Payment.aggregate([
+        { $match: { tenantId: scopedTenantId, status: 'OVERDUE' } },
+        { $group: { _id: '$studentId' } },
+        { $count: 'total' }
+      ])
+    ]);
+
+    return {
+      pendingRows,
+      paidThisMonth: paidThisMonthRows?.[0]?.totalAmount || 0,
+      overdueStudentsCount: overdueStudentsRows?.[0]?.total || 0
+    };
+  },
+
+  createNotification(payload) {
+    return Notification.create(payload);
+  },
+
+  async findStudentsByDueStatus(tenantId, filters = {}) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const { status, classId, dueInDays } = filters;
+    const paymentFilter = {};
+    if (status) {
+      paymentFilter.status = status;
+    }
+    if (Number.isFinite(dueInDays)) {
+      const now = new Date();
+      const dueCutoff = new Date(now);
+      dueCutoff.setDate(dueCutoff.getDate() + Number(dueInDays));
+      paymentFilter.dueDate = { $lte: dueCutoff };
+    }
+
+    const rows = await Payment.find({ tenantId: scopedTenantId, ...paymentFilter })
+      .populate({
+        path: 'studentId',
+        select: '_id name email parentPhone classId',
+        match: classId ? { classId } : {},
+        options: { lean: true },
+        populate: { path: 'classId', select: '_id name section', options: { lean: true } }
+      })
+      .sort({ dueDate: 1 })
+      .lean();
+
+    return rows.filter((row) => row.studentId);
   }
 };

@@ -1,4 +1,5 @@
 import { TenantContext } from '../../core/context/tenantContext.js';
+import { computeFeeMetrics } from '../fees/fee.utils.js';
 
 const toDayRange = (baseDate = new Date()) => {
   const start = new Date(baseDate);
@@ -78,6 +79,46 @@ export const createDashboardService = (repository) => {
         upcomingRenewals,
         attendanceRate,
         activeBatches
+      };
+    },
+
+    async getFeeSummary() {
+      const tenantId = resolveTenantId();
+      const now = new Date();
+      const { monthStart, nextMonthStart } = toMonthRange(now);
+      const activeStudentFees = await repository.listActiveStudentFees(tenantId);
+      const paymentTotals = await Promise.all(
+        activeStudentFees.map((item) => repository.sumPaymentsSinceStart(tenantId, item.studentId, item.startDate))
+      );
+
+      let totalPendingRows = 0;
+      const totalPendingFees = activeStudentFees.reduce((sum, item, index) => {
+        const feePlan = item.feePlanId;
+        if (!feePlan) return sum;
+        const totalPaid = paymentTotals[index]?.[0]?.totalAmount || 0;
+        const metrics = computeFeeMetrics({
+          startDate: item.startDate,
+          nextDueDate: item.nextDueDate,
+          totalAmount: item.totalAmount,
+          durationMonths: feePlan.durationMonths,
+          totalPaid,
+          asOfDate: now
+        });
+        const pendingCycles = feePlan.amount > 0 ? Math.max(0, Math.ceil(metrics.pendingTillDate / feePlan.amount)) : 0;
+        totalPendingRows += pendingCycles;
+        return sum + metrics.pendingTillDate;
+      }, 0);
+
+      const [paidThisMonthRows, overdueStudentsRows] = await Promise.all([
+        repository.sumPaidThisMonth(tenantId, monthStart, nextMonthStart),
+        repository.countOverdueStudents(tenantId)
+      ]);
+
+      return {
+        totalPendingFees,
+        paidThisMonth: paidThisMonthRows?.[0]?.totalAmount || 0,
+        overdueStudentsCount: overdueStudentsRows?.[0]?.total || 0,
+        totalPendingRows
       };
     }
   };

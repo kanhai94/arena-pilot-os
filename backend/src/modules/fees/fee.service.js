@@ -7,6 +7,113 @@ import { TenantContext } from '../../core/context/tenantContext.js';
 export const createFeeService = (repository, dependencies = {}) => {
   const { tenantMetricsService } = dependencies;
   const resolveTenantId = () => TenantContext.requireTenantId();
+  const paymentModeToDb = {
+    CASH: 'CASH',
+    ONLINE: 'ONLINE',
+    UPI: 'UPI'
+  };
+
+  const formatMonthKey = (dateValue) => {
+    const date = new Date(dateValue);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC'
+    }).replace(' ', '-');
+  };
+
+  const summarizeDueStatus = (dueDate, asOfDate) => {
+    const diffMs = normalizeToUTCDate(dueDate).getTime() - normalizeToUTCDate(asOfDate).getTime();
+    const dueInDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (dueInDays < 0) {
+      return {
+        status: 'OVERDUE',
+        dueInDays,
+        badge: 'Overdue'
+      };
+    }
+
+    if (dueInDays === 0) {
+      return {
+        status: 'PENDING',
+        dueInDays,
+        badge: 'Due today'
+      };
+    }
+
+    return {
+      status: 'PENDING',
+      dueInDays,
+      badge: `Due in ${dueInDays} day${dueInDays === 1 ? '' : 's'}`
+    };
+  };
+
+  const buildPendingRows = async ({ asOfDate, search = '', studentId, classId, dueInDays, page = 1, limit = 200 }) => {
+    const rowsPerPage = Math.max(limit, 200);
+    const { rows } = await repository.getPendingStudentFeesBase(resolveTenantId(), page, rowsPerPage, search);
+
+    const filtered = rows
+      .flatMap((row) => {
+        const currentDate = normalizeToUTCDate(asOfDate);
+        const startDate = normalizeToUTCDate(row.startDate);
+        const feePlanAmount = row.feePlan?.amount || row.totalAmount || 0;
+        if (!feePlanAmount || !row.feePlan?.durationMonths) {
+          return [];
+        }
+
+        const metrics = computeFeeMetrics({
+          startDate: row.startDate,
+          nextDueDate: row.nextDueDate,
+          totalAmount: row.totalAmount,
+          durationMonths: row.feePlan.durationMonths,
+          totalPaid: row.totalPaid || 0,
+          asOfDate: currentDate
+        });
+
+        const pendingCycles = Math.max(0, Math.ceil(metrics.pendingTillDate / feePlanAmount));
+        const firstPendingCycle = Math.max(0, metrics.dueCycles - pendingCycles);
+
+        return Array.from({ length: pendingCycles }).map((_, index) => {
+          const dueDate = addMonthsUTC(startDate, firstPendingCycle + index);
+          const dueInfo = summarizeDueStatus(dueDate, currentDate);
+          return {
+            id: `${row.student._id}-${formatMonthKey(dueDate)}`,
+            studentId: row.student._id,
+            student: row.student,
+            classId: row.student.classId?._id || row.student.classId || null,
+            amount: feePlanAmount,
+            paymentDate: null,
+            dueDate,
+            status: dueInfo.status,
+            paymentMode: null,
+            transactionId: null,
+            month: formatMonthKey(dueDate),
+            paymentSource: 'system',
+            referenceNote: null,
+            badge: dueInfo.badge,
+            dueInDays: dueInfo.dueInDays,
+            monthlyFee: feePlanAmount,
+            lastPayment: row.totalPaid || 0,
+            pendingDues: metrics.overallPending
+          };
+        });
+      })
+      .filter((item) => {
+        if (studentId && String(item.studentId) !== String(studentId)) {
+          return false;
+        }
+        if (classId && String(item.classId || '') !== String(classId)) {
+          return false;
+        }
+        if (Number.isFinite(dueInDays) && item.dueInDays > Number(dueInDays)) {
+          return false;
+        }
+        return true;
+      });
+
+    return filtered;
+  };
 
   const calculateStudentFeeStatus = async (studentFee, asOfDate) => {
     const tenantId = resolveTenantId();
@@ -127,6 +234,7 @@ export const createFeeService = (repository, dependencies = {}) => {
       });
 
       await repository.updateStudentFeeStatus(tenantId, payload.studentId, 'pending');
+      await repository.updateStudentById(tenantId, payload.studentId, { monthlyFee: feePlan.amount });
 
       return studentFee;
     },
@@ -182,13 +290,23 @@ export const createFeeService = (repository, dependencies = {}) => {
       }
 
       const paymentDate = normalizeToUTCDate(payload.paymentDate);
+      const dueDate = payload.dueDate ? normalizeToUTCDate(payload.dueDate) : studentFee.nextDueDate;
+      const month = payload.month || formatMonthKey(dueDate);
+      const existingMonthPayment = await repository.findPaymentByStudentAndMonth(tenantId, payload.studentId, month);
+      if (existingMonthPayment) {
+        throw new AppError('Payment already exists for this student and month', StatusCodes.CONFLICT);
+      }
 
       const payment = await repository.createPayment({
         tenantId,
         studentId: payload.studentId,
         amountPaid: payload.amountPaid,
+        month,
         paymentDate,
-        paymentMode: payload.paymentMode,
+        dueDate,
+        status: 'PAID',
+        paymentMode: paymentModeToDb[payload.paymentMode] || payload.paymentMode,
+        transactionId: payload.transactionId || null,
         referenceNote: payload.referenceNote || null,
         recordedBy
       });
@@ -222,22 +340,69 @@ export const createFeeService = (repository, dependencies = {}) => {
       };
     },
 
-    async paymentHistory(studentId, page, limit) {
+    async paymentHistory(query) {
       const tenantId = resolveTenantId();
-      const student = await repository.findStudentById(tenantId, studentId);
-      if (!student) {
-        throw new AppError('Student not found', StatusCodes.NOT_FOUND);
+      const { studentId, status, classId, dueInDays, page, limit } = query;
+
+      if (studentId) {
+        const student = await repository.findStudentById(tenantId, studentId);
+        if (!student) {
+          throw new AppError('Student not found', StatusCodes.NOT_FOUND);
+        }
       }
 
-      const { items, total, totalPaid } = await repository.getPaymentHistory(tenantId, studentId, page, limit);
+      const paidHistoryPromise = repository.listPayments(tenantId, {
+        studentId,
+        status: status === 'PAID' ? 'PAID' : undefined,
+        classId,
+        dueInDays,
+        page,
+        limit
+      });
+      const pendingRowsPromise =
+        !status || status === 'PENDING' || status === 'OVERDUE'
+          ? buildPendingRows({
+              asOfDate: new Date(),
+              studentId,
+              classId,
+              dueInDays,
+              page,
+              limit
+            })
+          : Promise.resolve([]);
 
+      const [{ items: paidItems, total, }, pendingRows] = await Promise.all([paidHistoryPromise, pendingRowsPromise]);
+      const paidRows = paidItems.map((item) => ({
+        id: String(item._id),
+        studentId: typeof item.studentId === 'object' ? String(item.studentId?._id || '') : String(item.studentId),
+        student: item.studentId,
+        amount: item.amountPaid,
+        paymentDate: item.paymentDate,
+        dueDate: item.dueDate,
+        status: item.status,
+        paymentMode: item.paymentMode,
+        transactionId: item.transactionId,
+        month: item.month,
+        recordedBy: item.recordedBy || null
+      }));
+
+      const merged =
+        status && status !== 'PAID'
+          ? pendingRows.filter((item) => item.status === status)
+          : status === 'PAID'
+            ? paidRows
+            : [...pendingRows, ...paidRows].sort(
+                (a, b) => new Date(b.paymentDate || b.dueDate).getTime() - new Date(a.paymentDate || a.dueDate).getTime()
+              );
+
+      const totalPaid = paidRows.reduce((sum, item) => sum + item.amount, 0);
       return {
-        items,
+        items: merged,
         pagination: {
           page,
           limit,
-          total,
-          totalPages: Math.ceil(total / limit)
+          total: status === 'PAID' ? total : merged.length,
+          totalPages: Math.max(1, Math.ceil((status === 'PAID' ? total : merged.length) / limit))
         },
         totalPaid
       };
@@ -290,6 +455,72 @@ export const createFeeService = (repository, dependencies = {}) => {
           total,
           totalPages: Math.ceil(total / limit)
         }
+      };
+    },
+
+    async getFeeSummary() {
+      const asOfDate = new Date();
+      const pendingRows = await buildPendingRows({ asOfDate, limit: 500 });
+      const currentMonth = formatMonthKey(asOfDate);
+      const { items: paidThisMonthItems } = await repository.listPayments(resolveTenantId(), {
+        status: 'PAID',
+        page: 1,
+        limit: 500
+      });
+
+      const currentMonthItems = paidThisMonthItems.filter((item) => item.month === currentMonth);
+      const pendingTotal = pendingRows.reduce((sum, row) => sum + row.amount, 0);
+      const paidThisMonth = currentMonthItems.reduce((sum, row) => sum + row.amountPaid, 0);
+      const overdueStudentsCount = new Set(
+        pendingRows.filter((row) => row.status === 'OVERDUE').map((row) => String(row.studentId))
+      ).size;
+
+      return {
+        totalPendingFees: pendingTotal,
+        paidThisMonth,
+        overdueStudentsCount,
+        totalPendingRows: pendingRows.length
+      };
+    },
+
+    async sendReminders(payload) {
+      const tenantId = resolveTenantId();
+      const rows = await buildPendingRows({
+        asOfDate: new Date(),
+        classId: payload.classId,
+        dueInDays: payload.dueInDays
+      });
+
+      const filteredRows = payload.status ? rows.filter((row) => row.status === payload.status) : rows;
+
+      const deduped = new Map();
+      for (const row of filteredRows) {
+        const key = `${row.studentId}-${row.month}`;
+        if (!deduped.has(key)) {
+          deduped.set(key, row);
+        }
+      }
+
+      const entries = Array.from(deduped.values());
+      await Promise.all(
+        entries.map((row) =>
+          repository.createNotification({
+            tenantId,
+            studentId: row.studentId,
+            phoneNumber: row.student.parentPhone,
+            messageType: 'feeReminder',
+            messageContent:
+              payload.channel === 'email'
+                ? `Fee reminder for ${row.month}. Amount due: ${row.amount}.`
+                : `Fee reminder: ${row.amount} due for ${row.month}.`,
+            status: 'queued'
+          })
+        )
+      );
+
+      return {
+        queued: entries.length,
+        channel: payload.channel
       };
     }
   };

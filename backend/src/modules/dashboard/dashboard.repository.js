@@ -3,6 +3,7 @@ import { Attendance } from '../../models/attendance.model.js';
 import { Batch } from '../../models/batch.model.js';
 import { Payment } from '../../models/payment.model.js';
 import { Subscription } from '../../models/subscription.model.js';
+import { StudentFee } from '../../models/studentFee.model.js';
 
 export const dashboardRepository = {
   countActiveStudents(tenantId) {
@@ -59,6 +60,40 @@ export const dashboardRepository = {
 
   countActiveBatches(tenantId) {
     return Batch.countDocuments({ tenantId, status: 'active' });
+  },
+
+  sumPaidThisMonth(tenantId, monthStart, nextMonthStart) {
+    return Payment.aggregate([
+      { $match: { tenantId, paymentDate: { $gte: monthStart, $lt: nextMonthStart }, status: 'PAID' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amountPaid' } } }
+    ]);
+  },
+
+  countOverdueStudents(tenantId) {
+    return Payment.aggregate([
+      { $match: { tenantId, status: 'OVERDUE' } },
+      { $group: { _id: '$studentId' } },
+      { $count: 'total' }
+    ]);
+  },
+
+  listActiveStudentFees(tenantId) {
+    return StudentFee.find({ tenantId, status: 'active' })
+      .populate({ path: 'feePlanId', select: '_id name amount durationMonths', options: { lean: true } })
+      .lean();
+  },
+
+  sumPaymentsSinceStart(tenantId, studentId, startDate) {
+    return Payment.aggregate([
+      {
+        $match: {
+          tenantId,
+          studentId,
+          paymentDate: { $gte: startDate }
+        }
+      },
+      { $group: { _id: null, totalAmount: { $sum: '$amountPaid' } } }
+    ]);
   }
 };
 

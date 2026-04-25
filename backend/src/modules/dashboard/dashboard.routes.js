@@ -21,6 +21,11 @@ dashboardRouter.get(
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   dashboardController.getOverview
 );
+dashboardRouter.get(
+  '/fee-summary',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  dashboardController.getFeeSummary
+);
 
 export { dashboardRouter };
 

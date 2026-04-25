@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { AppError } from '../errors/appError.js';
 
 const objectIdRegex = /^[a-f0-9]{24}$/i;
+const paymentStatusSchema = z.enum(['PAID', 'PENDING', 'OVERDUE']);
+const paymentModeSchema = z.enum(['CASH', 'ONLINE', 'UPI']);
 
 export const createFeePlanSchema = z
   .object({
@@ -46,13 +48,20 @@ export const recordPaymentSchema = z
     studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
     amountPaid: z.coerce.number().positive(),
     paymentDate: z.string().datetime({ offset: true }).or(z.string().date()),
-    paymentMode: z.enum(['cash', 'online', 'upi']),
-    referenceNote: z.string().max(300).optional()
+    dueDate: z.string().datetime({ offset: true }).or(z.string().date()).optional(),
+    month: z.string().trim().min(3).max(20),
+    paymentMode: paymentModeSchema,
+    transactionId: z.string().trim().max(120).optional(),
+    referenceNote: z.string().max(300).optional(),
+    createPendingIfMissing: z.boolean().optional()
   })
   .strict();
 
 export const paymentHistoryQuerySchema = z.object({
-  studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
+  studentId: z.string().regex(objectIdRegex, 'Invalid studentId').optional(),
+  status: paymentStatusSchema.optional(),
+  classId: z.string().regex(objectIdRegex, 'Invalid classId').optional(),
+  dueInDays: z.coerce.number().int().min(1).max(60).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
@@ -63,6 +72,15 @@ export const pendingFeesListQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
   asOfDate: z.string().datetime({ offset: true }).or(z.string().date()).optional()
 });
+
+export const reminderSchema = z
+  .object({
+    channel: z.enum(['whatsapp', 'email']),
+    status: paymentStatusSchema.optional(),
+    classId: z.string().regex(objectIdRegex, 'Invalid classId').optional(),
+    dueInDays: z.coerce.number().int().min(1).max(60).optional()
+  })
+  .strict();
 
 export const parseOrThrow = (schema, payload) => {
   const parsed = schema.safeParse(payload);

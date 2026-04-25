@@ -6,6 +6,7 @@ import {
   parseOrThrow,
   paymentHistoryQuerySchema,
   pendingFeesListQuerySchema,
+  reminderSchema,
   recordPaymentSchema,
   studentFeeStatusQuerySchema,
   updateFeePlanParamsSchema,
@@ -77,7 +78,7 @@ export const createFeeController = (feeService) => {
     paymentHistory: async (req, res, next) => {
       try {
         const query = parseOrThrow(paymentHistoryQuerySchema, req.query);
-        const data = await feeService.paymentHistory(query.studentId, query.page, query.limit);
+        const data = await feeService.paymentHistory(query);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);
@@ -89,6 +90,25 @@ export const createFeeController = (feeService) => {
         const query = parseOrThrow(pendingFeesListQuerySchema, req.query);
         const data = await feeService.pendingFeesList(query.page, query.limit, query.search, query.asOfDate);
         return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    getFeeSummary: async (_req, res, next) => {
+      try {
+        const data = await feeService.getFeeSummary();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    sendReminders: async (req, res, next) => {
+      try {
+        const payload = parseOrThrow(reminderSchema, req.body);
+        const data = await feeService.sendReminders(payload);
+        return apiSuccess(res, data, StatusCodes.CREATED);
       } catch (error) {
         return next(error);
       }

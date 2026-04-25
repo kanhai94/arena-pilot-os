@@ -40,9 +40,24 @@ feeRouter.get(
   feeController.paymentHistory
 );
 feeRouter.get(
+  '/payments',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  feeController.paymentHistory
+);
+feeRouter.get(
   '/payments/pending',
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   feeController.pendingFeesList
+);
+feeRouter.post(
+  '/payments/reminders',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF),
+  feeController.sendReminders
+);
+feeRouter.get(
+  '/dashboard/fee-summary',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  feeController.getFeeSummary
 );
 
 export { feeRouter };

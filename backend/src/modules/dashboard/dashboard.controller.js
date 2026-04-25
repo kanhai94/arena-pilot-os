@@ -9,6 +9,15 @@ export const createDashboardController = (service) => {
       } catch (error) {
         return next(error);
       }
+    },
+
+    getFeeSummary: async (_req, res, next) => {
+      try {
+        const data = await service.getFeeSummary();
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
     }
   };
 };

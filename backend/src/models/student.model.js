@@ -55,6 +55,11 @@ const studentSchema = new mongoose.Schema(
       lowercase: true,
       default: null
     },
+    monthlyFee: {
+      type: Number,
+      min: 0,
+      default: null
+    },
     batchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Batch',

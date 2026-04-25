@@ -19,15 +19,38 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       min: 1
     },
+    month: {
+      type: String,
+      trim: true,
+      required: true,
+      index: true
+    },
     paymentDate: {
       type: Date,
       required: true,
       index: true
     },
+    dueDate: {
+      type: Date,
+      required: true,
+      index: true
+    },
+    status: {
+      type: String,
+      enum: ['PAID', 'PENDING', 'OVERDUE'],
+      required: true,
+      default: 'PAID',
+      index: true
+    },
     paymentMode: {
       type: String,
-      enum: ['cash', 'online', 'upi'],
+      enum: ['CASH', 'ONLINE', 'UPI', 'cash', 'online', 'upi'],
       required: true
+    },
+    transactionId: {
+      type: String,
+      trim: true,
+      default: null
     },
     razorpayOrderId: {
       type: String,
@@ -70,6 +93,8 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ tenantId: 1, studentId: 1, paymentDate: -1 });
 paymentSchema.index({ tenantId: 1, createdAt: -1 });
 paymentSchema.index({ tenantId: 1, studentId: 1 });
+paymentSchema.index({ tenantId: 1, studentId: 1, month: 1 }, { unique: true });
+paymentSchema.index({ tenantId: 1, status: 1, dueDate: 1 });
 paymentSchema.index(
   { razorpayPaymentId: 1 },
   {

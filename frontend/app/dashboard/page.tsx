@@ -172,7 +172,10 @@ type PendingFeesResponse = {
     student: {
       _id: string;
       name: string;
+      email?: string | null;
       parentPhone: string;
+      classId?: string | { _id: string; name?: string; section?: string } | null;
+      monthlyFee?: number | null;
     };
     summary: {
       pendingTillDate: number;
@@ -183,6 +186,49 @@ type PendingFeesResponse = {
   pagination: {
     total: number;
   };
+};
+
+type FeeSummaryResponse = {
+  totalPendingFees: number;
+  paidThisMonth: number;
+  overdueStudentsCount: number;
+  totalPendingRows?: number;
+};
+
+type PaymentHistoryRow = {
+  id: string;
+  studentId: string;
+  student?: {
+    _id: string;
+    name: string;
+    email?: string | null;
+    parentPhone?: string;
+    classId?: string | { _id: string; name?: string; section?: string } | null;
+    monthlyFee?: number | null;
+  } | null;
+  amount: number;
+  paymentDate?: string | null;
+  dueDate?: string | null;
+  status: 'PAID' | 'PENDING' | 'OVERDUE';
+  paymentMode?: string | null;
+  transactionId?: string | null;
+  month: string;
+  badge?: string;
+  dueInDays?: number;
+  pendingDues?: number;
+  monthlyFee?: number;
+  lastPayment?: number;
+};
+
+type PaymentHistoryResponse = {
+  items: PaymentHistoryRow[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  totalPaid: number;
 };
 
 type BatchesListResponse = {
@@ -620,6 +666,11 @@ const normalizeCsvHeader = (value: string) =>
 const normalizeImportLookup = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 const formatSchoolClassLabel = (name?: string | null, section?: string | null) =>
   [name?.trim(), section?.trim()].filter(Boolean).join('-');
+const formatPaymentStudentClassLabel = (classRef?: string | { _id: string; name?: string; section?: string } | null) => {
+  if (!classRef) return '-';
+  if (typeof classRef === 'string') return classRef;
+  return formatSchoolClassLabel(classRef.name, classRef.section) || classRef.name || '-';
+};
 
 const parseStudentsImportCsv = (content: string) => {
   const lines = content
@@ -887,6 +938,26 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
   const [notificationsTotal, setNotificationsTotal] = useState(0);
   const [pendingFees, setPendingFees] = useState<PendingFeesResponse['items']>([]);
+  const [feeSummary, setFeeSummary] = useState<FeeSummaryResponse | null>(null);
+  const [feeCollectionRows, setFeeCollectionRows] = useState<PaymentHistoryRow[]>([]);
+  const [studentPaymentHistory, setStudentPaymentHistory] = useState<PaymentHistoryRow[]>([]);
+  const [showFeeCollectionModal, setShowFeeCollectionModal] = useState(false);
+  const [feeCollectionSubmitting, setFeeCollectionSubmitting] = useState(false);
+  const [feeCollectionStatusFilter, setFeeCollectionStatusFilter] = useState<'all' | 'PAID' | 'PENDING' | 'OVERDUE'>('all');
+  const [feeCollectionClassFilter, setFeeCollectionClassFilter] = useState('all');
+  const [feeCollectionDueInFilter, setFeeCollectionDueInFilter] = useState('all');
+  const [feeCollectionReminderChannel, setFeeCollectionReminderChannel] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [feeCollectionReminderStatus, setFeeCollectionReminderStatus] = useState<'PENDING' | 'OVERDUE'>('PENDING');
+  const [feeCollectionSelectedStudentId, setFeeCollectionSelectedStudentId] = useState('');
+  const [feeCollectionMonth, setFeeCollectionMonth] = useState(new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-'));
+  const [feeCollectionAmount, setFeeCollectionAmount] = useState('');
+  const [feeCollectionMode, setFeeCollectionMode] = useState<'CASH' | 'ONLINE' | 'UPI'>('CASH');
+  const [feeCollectionTransactionId, setFeeCollectionTransactionId] = useState('');
+  const [feeCollectionServerError, setFeeCollectionServerError] = useState('');
+  const [feeCollectionLoading, setFeeCollectionLoading] = useState(false);
+  const [feeCollectionReminderLoading, setFeeCollectionReminderLoading] = useState(false);
+  const [studentPaymentHistoryLoading, setStudentPaymentHistoryLoading] = useState(false);
+  const [feeCollectionStudentQuery, setFeeCollectionStudentQuery] = useState('');
   const [registrationStats, setRegistrationStats] = useState<RegistrationStats | null>(null);
   const [feePlans, setFeePlans] = useState<FeePlan[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -1542,6 +1613,7 @@ export default function DashboardPage() {
       tenantFeatures,
       plans,
       memberList,
+      feeSummaryData,
       platformPlanList,
       tenantSubscriptionData,
       tenantBillingPlans,
@@ -1576,6 +1648,7 @@ export default function DashboardPage() {
       ),
       safeFetch(() => apiGetWithAuth<FeePlan[]>('/fees/plans', accessToken), []),
       safeFetch(() => apiGetWithAuth<TeamMembersResponse>('/team-members', accessToken), { items: [], total: 0 }),
+      safeFetch(() => apiGetWithAuth<FeeSummaryResponse>('/dashboard/fee-summary', accessToken), null),
       resolvedIsSuperAdmin
         ? safeFetch(() => apiGetWithAuth<PlatformPlan[]>('/admin/plans', accessToken), [])
         : Promise.resolve([]),
@@ -1618,6 +1691,7 @@ export default function DashboardPage() {
     setRegistrationStats(regStats);
     setOrganizationType(resolvedOrgType);
     setFeePlans(plans);
+    setFeeSummary(feeSummaryData);
     setBatches(batchList.items);
     const activeMembers = memberList.items.filter((member) => member.isActive);
     setTeamMembers(activeMembers);
@@ -1664,6 +1738,60 @@ export default function DashboardPage() {
       { items: [], pagination: { total: 0 } }
     );
     setAttendanceEntries(response.items);
+  };
+
+  const loadFeeSummaryData = async (accessToken = '') => {
+    if (!isAdmin) return;
+    const response = await safeFetch<FeeSummaryResponse | null>(
+      () => apiGetWithAuth<FeeSummaryResponse>('/dashboard/fee-summary', accessToken),
+      null
+    );
+    setFeeSummary(response);
+  };
+
+  const loadFeeCollectionRowsData = async (accessToken = '') => {
+    if (!isAdmin) return;
+    setFeeCollectionLoading(true);
+    const params = new URLSearchParams({ page: '1', limit: '200' });
+    if (feeCollectionStatusFilter !== 'all') {
+      params.set('status', feeCollectionStatusFilter);
+    }
+    if (feeCollectionClassFilter !== 'all') {
+      params.set('classId', feeCollectionClassFilter);
+    }
+    if (feeCollectionDueInFilter !== 'all') {
+      params.set('dueInDays', feeCollectionDueInFilter);
+    }
+
+    const response = await safeFetch<PaymentHistoryResponse>(
+      () => apiGetWithAuth<PaymentHistoryResponse>(`/fees/payments?${params.toString()}`, accessToken),
+      {
+        items: [],
+        pagination: { page: 1, limit: 200, total: 0, totalPages: 1 },
+        totalPaid: 0
+      }
+    );
+    setFeeCollectionRows(response.items);
+    setFeeCollectionLoading(false);
+  };
+
+  const loadStudentPaymentHistory = async (accessToken = '', studentId: string) => {
+    if (!isAdmin || !studentId) {
+      setStudentPaymentHistory([]);
+      return;
+    }
+
+    setStudentPaymentHistoryLoading(true);
+    const response = await safeFetch<PaymentHistoryResponse>(
+      () => apiGetWithAuth<PaymentHistoryResponse>(`/fees/payments?studentId=${studentId}&page=1&limit=24`, accessToken),
+      {
+        items: [],
+        pagination: { page: 1, limit: 24, total: 0, totalPages: 1 },
+        totalPaid: 0
+      }
+    );
+    setStudentPaymentHistory(response.items);
+    setStudentPaymentHistoryLoading(false);
   };
 
   useEffect(() => {
@@ -1839,6 +1967,21 @@ export default function DashboardPage() {
   }, [token, academyAttendanceDate]);
 
   useEffect(() => {
+    if (!token || !isAdmin) return;
+    loadFeeCollectionRowsData(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAdmin, feeCollectionStatusFilter, feeCollectionClassFilter, feeCollectionDueInFilter]);
+
+  useEffect(() => {
+    if (!token || !isAdmin || !showClientComposer || !clientEditingId) {
+      setStudentPaymentHistory([]);
+      return;
+    }
+    loadStudentPaymentHistory(token, clientEditingId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAdmin, showClientComposer, clientEditingId]);
+
+  useEffect(() => {
     if (!batchCoachId && coaches.length > 0) {
       setBatchCoachId(coaches[0].id);
     }
@@ -1870,6 +2013,93 @@ export default function DashboardPage() {
 
   const pendingStudentsCount = useMemo(() => pendingFees.filter((f) => f.summary.overallPending > 0).length, [pendingFees]);
   const paidStudentsCount = useMemo(() => attendanceStudents.filter((s) => s.feeStatus === 'paid').length, [attendanceStudents]);
+  const feeCollectionStudentOptions = useMemo(() => {
+    const classLabelForStudent = (student: Student) => {
+      if (organizationType === 'SCHOOL') {
+        const studentClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+        const schoolClass = schoolClasses.find((item) => item._id === studentClassId);
+        return schoolClass ? formatSchoolClassLabel(schoolClass.name, schoolClass.section) : '-';
+      }
+      const batchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
+      return academyClassRows.find((row) => row.id === batchId)?.title || '-';
+    };
+
+    return attendanceStudents
+      .map((student) => {
+        const pendingRow = pendingFees.find((row) => row.student._id === student._id);
+        return {
+          id: student._id,
+          name: student.name,
+          email: student.email || '',
+          classLabel: classLabelForStudent(student),
+          monthlyFee: pendingRow?.feePlan?.amount || pendingRow?.student.monthlyFee || null,
+          pendingDues: pendingRow?.summary.overallPending || 0
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [academyClassRows, attendanceStudents, organizationType, pendingFees, schoolClasses]);
+
+  const normalizedFeeCollectionSearch = feeCollectionStudentQuery.trim().toLowerCase();
+  const visibleFeeCollectionStudents = useMemo(() => {
+    if (!normalizedFeeCollectionSearch) return feeCollectionStudentOptions.slice(0, 40);
+    return feeCollectionStudentOptions
+      .filter((student) => {
+        const haystack = [student.name, student.email, student.classLabel].join(' ').toLowerCase();
+        return haystack.includes(normalizedFeeCollectionSearch);
+      })
+      .slice(0, 40);
+  }, [feeCollectionStudentOptions, normalizedFeeCollectionSearch]);
+
+  const selectedFeeCollectionStudent = useMemo(
+    () => feeCollectionStudentOptions.find((student) => student.id === feeCollectionSelectedStudentId) || null,
+    [feeCollectionSelectedStudentId, feeCollectionStudentOptions]
+  );
+
+  const selectedFeeCollectionHistory = useMemo(
+    () =>
+      feeCollectionSelectedStudentId
+        ? studentPaymentHistory.filter((row) => String(row.studentId) === String(feeCollectionSelectedStudentId))
+        : [],
+    [feeCollectionSelectedStudentId, studentPaymentHistory]
+  );
+
+  const selectedFeeLastPaidRow = useMemo(
+    () => selectedFeeCollectionHistory.find((row) => row.status === 'PAID' && row.paymentDate),
+    [selectedFeeCollectionHistory]
+  );
+
+  const selectedFeePendingRows = useMemo(
+    () => selectedFeeCollectionHistory.filter((row) => row.status === 'PENDING' || row.status === 'OVERDUE'),
+    [selectedFeeCollectionHistory]
+  );
+
+  const selectedFeePendingAmount = useMemo(
+    () => selectedFeePendingRows.reduce((sum, row) => sum + row.amount, 0),
+    [selectedFeePendingRows]
+  );
+  const feeCollectionMonthOptions = useMemo(() => {
+    const currentMonthKey = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-');
+    return Array.from(new Set([currentMonthKey, ...selectedFeeCollectionHistory.map((row) => row.month)])).sort();
+  }, [selectedFeeCollectionHistory]);
+
+  useEffect(() => {
+    if (!showFeeCollectionModal || !token || !isAdmin || !feeCollectionSelectedStudentId) return;
+    loadStudentPaymentHistory(token, feeCollectionSelectedStudentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFeeCollectionModal, token, isAdmin, feeCollectionSelectedStudentId]);
+
+  useEffect(() => {
+    if (!showFeeCollectionModal) return;
+    if (selectedFeePendingRows.length > 0) {
+      const firstPending = selectedFeePendingRows[0];
+      setFeeCollectionMonth(firstPending.month);
+      setFeeCollectionAmount(String(firstPending.amount));
+      return;
+    }
+    if (selectedFeeCollectionStudent?.monthlyFee) {
+      setFeeCollectionAmount(String(selectedFeeCollectionStudent.monthlyFee));
+    }
+  }, [selectedFeeCollectionStudent, selectedFeePendingRows, showFeeCollectionModal]);
 
   const centerOptions = useMemo(
     () => Array.from(new Set(batches.map((batch) => batch.centerName || 'Main Center'))).sort((a, b) => a.localeCompare(b)),
@@ -4276,6 +4506,117 @@ const getNameInitials = (value: string) =>
     }
   };
 
+  const closeFeeCollectionModal = () => {
+    setShowFeeCollectionModal(false);
+    setFeeCollectionSelectedStudentId('');
+    setFeeCollectionStudentQuery('');
+    setFeeCollectionMonth(new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-'));
+    setFeeCollectionAmount('');
+    setFeeCollectionMode('CASH');
+    setFeeCollectionTransactionId('');
+    setFeeCollectionServerError('');
+  };
+
+  const openFeeCollectionModalForStudent = async (studentId = '') => {
+    if (!isAdmin) {
+      setToast('Only admin can collect fee.');
+      return;
+    }
+
+    setFeeCollectionSelectedStudentId(studentId);
+    setFeeCollectionStudentQuery('');
+    setFeeCollectionMonth(new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-'));
+    setFeeCollectionMode('CASH');
+    setFeeCollectionTransactionId('');
+    setFeeCollectionServerError('');
+    setShowFeeCollectionModal(true);
+    if (studentId && token) {
+      await loadStudentPaymentHistory(token, studentId);
+    } else {
+      setStudentPaymentHistory([]);
+    }
+  };
+
+  const submitFeeCollection = async () => {
+    if (!isAdmin) {
+      setToast('Only admin can collect fee.');
+      return;
+    }
+    if (!feeCollectionSelectedStudentId) {
+      setFeeCollectionServerError('Please select a student.');
+      return;
+    }
+    if (!feeCollectionMonth.trim()) {
+      setFeeCollectionServerError('Please select a month.');
+      return;
+    }
+    const amountValue = Number(feeCollectionAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setFeeCollectionServerError('Amount must be greater than 0.');
+      return;
+    }
+
+    setFeeCollectionSubmitting(true);
+    setFeeCollectionServerError('');
+    try {
+      const firstPendingRow = selectedFeePendingRows.find((row) => row.month === feeCollectionMonth) || selectedFeePendingRows[0] || null;
+      await apiPostWithAuth(
+        '/fees/payments',
+        {
+          studentId: feeCollectionSelectedStudentId,
+          amountPaid: amountValue,
+          paymentDate: new Date().toISOString(),
+          dueDate: firstPendingRow?.dueDate || new Date().toISOString(),
+          month: feeCollectionMonth,
+          paymentMode: feeCollectionMode,
+          transactionId: feeCollectionTransactionId.trim() || null
+        },
+        token
+      );
+
+      setToast('Fee collected successfully');
+      await Promise.all([
+        loadDashboardData(token),
+        loadFeeCollectionRowsData(token),
+        loadFeeSummaryData(token),
+        loadStudentPaymentHistory(token, feeCollectionSelectedStudentId)
+      ]);
+      closeFeeCollectionModal();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to collect fee.';
+      setFeeCollectionServerError(message);
+      setToast(message);
+    } finally {
+      setFeeCollectionSubmitting(false);
+    }
+  };
+
+  const sendFeeReminders = async () => {
+    if (!canSendReminders) {
+      setToast('Only admin or staff can send reminders.');
+      return;
+    }
+    setFeeCollectionReminderLoading(true);
+    try {
+      const response = await apiPostWithAuth<{ created: number }>(
+        '/fees/payments/reminders',
+        {
+          channel: feeCollectionReminderChannel,
+          status: feeCollectionReminderStatus,
+          classId: feeCollectionClassFilter !== 'all' ? feeCollectionClassFilter : undefined,
+          dueInDays: feeCollectionDueInFilter !== 'all' ? Number(feeCollectionDueInFilter) : undefined
+        },
+        token
+      );
+      setToast(`Reminder queue created for ${response.created || 0} payment record(s).`);
+      await loadDashboardData(token);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'Failed to send reminders.');
+    } finally {
+      setFeeCollectionReminderLoading(false);
+    }
+  };
+
   const submitCoach = async () => {
     if (!canManageUsers) {
       setToast('Only admin can manage users.');
@@ -6587,6 +6928,76 @@ const getNameInitials = (value: string) =>
                               Auto renew
                             </label>
                           </section>
+
+                          {clientEditingId ? (
+                            <section className="rounded-3xl border border-slate-200 bg-white p-5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h4 className="text-lg font-bold text-slate-900">Payment History</h4>
+                                  <p className="text-sm text-slate-500">Monthly fee status and payment activity for this student.</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openFeeCollectionModalForStudent(clientEditingId)}
+                                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                                >
+                                  Collect Fee
+                                </button>
+                              </div>
+                              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                                <table className="min-w-full text-left text-sm">
+                                  <thead className="bg-slate-50">
+                                    <tr className="border-b border-slate-200 text-slate-600">
+                                      <th className="px-3 py-3 font-semibold">Month</th>
+                                      <th className="px-3 py-3 font-semibold">Amount</th>
+                                      <th className="px-3 py-3 font-semibold">Status</th>
+                                      <th className="px-3 py-3 font-semibold">Payment Date</th>
+                                      <th className="px-3 py-3 font-semibold">Mode</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {studentPaymentHistoryLoading ? (
+                                      <tr>
+                                        <td colSpan={5} className="px-3 py-4 text-center text-slate-500">
+                                          Loading payment history...
+                                        </td>
+                                      </tr>
+                                    ) : null}
+                                    {!studentPaymentHistoryLoading && studentPaymentHistory.length === 0 ? (
+                                      <tr>
+                                        <td colSpan={5} className="px-3 py-4 text-center text-slate-500">
+                                          No payment history yet.
+                                        </td>
+                                      </tr>
+                                    ) : null}
+                                    {!studentPaymentHistoryLoading
+                                      ? studentPaymentHistory.map((row) => (
+                                          <tr key={row.id} className="border-b border-slate-100">
+                                            <td className="px-3 py-3 font-medium text-slate-900">{row.month}</td>
+                                            <td className="px-3 py-3 text-slate-700">{formatCurrency(row.amount)}</td>
+                                            <td className="px-3 py-3">
+                                              <span
+                                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                  row.status === 'PAID'
+                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                    : row.status === 'OVERDUE'
+                                                      ? 'bg-rose-100 text-rose-700'
+                                                      : 'bg-amber-100 text-amber-700'
+                                                }`}
+                                              >
+                                                {row.status}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-3 text-slate-700">{row.paymentDate ? fmtDate(row.paymentDate) : '-'}</td>
+                                            <td className="px-3 py-3 text-slate-700">{row.paymentMode || '-'}</td>
+                                          </tr>
+                                        ))
+                                      : null}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </section>
+                          ) : null}
                         </div>
 
                           <div className="student-action-wrap mt-5 rounded-2xl p-2 dark:border dark:border-white/40 dark:bg-black/40">
@@ -6924,12 +7335,13 @@ const getNameInitials = (value: string) =>
                           <th className="px-3 py-3 font-semibold">Payment Date</th>
                           <th className="px-3 py-3 font-semibold">Due Date</th>
                           <th className="px-3 py-3 font-semibold">Due In</th>
+                          <th className="px-3 py-3 font-semibold">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {renewalRows.length === 0 ? (
                           <tr>
-                            <td className="px-3 py-6 text-center text-slate-500" colSpan={8}>
+                            <td className="px-3 py-6 text-center text-slate-500" colSpan={9}>
                               No clients due in selected window.
                             </td>
                           </tr>
@@ -6958,6 +7370,15 @@ const getNameInitials = (value: string) =>
                               >
                                 {row.dueInDays} day
                               </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <button
+                                type="button"
+                                onClick={() => openFeeCollectionModalForStudent(row.id)}
+                                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                              >
+                                Collect Fee
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -7508,6 +7929,356 @@ const getNameInitials = (value: string) =>
           ) : null}
 
           {!loading && activeTab === 'studio' && activeMenu === 'Finance Deck' && isAdmin ? (
+            <div
+              className={`space-y-4 rounded-[32px] p-4 shadow-[0_28px_60px_-35px_rgba(0,0,0,0.65)] ${
+                useDarkFinanceTheme
+                  ? 'border border-white/10 bg-[#0b1220] text-white'
+                  : 'border border-slate-200 bg-white text-slate-900'
+              }`}
+            >
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-amber-300/15 bg-amber-400/10' : 'border border-amber-200 bg-amber-50'}`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-amber-100' : 'text-amber-700'}`}>Total Pending Fees</p>
+                  <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(feeSummary?.totalPendingFees ?? 0)}</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>{feeSummary?.totalPendingRows ?? 0} unpaid month entries</p>
+                </article>
+                <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-emerald-300/15 bg-emerald-400/10' : 'border border-emerald-200 bg-emerald-50'}`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-100' : 'text-emerald-700'}`}>Paid This Month</p>
+                  <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(feeSummary?.paidThisMonth ?? 0)}</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Collected in current billing cycle</p>
+                </article>
+                <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-rose-300/15 bg-rose-400/10' : 'border border-rose-200 bg-rose-50'}`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-rose-100' : 'text-rose-700'}`}>Overdue Students</p>
+                  <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{feeSummary?.overdueStudentsCount ?? 0}</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Students needing follow-up</p>
+                </article>
+                <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-cyan-300/15 bg-cyan-400/10' : 'border border-cyan-200 bg-cyan-50'}`}>
+                  <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-cyan-100' : 'text-cyan-700'}`}>Visible Records</p>
+                  <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{feeCollectionRows.length}</p>
+                  <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Rows after current filters</p>
+                </article>
+              </section>
+
+              <article className={`rounded-3xl p-5 shadow-[0_22px_45px_-30px_rgba(0,0,0,0.6)] ${useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a]' : 'border border-slate-200 bg-white'}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className={`text-xs uppercase tracking-[0.18em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>Fee Collection</p>
+                    <h3 className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>Fee Collection &amp; Payment History</h3>
+                    <p className={`mt-1 max-w-2xl text-sm ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Handle monthly fee cycles, review pending dues, and send reminders from one place.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openFeeCollectionModalForStudent()}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                      useDarkFinanceTheme
+                        ? 'bg-[linear-gradient(135deg,#4f46e5,#818cf8)] text-white shadow-[0_18px_35px_-20px_rgba(129,140,248,0.85)]'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    }`}
+                  >
+                    Collect Fee
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Class</span>
+                    <select
+                      value={feeCollectionClassFilter}
+                      onChange={(e) => setFeeCollectionClassFilter(e.target.value)}
+                      className={`rounded-xl border px-4 py-2.5 ${
+                        useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    >
+                      <option value="all">All classes</option>
+                      {organizationType === 'SCHOOL'
+                        ? schoolClasses.map((item) => (
+                            <option key={item._id} value={item._id}>
+                              {formatSchoolClassLabel(item.name, item.section)}
+                            </option>
+                          ))
+                        : academyClassRows.map((row) => (
+                            <option key={row.id} value={row.id}>
+                              {row.title}
+                            </option>
+                          ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Status</span>
+                    <select
+                      value={feeCollectionStatusFilter}
+                      onChange={(e) => setFeeCollectionStatusFilter(e.target.value as 'all' | 'PAID' | 'PENDING' | 'OVERDUE')}
+                      className={`rounded-xl border px-4 py-2.5 ${
+                        useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="PAID">Paid</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="OVERDUE">Overdue</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Due in days</span>
+                    <select
+                      value={feeCollectionDueInFilter}
+                      onChange={(e) => setFeeCollectionDueInFilter(e.target.value as 'all' | '1' | '5' | '10')}
+                      className={`rounded-xl border px-4 py-2.5 ${
+                        useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    >
+                      <option value="all">Any due window</option>
+                      <option value="1">Due in 1 day</option>
+                      <option value="5">Due in 5 days</option>
+                      <option value="10">Due in 10 days</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Reminder channel</span>
+                    <select
+                      value={feeCollectionReminderChannel}
+                      onChange={(e) => setFeeCollectionReminderChannel(e.target.value as 'whatsapp' | 'email')}
+                      className={`rounded-xl border px-4 py-2.5 ${
+                        useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    >
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="email">Email</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-semibold">
+                    <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Reminder target</span>
+                    <div className="flex gap-2">
+                      <select
+                        value={feeCollectionReminderStatus}
+                        onChange={(e) => setFeeCollectionReminderStatus(e.target.value as 'PENDING' | 'OVERDUE')}
+                        className={`min-w-0 flex-1 rounded-xl border px-4 py-2.5 ${
+                          useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'
+                        }`}
+                      >
+                        <option value="PENDING">Due soon</option>
+                        <option value="OVERDUE">Overdue</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={sendFeeReminders}
+                        disabled={!canSendReminders || feeCollectionReminderLoading}
+                        className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                          useDarkFinanceTheme
+                            ? 'border border-white/10 bg-white/5 text-white hover:bg-white/10 disabled:opacity-60'
+                            : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-60'
+                        }`}
+                      >
+                        {feeCollectionReminderLoading ? 'Sending...' : 'Send'}
+                      </button>
+                    </div>
+                  </label>
+                </div>
+
+                <div className={`mt-4 overflow-x-auto rounded-2xl ${useDarkFinanceTheme ? 'border border-white/10' : 'border border-slate-200'}`}>
+                  <table className="min-w-full text-left text-sm">
+                    <thead className={useDarkFinanceTheme ? 'bg-white/5' : 'bg-slate-50'}>
+                      <tr className={`border-b ${useDarkFinanceTheme ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
+                        <th className="px-3 py-3 font-semibold">Student</th>
+                        <th className="px-3 py-3 font-semibold">Class</th>
+                        <th className="px-3 py-3 font-semibold">Month</th>
+                        <th className="px-3 py-3 font-semibold">Amount</th>
+                        <th className="px-3 py-3 font-semibold">Due</th>
+                        <th className="px-3 py-3 font-semibold">Status</th>
+                        <th className="px-3 py-3 font-semibold">Mode</th>
+                        <th className="px-3 py-3 font-semibold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feeCollectionLoading ? (
+                        <tr>
+                          <td colSpan={8} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Loading fee records...</td>
+                        </tr>
+                      ) : null}
+                      {!feeCollectionLoading && feeCollectionRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>No fee records found for current filters.</td>
+                        </tr>
+                      ) : null}
+                      {!feeCollectionLoading
+                        ? feeCollectionRows.map((row) => {
+                            const statusTone =
+                              row.status === 'PAID'
+                                ? useDarkFinanceTheme
+                                  ? 'bg-emerald-400/15 text-emerald-200'
+                                  : 'bg-emerald-100 text-emerald-700'
+                                : row.status === 'OVERDUE'
+                                  ? useDarkFinanceTheme
+                                    ? 'bg-rose-400/15 text-rose-200'
+                                    : 'bg-rose-100 text-rose-700'
+                                  : useDarkFinanceTheme
+                                    ? 'bg-amber-400/15 text-amber-200'
+                                    : 'bg-amber-100 text-amber-700';
+                            return (
+                              <tr key={row.id} className={`border-b ${useDarkFinanceTheme ? 'border-white/5' : 'border-slate-100'}`}>
+                                <td className="px-3 py-3">
+                                  <div className={`font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{row.student?.name || 'Unknown student'}</div>
+                                  <div className={`text-xs ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>{row.student?.email || 'No email'}</div>
+                                </td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{formatPaymentStudentClassLabel(row.student?.classId)}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}`}>{row.month}</td>
+                                <td className={`px-3 py-3 font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(row.amount)}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  <div>{row.dueDate ? fmtDate(row.dueDate) : '-'}</div>
+                                  {row.badge ? <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusTone}`}>{row.badge}</span> : null}
+                                </td>
+                                <td className="px-3 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone}`}>{row.status}</span></td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{row.paymentMode || '-'}</td>
+                                <td className="px-3 py-3 text-right">
+                                  {row.status === 'PAID' ? (
+                                    <span className={`text-xs font-semibold ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Recorded</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => openFeeCollectionModalForStudent(row.studentId)}
+                                      className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                                        useDarkFinanceTheme
+                                          ? 'bg-[linear-gradient(135deg,#4f46e5,#818cf8)] text-white'
+                                          : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                                      }`}
+                                    >
+                                      Collect Fee
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article className={`rounded-3xl p-5 shadow-[0_22px_45px_-30px_rgba(0,0,0,0.6)] ${useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a]' : 'border border-slate-200 bg-white'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className={`text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>Workspace Billing</h3>
+                    <p className={`mt-1 text-sm ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Platform subscription payments remain available below.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={openUpgradeModal}
+                      className="rounded-xl bg-[#00E5A8] px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-[#22f0b7]"
+                    >
+                      Upgrade Plan
+                    </button>
+                    {tenantBillingHistory.some((payment) => payment.status === 'failed') ? (
+                      <button
+                        onClick={() => retryTenantPayment(tenantBillingHistory.find((payment) => payment.status === 'failed')?.planName || '')}
+                        className={`rounded-xl px-4 py-2 text-sm font-semibold ${useDarkFinanceTheme ? 'border border-rose-300/30 text-rose-200 hover:bg-rose-400/10' : 'border border-rose-200 text-rose-700 hover:bg-rose-50'}`}
+                      >
+                        Retry Payment
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-cyan-300/15 bg-cyan-400/10' : 'border border-cyan-200 bg-cyan-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-cyan-100' : 'text-cyan-700'}`}>Subscription</p>
+                    <p className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
+                      {tenantSubscription?.planName || billing?.plan?.name || 'Trial Window'}
+                    </p>
+                  </article>
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-emerald-300/15 bg-emerald-400/10' : 'border border-emerald-200 bg-emerald-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-100' : 'text-emerald-700'}`}>Status</p>
+                    <p className={`mt-2 text-2xl font-bold capitalize ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
+                      {tenantSubscription?.status || billing?.status || 'trial'}
+                    </p>
+                    <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Auto renew: {tenantSubscription?.autoRenew ? 'On' : 'Off'}
+                    </p>
+                  </article>
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-indigo-300/15 bg-indigo-400/10' : 'border border-indigo-200 bg-indigo-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-indigo-100' : 'text-indigo-700'}`}>Next Payment</p>
+                    <p className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
+                      {tenantSubscription?.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}
+                    </p>
+                    <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
+                    </p>
+                  </article>
+                  <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-amber-300/15 bg-amber-400/10' : 'border border-amber-200 bg-amber-50'}`}>
+                    <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-amber-100' : 'text-amber-700'}`}>Usage</p>
+                    <p className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>
+                      {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'}` : '0 / ∞'}
+                    </p>
+                    <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Students used / limit</p>
+                  </article>
+                </div>
+
+                <div className={`mt-4 overflow-x-auto rounded-2xl ${useDarkFinanceTheme ? 'border border-white/10' : 'border border-slate-200'}`}>
+                  <table className="min-w-full text-left text-sm">
+                    <thead className={useDarkFinanceTheme ? 'bg-white/5' : 'bg-slate-50'}>
+                      <tr className={`border-b ${useDarkFinanceTheme ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
+                        <th className="px-3 py-3 font-semibold">Plan</th>
+                        <th className="px-3 py-3 font-semibold">Amount</th>
+                        <th className="px-3 py-3 font-semibold">Status</th>
+                        <th className="px-3 py-3 font-semibold">Date</th>
+                        <th className="px-3 py-3 font-semibold">Next Payment</th>
+                        <th className="px-3 py-3 font-semibold">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantBillingLoading ? (
+                        <tr>
+                          <td colSpan={6} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Loading workspace payments...
+                          </td>
+                        </tr>
+                      ) : null}
+                      {!tenantBillingLoading && tenantBillingHistory.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>
+                            No workspace payment records available.
+                          </td>
+                        </tr>
+                      ) : null}
+                      {!tenantBillingLoading
+                        ? tenantBillingHistory.map((payment) => {
+                            const paymentStatus = String(payment.status || 'pending').toLowerCase();
+                            const paymentTone =
+                              paymentStatus === 'paid'
+                                ? useDarkFinanceTheme
+                                  ? 'bg-emerald-400/15 text-emerald-200'
+                                  : 'bg-emerald-100 text-emerald-700'
+                                : paymentStatus === 'failed'
+                                  ? useDarkFinanceTheme
+                                    ? 'bg-rose-400/15 text-rose-200'
+                                    : 'bg-rose-100 text-rose-700'
+                                  : useDarkFinanceTheme
+                                    ? 'bg-amber-400/15 text-amber-200'
+                                    : 'bg-amber-100 text-amber-700';
+                            return (
+                              <tr key={payment.id} className={`border-b ${useDarkFinanceTheme ? 'border-white/5' : 'border-slate-100'}`}>
+                                <td className={`px-3 py-3 font-medium ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{payment.planName || '-'}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}`}>{formatCurrency(payment.amount)}</td>
+                                <td className="px-3 py-3">
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${paymentTone}`}>{payment.status}</span>
+                                </td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{payment.date ? fmtDate(payment.date) : '-'}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{payment.nextPaymentDate ? fmtDate(payment.nextPaymentDate) : 'N/A'}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}`}>{formatCurrency(payment.totalAmount ?? payment.amount)}</td>
+                              </tr>
+                            );
+                          })
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          ) : null}
+
+          {!loading && activeTab === 'studio' && activeMenu === 'Finance Deck' && false ? (
             <div
               className={`space-y-4 rounded-[32px] p-4 shadow-[0_28px_60px_-35px_rgba(0,0,0,0.65)] ${
                 useDarkFinanceTheme
@@ -8324,6 +9095,202 @@ const getNameInitials = (value: string) =>
                   </button>
                 </article>
               ) : null}
+            </div>
+          ) : null}
+
+          {showFeeCollectionModal ? (
+            <div className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 ${useDarkFinanceTheme ? 'bg-slate-950/70' : 'bg-slate-900/35'}`}>
+              <div className={`w-full max-w-5xl rounded-[28px] p-5 shadow-2xl ${useDarkFinanceTheme ? 'border border-white/10 bg-[#0f172a] text-white' : 'border border-slate-200 bg-white text-slate-900'}`}>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className={`text-xs uppercase tracking-[0.18em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>Fee Collection</p>
+                    <h3 className="mt-2 text-3xl font-bold">Collect Fee</h3>
+                    <p className={`mt-1 text-sm ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Select a student, review dues, and save this month&apos;s payment.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeFeeCollectionModal}
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold ${useDarkFinanceTheme ? 'border border-white/15 bg-white/5 text-white hover:bg-white/10' : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                  <div className="space-y-4">
+                    <label className="grid gap-1.5 text-sm font-semibold">
+                      <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Student</span>
+                      <input
+                        value={feeCollectionStudentQuery}
+                        onChange={(e) => setFeeCollectionStudentQuery(e.target.value)}
+                        placeholder="Search student by name, email, or class"
+                        className={`rounded-2xl border px-4 py-3 ${useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white placeholder:text-slate-400' : 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'}`}
+                      />
+                    </label>
+
+                    <div className={`max-h-64 overflow-y-auto rounded-2xl border ${useDarkFinanceTheme ? 'border-white/10 bg-[#101827]' : 'border-slate-200 bg-slate-50'}`}>
+                      {visibleFeeCollectionStudents.length === 0 ? (
+                        <div className={`px-4 py-5 text-sm ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>No students match your search.</div>
+                      ) : (
+                        visibleFeeCollectionStudents.map((student) => {
+                          const selected = student.id === feeCollectionSelectedStudentId;
+                          return (
+                            <button
+                              key={student.id}
+                              type="button"
+                              onClick={() => setFeeCollectionSelectedStudentId(student.id)}
+                              className={`flex w-full items-start justify-between gap-3 border-b px-4 py-3 text-left last:border-b-0 ${
+                                selected
+                                  ? useDarkFinanceTheme
+                                    ? 'border-white/10 bg-indigo-500/12'
+                                    : 'border-slate-200 bg-indigo-50'
+                                  : useDarkFinanceTheme
+                                    ? 'border-white/5 hover:bg-white/5'
+                                    : 'border-slate-200 hover:bg-white'
+                              }`}
+                            >
+                              <div>
+                                <div className={`font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{student.name}</div>
+                                <div className={`text-xs ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>{student.classLabel} {student.email ? `• ${student.email}` : ''}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className={`text-sm font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{student.monthlyFee ? formatCurrency(student.monthlyFee) : '-'}</div>
+                                <div className={`text-[11px] ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Pending {formatCurrency(student.pendingDues || 0)}</div>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-white/10 bg-[#101827]' : 'border border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Monthly Fee</p>
+                        <p className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{selectedFeeCollectionStudent?.monthlyFee ? formatCurrency(selectedFeeCollectionStudent.monthlyFee) : '-'}</p>
+                      </article>
+                      <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-white/10 bg-[#101827]' : 'border border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Last Payment</p>
+                        <p className={`mt-2 text-lg font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{selectedFeeLastPaidRow ? `${selectedFeeLastPaidRow.month} • ${formatCurrency(selectedFeeLastPaidRow.amount)}` : 'No payment yet'}</p>
+                      </article>
+                      <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-white/10 bg-[#101827]' : 'border border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Pending Dues</p>
+                        <p className={`mt-2 text-2xl font-bold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(selectedFeePendingAmount)}</p>
+                      </article>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5 text-sm font-semibold">
+                        <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Month</span>
+                        <select
+                          value={feeCollectionMonth}
+                          onChange={(e) => setFeeCollectionMonth(e.target.value)}
+                          className={`rounded-2xl border px-4 py-3 ${useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'}`}
+                        >
+                          {feeCollectionMonthOptions.map((month) => (
+                            <option key={month} value={month}>{month}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-semibold">
+                        <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Payment mode</span>
+                        <select
+                          value={feeCollectionMode}
+                          onChange={(e) => setFeeCollectionMode(e.target.value as 'CASH' | 'ONLINE' | 'UPI')}
+                          className={`rounded-2xl border px-4 py-3 ${useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white' : 'border-slate-300 bg-white text-slate-900'}`}
+                        >
+                          <option value="CASH">Cash</option>
+                          <option value="ONLINE">Online</option>
+                          <option value="UPI">UPI</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5 text-sm font-semibold">
+                        <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Amount</span>
+                        <input
+                          value={feeCollectionAmount}
+                          onChange={(e) => setFeeCollectionAmount(e.target.value)}
+                          placeholder="Enter amount"
+                          className={`rounded-2xl border px-4 py-3 ${useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white placeholder:text-slate-400' : 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'}`}
+                        />
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-semibold">
+                        <span className={useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}>Transaction ID</span>
+                        <input
+                          value={feeCollectionTransactionId}
+                          onChange={(e) => setFeeCollectionTransactionId(e.target.value)}
+                          placeholder={feeCollectionMode === 'CASH' ? 'Optional for cash' : 'Enter transaction id'}
+                          className={`rounded-2xl border px-4 py-3 ${useDarkFinanceTheme ? 'border-white/10 bg-[#172235] text-white placeholder:text-slate-400' : 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400'}`}
+                        />
+                      </label>
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 ${useDarkFinanceTheme ? 'border-white/10 bg-[#101827]' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className={`text-sm font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>Pending + paid history</h4>
+                        <span className={`text-xs ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>{selectedFeeCollectionHistory.length} record(s)</span>
+                      </div>
+                      <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                        {studentPaymentHistoryLoading ? (
+                          <p className={`text-sm ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Loading payment history...</p>
+                        ) : selectedFeeCollectionHistory.length === 0 ? (
+                          <p className={`text-sm ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>No payment history yet.</p>
+                        ) : (
+                          selectedFeeCollectionHistory.map((row) => (
+                            <div key={row.id} className={`flex items-center justify-between rounded-xl border px-3 py-2 ${useDarkFinanceTheme ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white'}`}>
+                              <div>
+                                <div className={`font-medium ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{row.month}</div>
+                                <div className={`text-xs ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>{row.paymentDate ? fmtDate(row.paymentDate) : row.dueDate ? `Due ${fmtDate(row.dueDate)}` : 'No date'}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className={`font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(row.amount)}</div>
+                                <div className={`text-xs ${
+                                  row.status === 'PAID'
+                                    ? 'text-emerald-600'
+                                    : row.status === 'OVERDUE'
+                                      ? 'text-rose-600'
+                                      : 'text-amber-600'
+                                }`}>{row.status}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {feeCollectionServerError ? (
+                      <div className={`rounded-2xl border px-4 py-3 text-sm font-medium ${useDarkFinanceTheme ? 'border-rose-400/20 bg-rose-500/10 text-rose-200' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                        {feeCollectionServerError}
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={closeFeeCollectionModal}
+                        className={`rounded-2xl px-5 py-3 text-sm font-semibold ${useDarkFinanceTheme ? 'border border-white/15 bg-white/5 text-white hover:bg-white/10' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitFeeCollection}
+                        disabled={feeCollectionSubmitting}
+                        className={`rounded-2xl px-6 py-3 text-sm font-semibold ${
+                          useDarkFinanceTheme
+                            ? 'bg-[linear-gradient(135deg,#4f46e5,#818cf8)] text-white disabled:opacity-60'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-60'
+                        }`}
+                      >
+                        {feeCollectionSubmitting ? 'Saving...' : 'Save Payment'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
