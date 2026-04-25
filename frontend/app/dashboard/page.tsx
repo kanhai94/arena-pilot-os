@@ -2032,7 +2032,7 @@ export default function DashboardPage() {
           name: student.name,
           email: student.email || '',
           classLabel: classLabelForStudent(student),
-          monthlyFee: pendingRow?.feePlan?.amount || pendingRow?.student.monthlyFee || null,
+          monthlyFee: pendingRow?.student.monthlyFee || null,
           pendingDues: pendingRow?.summary.overallPending || 0
         };
       })
