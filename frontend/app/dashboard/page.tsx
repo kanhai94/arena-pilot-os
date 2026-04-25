@@ -609,7 +609,8 @@ const parseCsvLine = (line: string) => {
   return values;
 };
 
-const normalizeCsvHeader = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+const normalizeCsvHeader = (value: string) =>
+  value.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[\s_-]+/g, '');
 const normalizeImportLookup = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 const formatSchoolClassLabel = (name?: string | null, section?: string | null) =>
   [name?.trim(), section?.trim()].filter(Boolean).join('-');
@@ -627,11 +628,11 @@ const parseStudentsImportCsv = (content: string) => {
   const headerParts = parseCsvLine(lines[0]).map(normalizeCsvHeader);
   const indexOf = (name: string) => headerParts.findIndex((header) => header === name);
 
-  const nameIdx = indexOf('name');
+  const nameIdx = [indexOf('name'), indexOf('studentname'), indexOf('fullname')].find((value) => value !== -1) ?? -1;
   const ageIdx = indexOf('age');
   const genderIdx = indexOf('gender');
   const parentNameIdx = indexOf('parentname');
-  const parentPhoneIdx = indexOf('parentphone');
+  const parentPhoneIdx = [indexOf('parentphone'), indexOf('phone'), indexOf('phonenumber')].find((value) => value !== -1) ?? -1;
   const emailIdx = indexOf('email');
   const batchIdIdx = indexOf('batchid');
   const classIdx = indexOf('class');
@@ -639,8 +640,8 @@ const parseStudentsImportCsv = (content: string) => {
   const batchIdx = indexOf('batch');
   const feeStatusIdx = indexOf('feestatus');
   const dobIdx = indexOf('dob');
-  const rollNoIdx = indexOf('rollno');
-  const mobileIdx = indexOf('mobile');
+  const rollNoIdx = [indexOf('rollno'), indexOf('rollnumber')].find((value) => value !== -1) ?? -1;
+  const mobileIdx = [indexOf('mobile'), indexOf('mobileno'), indexOf('mobilenumber')].find((value) => value !== -1) ?? -1;
 
   if (nameIdx < 0) {
     throw new Error('CSV header must include `name`.');
@@ -695,7 +696,7 @@ const parseStudentsImportCsv = (content: string) => {
       parentPhone: normalizedPhone.startsWith('+') ? normalizedPhone : `+91${normalizedPhone.replace(/\D/g, '')}`,
       ...(email ? { email } : {}),
       ...(batchId ? { batchId } : {}),
-      ...(classLabel ? { classLabel } : {}),
+  ...(classLabel ? { classLabel } : {}),
       feeStatus,
       ...(dob ? { dob } : {}),
       ...(rollNo ? { rollNo } : {})
@@ -704,6 +705,8 @@ const parseStudentsImportCsv = (content: string) => {
 
   return rows;
 };
+
+const objectIdLikeRegex = /^[0-9a-fA-F]{24}$/;
 
 const splitBatchAndClass = (value: string) => {
   const parts = value.split(' - ');
@@ -864,6 +867,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState('');
+  const [studentImportStatus, setStudentImportStatus] = useState<{
+    tone: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+  const [studentImportIssues, setStudentImportIssues] = useState<string[]>([]);
 
   const [billing, setBilling] = useState<BillingCurrent | null>(null);
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
@@ -4381,6 +4389,7 @@ const getNameInitials = (value: string) =>
   const triggerImportStudents = () => {
     if (!canManageStudents) {
       setToast('You do not have permission to import students.');
+      setStudentImportStatus({ tone: 'error', message: 'You do not have permission to import students.' });
       return;
     }
     importStudentsInputRef.current?.click();
@@ -4450,23 +4459,29 @@ const getNameInitials = (value: string) =>
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
       setToast('Please upload a CSV file.');
+      setStudentImportStatus({ tone: 'error', message: 'Please upload a CSV file.' });
       return;
     }
 
     if (!token) {
       setToast('Session expired. Please login again.');
+      setStudentImportStatus({ tone: 'error', message: 'Session expired. Please login again.' });
       return;
     }
     if (!canManageStudents) {
       setToast('You do not have permission to import students.');
+      setStudentImportStatus({ tone: 'error', message: 'You do not have permission to import students.' });
       return;
     }
 
     try {
+      setStudentImportStatus({ tone: 'info', message: `Importing ${file.name}...` });
+      setStudentImportIssues([]);
       const content = await file.text();
       const importRows = parseStudentsImportCsv(content);
       if (importRows.length === 0) {
         setToast('No valid student rows found in CSV.');
+        setStudentImportStatus({ tone: 'error', message: 'No valid student rows found in CSV.' });
         return;
       }
 
@@ -4505,8 +4520,27 @@ const getNameInitials = (value: string) =>
         try {
           let resolvedAssignment: { batchId?: string | null; classId?: string | null } = {};
 
-          if (row.batchId) {
-            resolvedAssignment = organizationType === 'SCHOOL' ? { classId: row.batchId } : { batchId: row.batchId };
+          const rawAssignmentValue = row.batchId?.trim() || row.classLabel?.trim() || '';
+
+          if (rawAssignmentValue) {
+            if (objectIdLikeRegex.test(rawAssignmentValue)) {
+              resolvedAssignment = organizationType === 'SCHOOL' ? { classId: rawAssignmentValue } : { batchId: rawAssignmentValue };
+            } else {
+              const normalizedClassLabel = normalizeImportLookup(rawAssignmentValue);
+              if (organizationType === 'SCHOOL') {
+                const matchedClass = schoolClassLookup.get(normalizedClassLabel);
+                if (!matchedClass) {
+                  throw new Error(`Class "${rawAssignmentValue}" not found`);
+                }
+                resolvedAssignment = { classId: matchedClass._id };
+              } else {
+                const matchedBatch = sportsClassLookup.get(normalizedClassLabel);
+                if (!matchedBatch) {
+                  throw new Error(`Class "${rawAssignmentValue}" not found`);
+                }
+                resolvedAssignment = { batchId: matchedBatch.id };
+              }
+            }
           } else if (row.classLabel) {
             const normalizedClassLabel = normalizeImportLookup(row.classLabel);
             if (organizationType === 'SCHOOL') {
@@ -4570,6 +4604,7 @@ const getNameInitials = (value: string) =>
             2
           )
         );
+        setStudentImportIssues(failures.slice(0, 5).map((failure) => `Row ${failure.row} (${failure.name}): ${failure.error}`));
       }
 
       setToast(
@@ -4577,8 +4612,21 @@ const getNameInitials = (value: string) =>
           ? `Imported ${successCount} students, ${failures.length} failed. Check debug output.`
           : `Successfully imported ${successCount} students.`
       );
+      setStudentImportStatus({
+        tone: failures.length > 0 ? 'error' : 'success',
+        message:
+          failures.length > 0
+            ? `Imported ${successCount} students. ${failures.length} rows failed.`
+            : `Successfully imported ${successCount} students.`
+      });
+      if (failures.length === 0) {
+        setStudentImportIssues([]);
+      }
     } catch (error) {
-      setToast(error instanceof Error ? error.message : 'CSV import failed');
+      const message = error instanceof Error ? error.message : 'CSV import failed';
+      setToast(message);
+      setStudentImportStatus({ tone: 'error', message });
+      setStudentImportIssues([]);
     } finally {
       setActionLoading(false);
     }
@@ -6552,6 +6600,29 @@ const getNameInitials = (value: string) =>
                           <p className="text-sm text-slate-600 dark:text-slate-300">
                             Active learners: {studentsTotal}, paid: {paidStudentsCount}, pending: {pendingStudentsCount}
                           </p>
+                          {studentImportStatus ? (
+                            <div
+                              className={`mt-3 inline-flex rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                studentImportStatus.tone === 'success'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                  : studentImportStatus.tone === 'info'
+                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300'
+                                    : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'
+                              }`}
+                            >
+                              {studentImportStatus.message}
+                            </div>
+                          ) : null}
+                          {studentImportIssues.length > 0 ? (
+                            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
+                              <p className="font-semibold">Import details</p>
+                              <ul className="mt-1 space-y-1">
+                                {studentImportIssues.map((issue) => (
+                                  <li key={issue}>{issue}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2">
                           <input
