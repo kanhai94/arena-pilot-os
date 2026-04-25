@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Class } from '../../models/class.model.js';
 import { Attendance } from '../../models/attendance.model.js';
 import { Student } from '../../models/student.model.js';
+import { Subject } from '../../models/subject.model.js';
 import { Teacher } from '../../models/teacher.model.js';
 import { User } from '../../models/user.model.js';
 import { ROLES } from '../../constants/roles.js';
@@ -96,6 +97,21 @@ export const classRepository = {
     return resolved || null;
   },
 
+  findClassByNameAndSection(tenantId, name, section = '', excludeId = null) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const filter = {
+      tenantId: scopedTenantId,
+      name: name.trim(),
+      section: section.trim()
+    };
+
+    if (excludeId) {
+      filter._id = { $ne: excludeId };
+    }
+
+    return Class.findOne(filter).lean();
+  },
+
   async findTeacherById(tenantId, teacherId) {
     const scopedTenantId = resolveTenantId(tenantId);
     const teacher = await Teacher.findOne({ _id: teacherId, tenantId: scopedTenantId }).lean();
@@ -154,6 +170,30 @@ export const classRepository = {
 
     const [resolved] = await attachTeacherRefs(scopedTenantId, [updated]);
     return resolved || null;
+  },
+
+  countStudentsLinkedToClass(tenantId, classId) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    return Student.countDocuments({
+      tenantId: scopedTenantId,
+      classId
+    });
+  },
+
+  async deleteClassById(tenantId, id) {
+    const scopedTenantId = resolveTenantId(tenantId);
+    const existing = await Class.findOne({ _id: id, tenantId: scopedTenantId }).lean();
+    if (!existing) {
+      return null;
+    }
+
+    await Promise.all([
+      Attendance.deleteMany({ tenantId: scopedTenantId, classId: id }),
+      Subject.deleteMany({ tenantId: scopedTenantId, classId: id }),
+      Class.deleteOne({ _id: id, tenantId: scopedTenantId })
+    ]);
+
+    return existing;
   },
 
   async syncClassStrength(tenantId, classId) {

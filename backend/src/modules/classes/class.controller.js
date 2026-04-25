@@ -40,6 +40,16 @@ export const createClassController = (classService) => {
       }
     },
 
+    deleteClass: async (req, res, next) => {
+      try {
+        const { id } = parseOrThrow(classIdParamSchema, req.params);
+        const data = await classService.deleteClass(id);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
     assignTeacher: async (req, res, next) => {
       try {
         const { id } = parseOrThrow(classIdParamSchema, req.params);

@@ -54,6 +54,7 @@ type SchoolClassesPageProps = {
   teachers: SchoolTeacher[];
   students: AssignmentStudent[];
   canManage: boolean;
+  canDelete: boolean;
   saving: boolean;
   onCreateClass: (payload: {
     name: string;
@@ -72,6 +73,7 @@ type SchoolClassesPageProps = {
   onFetchClassDetails: (id: string) => Promise<SchoolClassDetails | null>;
   onAssignTeacher: (classId: string, teacherId: string) => Promise<boolean>;
   onAssignStudent: (studentId: string, classId: string, rollNumber: string) => Promise<boolean>;
+  onDeleteClass: (classId: string, classLabel: string) => Promise<boolean>;
 };
 
 const modalShellClass =
@@ -82,12 +84,14 @@ export function SchoolClassesPage({
   teachers,
   students,
   canManage,
+  canDelete,
   saving,
   onCreateClass,
   onUpdateClass,
   onFetchClassDetails,
   onAssignTeacher,
-  onAssignStudent
+  onAssignStudent,
+  onDeleteClass
 }: SchoolClassesPageProps) {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [classDetails, setClassDetails] = useState<SchoolClassDetails | null>(null);
@@ -338,6 +342,15 @@ export function SchoolClassesPage({
                         >
                           Add Students
                         </button>
+                        {canDelete ? (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteClass(row._id, formatClassLabel(row.name, row.section))}
+                            className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 dark:border-rose-500/35 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -21,6 +21,7 @@ classRouter.post('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF
 classRouter.get('/', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), classController.listClasses);
 classRouter.get('/:id', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), classController.getClassDetails);
 classRouter.put('/:id', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH), classController.updateClass);
+classRouter.delete('/:id', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), classController.deleteClass);
 classRouter.put(
   '/:id/assign-teacher',
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),

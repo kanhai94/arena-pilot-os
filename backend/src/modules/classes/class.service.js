@@ -8,10 +8,17 @@ export const createClassService = (repository) => {
   return {
     async createClass(payload) {
       const tenantId = resolveTenantId();
+      const normalizedName = payload.name.trim();
+      const normalizedSection = payload.section?.trim() || '';
+      const duplicate = await repository.findClassByNameAndSection(tenantId, normalizedName, normalizedSection);
+      if (duplicate) {
+        throw new AppError('Class with same name and section already exists', StatusCodes.CONFLICT);
+      }
+
       const created = await repository.createClass({
         tenantId,
-        name: payload.name.trim(),
-        section: payload.section?.trim() || '',
+        name: normalizedName,
+        section: normalizedSection,
         classTeacherId: null,
         strength: 0,
         scheduleDays: payload.scheduleDays || [],
@@ -53,13 +60,35 @@ export const createClassService = (repository) => {
         throw new AppError('Class not found', StatusCodes.NOT_FOUND);
       }
 
+      const normalizedName = payload.name.trim();
+      const normalizedSection = payload.section?.trim() || '';
+      const duplicate = await repository.findClassByNameAndSection(tenantId, normalizedName, normalizedSection, id);
+      if (duplicate) {
+        throw new AppError('Class with same name and section already exists', StatusCodes.CONFLICT);
+      }
+
       return repository.updateClass(tenantId, id, {
-        name: payload.name.trim(),
-        section: payload.section?.trim() || '',
+        name: normalizedName,
+        section: normalizedSection,
         scheduleDays: payload.scheduleDays || [],
         startTime: payload.startTime || '',
         endTime: payload.endTime || ''
       });
+    },
+
+    async deleteClass(id) {
+      const tenantId = resolveTenantId();
+      const classDoc = await repository.findClassById(tenantId, id);
+      if (!classDoc) {
+        throw new AppError('Class not found', StatusCodes.NOT_FOUND);
+      }
+
+      const linkedStudents = await repository.countStudentsLinkedToClass(tenantId, id);
+      if (linkedStudents > 0) {
+        throw new AppError('Cannot delete class with assigned students', StatusCodes.CONFLICT);
+      }
+
+      return repository.deleteClassById(tenantId, id);
     },
 
     async getClassDetails(id) {

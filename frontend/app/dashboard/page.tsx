@@ -78,6 +78,7 @@ type StudentImportRow = {
   parentPhone: string;
   email?: string;
   batchId?: string | null;
+  classLabel?: string;
   feeStatus: 'paid' | 'pending';
   dob?: string;
   rollNo?: string;
@@ -609,6 +610,9 @@ const parseCsvLine = (line: string) => {
 };
 
 const normalizeCsvHeader = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+const normalizeImportLookup = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+const formatSchoolClassLabel = (name?: string | null, section?: string | null) =>
+  [name?.trim(), section?.trim()].filter(Boolean).join('-');
 
 const parseStudentsImportCsv = (content: string) => {
   const lines = content
@@ -630,6 +634,9 @@ const parseStudentsImportCsv = (content: string) => {
   const parentPhoneIdx = indexOf('parentphone');
   const emailIdx = indexOf('email');
   const batchIdIdx = indexOf('batchid');
+  const classIdx = indexOf('class');
+  const classNameIdx = indexOf('classname');
+  const batchIdx = indexOf('batch');
   const feeStatusIdx = indexOf('feestatus');
   const dobIdx = indexOf('dob');
   const rollNoIdx = indexOf('rollno');
@@ -677,6 +684,7 @@ const parseStudentsImportCsv = (content: string) => {
     const feeStatus: 'paid' | 'pending' = feeStatusRaw === 'paid' ? 'paid' : 'pending';
     const parentName = read(parentNameIdx) || name;
     const batchId = read(batchIdIdx) || null;
+    const classLabel = read(classIdx) || read(classNameIdx) || read(batchIdx);
     const rollNo = read(rollNoIdx);
 
     rows.push({
@@ -687,6 +695,7 @@ const parseStudentsImportCsv = (content: string) => {
       parentPhone: normalizedPhone.startsWith('+') ? normalizedPhone : `+91${normalizedPhone.replace(/\D/g, '')}`,
       ...(email ? { email } : {}),
       ...(batchId ? { batchId } : {}),
+      ...(classLabel ? { classLabel } : {}),
       feeStatus,
       ...(dob ? { dob } : {}),
       ...(rollNo ? { rollNo } : {})
@@ -2771,6 +2780,23 @@ export default function DashboardPage() {
     );
   };
 
+  const deleteSchoolClass = async (id: string, classLabel: string) => {
+    if (!canDeleteClassAndAccess) {
+      setToast('Only admin can delete class.');
+      return false;
+    }
+
+    const confirmed = window.confirm(
+      `Delete class "${classLabel}"?\n\nThis is only allowed when no students are assigned to the class.`
+    );
+    if (!confirmed) return false;
+
+    return runCurriculumAction(
+      () => apiDeleteWithAuth(`/classes/${id}`, token),
+      'Class deleted successfully'
+    );
+  };
+
   const fetchSchoolClassDetails = async (id: string): Promise<SchoolClassDetails | null> => {
     return safeFetch(() => apiGetWithAuth<SchoolClassDetails>(`/classes/${id}`, token), null);
   };
@@ -4029,8 +4055,6 @@ export default function DashboardPage() {
     }
   };
 
-const generateInvoiceNo = () => `INV-${Date.now().toString().slice(-6)}`;
-
 const getNameInitials = (value: string) =>
   value
     .trim()
@@ -4052,7 +4076,7 @@ const getNameInitials = (value: string) =>
     setClientPhotoDataUrl('');
     setClientPhotoFileName('');
     setInvoiceDate(new Date().toISOString().slice(0, 10));
-    setInvoiceNumber(generateInvoiceNo());
+    setInvoiceNumber('');
     setInvoiceAmount('');
     setInvoiceRemarks('');
     setSubscriptionLevel('');
@@ -4101,7 +4125,7 @@ const getNameInitials = (value: string) =>
     setClientPhotoDataUrl(meta.photoDataUrl || '');
     setClientPhotoFileName(meta.photoFileName || '');
     setInvoiceDate(meta.invoiceDate || new Date().toISOString().slice(0, 10));
-    setInvoiceNumber(meta.invoiceNumber || generateInvoiceNo());
+    setInvoiceNumber(meta.invoiceNumber || '');
     setInvoiceAmount(meta.invoiceAmount || '');
     setInvoiceRemarks(meta.invoiceRemarks || '');
     setSubscriptionLevel(meta.subscriptionLevel || '');
@@ -4451,10 +4475,55 @@ const getNameInitials = (value: string) =>
       const failures: Array<{ row: number; name: string; error: string }> = [];
       let successCount = 0;
       const mergedMeta: Record<string, ClientMeta> = { ...clientMetaByStudentId };
+      const schoolClassLookup = new Map(
+        schoolClasses.flatMap((item) => {
+          const keys = new Set(
+            [
+              formatSchoolClassLabel(item.name, item.section),
+              [item.name?.trim(), item.section?.trim()].filter(Boolean).join(' '),
+              item.name?.trim()
+            ]
+              .filter(Boolean)
+              .map((value) => normalizeImportLookup(value as string))
+          );
+          return [...keys].map((key) => [key, item] as const);
+        })
+      );
+      const sportsClassLookup = new Map(
+        academyClassRows.flatMap((row) => {
+          const keys = new Set(
+            [row.title?.trim(), row.batchName?.trim(), `${row.batchName || ''} ${row.title || ''}`.trim()]
+              .filter(Boolean)
+              .map((value) => normalizeImportLookup(value))
+          );
+          return [...keys].map((key) => [key, row] as const);
+        })
+      );
 
       for (let index = 0; index < importRows.length; index += 1) {
         const row = importRows[index];
         try {
+          let resolvedAssignment: { batchId?: string | null; classId?: string | null } = {};
+
+          if (row.batchId) {
+            resolvedAssignment = organizationType === 'SCHOOL' ? { classId: row.batchId } : { batchId: row.batchId };
+          } else if (row.classLabel) {
+            const normalizedClassLabel = normalizeImportLookup(row.classLabel);
+            if (organizationType === 'SCHOOL') {
+              const matchedClass = schoolClassLookup.get(normalizedClassLabel);
+              if (!matchedClass) {
+                throw new Error(`Class "${row.classLabel}" not found`);
+              }
+              resolvedAssignment = { classId: matchedClass._id };
+            } else {
+              const matchedBatch = sportsClassLookup.get(normalizedClassLabel);
+              if (!matchedBatch) {
+                throw new Error(`Class "${row.classLabel}" not found`);
+              }
+              resolvedAssignment = { batchId: matchedBatch.id };
+            }
+          }
+
           const created = await apiPostWithAuth<Student>(
             '/students',
             {
@@ -4464,7 +4533,8 @@ const getNameInitials = (value: string) =>
               parentName: row.parentName,
               parentPhone: row.parentPhone,
               ...(row.email ? { email: row.email } : {}),
-              ...(row.batchId ? { batchId: row.batchId } : {}),
+              ...resolvedAssignment,
+              ...(organizationType === 'SCHOOL' && row.rollNo ? { rollNumber: row.rollNo } : {}),
               feeStatus: row.feeStatus
             },
             token
@@ -5364,12 +5434,14 @@ const getNameInitials = (value: string) =>
                       teachers={schoolTeachers}
                       students={attendanceStudents}
                       canManage={canManageBatches}
+                      canDelete={canDeleteClassAndAccess}
                       saving={actionLoading}
                       onCreateClass={createSchoolClass}
                       onUpdateClass={updateSchoolClass}
                       onFetchClassDetails={fetchSchoolClassDetails}
                       onAssignTeacher={assignTeacherToSchoolClass}
                       onAssignStudent={assignStudentToSchoolClass}
+                      onDeleteClass={deleteSchoolClass}
                     />
                   </div>
                 ) : (
