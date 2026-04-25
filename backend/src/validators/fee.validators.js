@@ -4,6 +4,8 @@ import { AppError } from '../errors/appError.js';
 const objectIdRegex = /^[a-f0-9]{24}$/i;
 const paymentStatusSchema = z.enum(['PAID', 'PENDING', 'OVERDUE']);
 const paymentModeSchema = z.enum(['CASH', 'ONLINE', 'UPI']);
+const discountTypeSchema = z.enum(['NONE', 'PERCENT', 'AMOUNT']);
+const discountScopeSchema = z.enum(['ONE_TIME', 'EVERY_CYCLE']);
 
 export const createFeePlanSchema = z
   .object({
@@ -34,8 +36,42 @@ export const assignFeePlanSchema = z
   .object({
     studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
     feePlanId: z.string().regex(objectIdRegex, 'Invalid feePlanId'),
-    startDate: z.string().datetime({ offset: true }).or(z.string().date())
+    startDate: z.string().datetime({ offset: true }).or(z.string().date()),
+    discountType: discountTypeSchema.optional(),
+    discountValue: z.coerce.number().min(0).optional(),
+    discountScope: discountScopeSchema.optional()
   })
+  .refine(
+    (value) =>
+      value.discountType === undefined ||
+      value.discountType === 'NONE' ||
+      (value.discountValue ?? 0) > 0,
+    { message: 'Discount value must be greater than 0', path: ['discountValue'] }
+  )
+  .strict();
+
+export const updateStudentFeeParamsSchema = z.object({
+  studentId: z.string().regex(objectIdRegex, 'Invalid studentId')
+});
+
+export const updateStudentFeeSchema = z
+  .object({
+    feePlanId: z.string().regex(objectIdRegex, 'Invalid feePlanId').optional(),
+    startDate: z.string().datetime({ offset: true }).or(z.string().date()).optional(),
+    discountType: discountTypeSchema.optional(),
+    discountValue: z.coerce.number().min(0).optional(),
+    discountScope: discountScopeSchema.optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field is required for update'
+  })
+  .refine(
+    (value) =>
+      value.discountType === undefined ||
+      value.discountType === 'NONE' ||
+      (value.discountValue ?? 0) > 0,
+    { message: 'Discount value must be greater than 0', path: ['discountValue'] }
+  )
   .strict();
 
 export const studentFeeStatusQuerySchema = z.object({

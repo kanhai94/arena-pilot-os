@@ -1,5 +1,5 @@
 import { TenantContext } from '../../core/context/tenantContext.js';
-import { computeFeeMetrics } from '../fees/fee.utils.js';
+import { computeFeeMetrics, getCycleCharge, getDueCycles } from '../fees/fee.utils.js';
 
 const toDayRange = (baseDate = new Date()) => {
   const start = new Date(baseDate);
@@ -102,9 +102,25 @@ export const createDashboardService = (repository) => {
           totalAmount: item.totalAmount,
           durationMonths: feePlan.durationMonths,
           totalPaid,
-          asOfDate: now
+          asOfDate: now,
+          oneTimeDiscountAmount: item.oneTimeDiscountAmount || 0
         });
-        const pendingCycles = feePlan.amount > 0 ? Math.max(0, Math.ceil(metrics.pendingTillDate / feePlan.amount)) : 0;
+        const dueCycles = getDueCycles(item.startDate, feePlan.durationMonths, now);
+        let remainingPaid = totalPaid;
+        let pendingCycles = 0;
+        for (let cycleIndex = 0; cycleIndex < dueCycles; cycleIndex += 1) {
+          const cycleCharge = getCycleCharge({
+            cycleIndex,
+            totalAmount: item.totalAmount,
+            oneTimeDiscountAmount: item.oneTimeDiscountAmount || 0
+          });
+          if (remainingPaid >= cycleCharge) {
+            remainingPaid -= cycleCharge;
+          } else {
+            pendingCycles += 1;
+            remainingPaid = 0;
+          }
+        }
         totalPendingRows += pendingCycles;
         return sum + metrics.pendingTillDate;
       }, 0);

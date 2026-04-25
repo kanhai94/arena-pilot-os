@@ -1,6 +1,15 @@
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '../../errors/appError.js';
-import { normalizeToUTCDate, addMonthsUTC, computeFeeMetrics } from './fee.utils.js';
+import {
+  normalizeToUTCDate,
+  addMonthsUTC,
+  clampCurrency,
+  computeFeeMetrics,
+  getCoveredCycles,
+  getCycleCharge,
+  getDueCycles,
+  resolveDiscountAmounts
+} from './fee.utils.js';
 import { paymentLogger } from '../../config/logger.js';
 import { TenantContext } from '../../core/context/tenantContext.js';
 
@@ -49,15 +58,85 @@ export const createFeeService = (repository, dependencies = {}) => {
     };
   };
 
+  const buildFeeAssignmentAmounts = (feePlan, payload = {}) => {
+    const baseAmount = clampCurrency(feePlan.amount);
+    const discountType = payload.discountType || 'NONE';
+    const discountValue = clampCurrency(payload.discountValue || 0);
+    const discountScope = payload.discountScope || 'ONE_TIME';
+    const discountAmounts = resolveDiscountAmounts({
+      baseAmount,
+      discountType,
+      discountValue,
+      discountScope
+    });
+
+    return {
+      baseAmount,
+      discountType,
+      discountValue,
+      discountScope,
+      totalAmount: discountAmounts.effectiveRecurringAmount,
+      recurringDiscountAmount: discountAmounts.recurringDiscountAmount,
+      oneTimeDiscountAmount: discountAmounts.oneTimeDiscountAmount
+    };
+  };
+
+  const buildPendingCycleRows = ({ row, asOfDate, studentId, classId, metrics }) => {
+    const currentDate = normalizeToUTCDate(asOfDate);
+    const durationMonths = row.feePlan?.durationMonths || 0;
+    const dueCycles = getDueCycles(row.startDate, durationMonths, currentDate);
+    const totalPaid = clampCurrency(row.totalPaid || 0);
+    let remainingPaid = totalPaid;
+
+    return Array.from({ length: dueCycles }).flatMap((_, index) => {
+      const charge = getCycleCharge({
+        cycleIndex: index,
+        totalAmount: row.totalAmount,
+        oneTimeDiscountAmount: row.oneTimeDiscountAmount || 0
+      });
+
+      if (remainingPaid >= charge) {
+        remainingPaid = clampCurrency(remainingPaid - charge);
+        return [];
+      }
+
+      const outstandingAmount = clampCurrency(charge - remainingPaid);
+      remainingPaid = 0;
+      const dueDate = addMonthsUTC(row.startDate, index);
+      const dueInfo = summarizeDueStatus(dueDate, currentDate);
+
+      return [
+        {
+          id: `${studentId}-${formatMonthKey(dueDate)}`,
+          studentId,
+          student: row.student,
+          classId,
+          amount: outstandingAmount,
+          paymentDate: null,
+          dueDate,
+          status: dueInfo.status,
+          paymentMode: null,
+          transactionId: null,
+          month: formatMonthKey(dueDate),
+          paymentSource: 'system',
+          referenceNote: null,
+          badge: dueInfo.badge,
+          dueInDays: dueInfo.dueInDays,
+          monthlyFee: row.totalAmount,
+          lastPayment: totalPaid,
+          pendingDues: metrics.overallPending
+        }
+      ];
+    });
+  };
+
   const buildPendingRows = async ({ asOfDate, search = '', studentId, classId, dueInDays, page = 1, limit = 200 }) => {
     const rowsPerPage = Math.max(limit, 200);
     const { rows } = await repository.getPendingStudentFeesBase(resolveTenantId(), page, rowsPerPage, search);
 
     const filtered = rows
       .flatMap((row) => {
-        const currentDate = normalizeToUTCDate(asOfDate);
-        const startDate = normalizeToUTCDate(row.startDate);
-        const feePlanAmount = row.feePlan?.amount || row.totalAmount || 0;
+        const feePlanAmount = row.totalAmount || row.feePlan?.amount || 0;
         if (!feePlanAmount || !row.feePlan?.durationMonths) {
           return [];
         }
@@ -68,35 +147,15 @@ export const createFeeService = (repository, dependencies = {}) => {
           totalAmount: row.totalAmount,
           durationMonths: row.feePlan.durationMonths,
           totalPaid: row.totalPaid || 0,
-          asOfDate: currentDate
+          asOfDate,
+          oneTimeDiscountAmount: row.oneTimeDiscountAmount || 0
         });
-
-        const pendingCycles = Math.max(0, Math.ceil(metrics.pendingTillDate / feePlanAmount));
-        const firstPendingCycle = Math.max(0, metrics.dueCycles - pendingCycles);
-
-        return Array.from({ length: pendingCycles }).map((_, index) => {
-          const dueDate = addMonthsUTC(startDate, firstPendingCycle + index);
-          const dueInfo = summarizeDueStatus(dueDate, currentDate);
-          return {
-            id: `${row.student._id}-${formatMonthKey(dueDate)}`,
-            studentId: row.student._id,
-            student: row.student,
-            classId: row.student.classId?._id || row.student.classId || null,
-            amount: feePlanAmount,
-            paymentDate: null,
-            dueDate,
-            status: dueInfo.status,
-            paymentMode: null,
-            transactionId: null,
-            month: formatMonthKey(dueDate),
-            paymentSource: 'system',
-            referenceNote: null,
-            badge: dueInfo.badge,
-            dueInDays: dueInfo.dueInDays,
-            monthlyFee: feePlanAmount,
-            lastPayment: row.totalPaid || 0,
-            pendingDues: metrics.overallPending
-          };
+        return buildPendingCycleRows({
+          row,
+          asOfDate,
+          studentId: row.student._id,
+          classId: row.student.classId?._id || row.student.classId || null,
+          metrics
         });
       })
       .filter((item) => {
@@ -126,7 +185,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       totalAmount: studentFee.totalAmount,
       durationMonths: studentFee.feePlan.durationMonths,
       totalPaid,
-      asOfDate
+      asOfDate,
+      oneTimeDiscountAmount: studentFee.oneTimeDiscountAmount || 0
     });
   };
 
@@ -136,7 +196,12 @@ export const createFeeService = (repository, dependencies = {}) => {
     const paymentRows = await repository.sumPaymentsForStudent(tenantId, studentFee.studentId, studentFee.startDate);
     const totalPaid = paymentRows[0]?.totalPaid || 0;
 
-    const coveredCycles = Math.min(studentFee.feePlan.durationMonths, Math.floor(totalPaid / studentFee.totalAmount));
+    const coveredCycles = getCoveredCycles({
+      durationMonths: studentFee.feePlan.durationMonths,
+      totalAmount: studentFee.totalAmount,
+      oneTimeDiscountAmount: studentFee.oneTimeDiscountAmount || 0,
+      totalPaid
+    });
     const nextDueDate = addMonthsUTC(studentFee.startDate, coveredCycles);
 
     const metrics = computeFeeMetrics({
@@ -145,7 +210,8 @@ export const createFeeService = (repository, dependencies = {}) => {
       totalAmount: studentFee.totalAmount,
       durationMonths: studentFee.feePlan.durationMonths,
       totalPaid,
-      asOfDate
+      asOfDate,
+      oneTimeDiscountAmount: studentFee.oneTimeDiscountAmount || 0
     });
 
     await repository.updateStudentFeeById(tenantId, studentFee._id, {
@@ -223,20 +289,63 @@ export const createFeeService = (repository, dependencies = {}) => {
 
       const startDate = normalizeToUTCDate(payload.startDate);
 
+      const feeAssignment = buildFeeAssignmentAmounts(feePlan, payload);
+
       const studentFee = await repository.createStudentFee({
         tenantId,
         studentId: payload.studentId,
         feePlanId: payload.feePlanId,
         startDate,
         nextDueDate: startDate,
-        totalAmount: feePlan.amount,
+        ...feeAssignment,
         status: 'active'
       });
 
       await repository.updateStudentFeeStatus(tenantId, payload.studentId, 'pending');
-      await repository.updateStudentById(tenantId, payload.studentId, { monthlyFee: feePlan.amount });
+      await repository.updateStudentById(tenantId, payload.studentId, { monthlyFee: feeAssignment.totalAmount });
 
       return studentFee;
+    },
+
+    async updateStudentFee(studentId, payload) {
+      const tenantId = resolveTenantId();
+      const existing = await repository.findActiveStudentFeeByStudentId(tenantId, studentId);
+      if (!existing) {
+        throw new AppError('No active fee assignment for student', StatusCodes.NOT_FOUND);
+      }
+
+      const nextFeePlanId = payload.feePlanId || String(existing.feePlanId);
+      const feePlan = await repository.findFeePlanById(tenantId, nextFeePlanId);
+      if (!feePlan) {
+        throw new AppError('Fee plan not found', StatusCodes.NOT_FOUND);
+      }
+
+      const startDate = payload.startDate ? normalizeToUTCDate(payload.startDate) : normalizeToUTCDate(existing.startDate);
+      const feeAssignment = buildFeeAssignmentAmounts(feePlan, {
+        discountType: payload.discountType ?? existing.discountType ?? 'NONE',
+        discountValue: payload.discountValue ?? existing.discountValue ?? 0,
+        discountScope: payload.discountScope ?? existing.discountScope ?? 'ONE_TIME'
+      });
+
+      const paymentRows = await repository.sumPaymentsForStudent(tenantId, studentId, startDate);
+      const totalPaid = paymentRows[0]?.totalPaid || 0;
+      const coveredCycles = getCoveredCycles({
+        durationMonths: feePlan.durationMonths,
+        totalAmount: feeAssignment.totalAmount,
+        oneTimeDiscountAmount: feeAssignment.oneTimeDiscountAmount,
+        totalPaid
+      });
+
+      const updated = await repository.updateStudentFeeById(tenantId, existing._id, {
+        feePlanId: nextFeePlanId,
+        startDate,
+        nextDueDate: addMonthsUTC(startDate, coveredCycles),
+        ...feeAssignment,
+        status: 'active'
+      });
+
+      await repository.updateStudentById(tenantId, studentId, { monthlyFee: feeAssignment.totalAmount });
+      return updated;
     },
 
     async getStudentFeeStatus(studentId, asOfInput) {
@@ -421,7 +530,8 @@ export const createFeeService = (repository, dependencies = {}) => {
             totalAmount: row.totalAmount,
             durationMonths: row.feePlan.durationMonths,
             totalPaid: row.totalPaid || 0,
-            asOfDate
+            asOfDate,
+            oneTimeDiscountAmount: row.oneTimeDiscountAmount || 0
           });
 
           if (metrics.overallPending <= 0) {

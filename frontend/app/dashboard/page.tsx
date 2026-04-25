@@ -65,6 +65,9 @@ type ClientMeta = {
   subscriptionType?: 'subscription' | 'trial';
   subscriptionPlanId?: string;
   subscriptionClassId?: string;
+  subscriptionDiscountType?: 'NONE' | 'PERCENT' | 'AMOUNT';
+  subscriptionDiscountValue?: string;
+  subscriptionDiscountScope?: 'ONE_TIME' | 'EVERY_CYCLE';
   subscriptionStartDate?: string;
   subscriptionEndDate?: string;
   subscriptionAutoRenew?: boolean;
@@ -1096,6 +1099,9 @@ export default function DashboardPage() {
   const [subscriptionType, setSubscriptionType] = useState<'subscription' | 'trial'>('subscription');
   const [subscriptionPlanId, setSubscriptionPlanId] = useState('');
   const [subscriptionClassId, setSubscriptionClassId] = useState('');
+  const [subscriptionDiscountType, setSubscriptionDiscountType] = useState<'NONE' | 'PERCENT' | 'AMOUNT'>('NONE');
+  const [subscriptionDiscountValue, setSubscriptionDiscountValue] = useState('');
+  const [subscriptionDiscountScope, setSubscriptionDiscountScope] = useState<'ONE_TIME' | 'EVERY_CYCLE'>('ONE_TIME');
   const [subscriptionStartDate, setSubscriptionStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
   const [subscriptionAutoRenew, setSubscriptionAutoRenew] = useState(false);
@@ -1284,11 +1290,6 @@ export default function DashboardPage() {
   const uiLabels = useMemo(() => getUILabels(organizationType), [organizationType]);
   const leftMenu = useMemo(() => getSidebarMenuItems(organizationType), [organizationType]);
   const isSchoolOrganization = organizationType === 'SCHOOL';
-  useEffect(() => {
-    if (selectedSubscriptionPlan) {
-      setInvoiceAmount(String(selectedSubscriptionPlan.amount));
-    }
-  }, [selectedSubscriptionPlan]);
   const accessRoleOptions = useMemo(
     () =>
       isSchoolOrganization
@@ -1366,6 +1367,53 @@ export default function DashboardPage() {
     !actionLoading &&
     !classFormHasRequiredMissing &&
     (organizationType === 'SCHOOL' || (classCapacityError.length === 0 && classTimeError.length === 0));
+  const selectedSubscriptionPlan = feePlans.find((item) => item._id === subscriptionPlanId) || null;
+  const parseMoneyValue = (value: string | number | null | undefined) => {
+    const numeric = typeof value === 'number' ? value : Number(String(value || '').trim());
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+  const getStudentFeeBreakdown = ({
+    planAmount,
+    paidAmount,
+    discountType,
+    discountValue
+  }: {
+    planAmount: number;
+    paidAmount: string | number | null | undefined;
+    discountType?: 'NONE' | 'PERCENT' | 'AMOUNT';
+    discountValue?: string | number | null | undefined;
+  }) => {
+    const baseAmount = Math.max(0, parseMoneyValue(planAmount));
+    const normalizedDiscountType = discountType || 'NONE';
+    const rawDiscountValue = Math.max(0, parseMoneyValue(discountValue));
+    const discountAmount =
+      normalizedDiscountType === 'PERCENT'
+        ? Math.min(baseAmount, Number(((baseAmount * rawDiscountValue) / 100).toFixed(2)))
+        : normalizedDiscountType === 'AMOUNT'
+          ? Math.min(baseAmount, rawDiscountValue)
+          : 0;
+    const payableAmount = Math.max(0, Number((baseAmount - discountAmount).toFixed(2)));
+    const collectedAmount = Math.min(payableAmount, Math.max(0, parseMoneyValue(paidAmount)));
+    const remainingAmount = Math.max(0, Number((payableAmount - collectedAmount).toFixed(2)));
+    return {
+      baseAmount,
+      discountAmount,
+      payableAmount,
+      collectedAmount,
+      remainingAmount
+    };
+  };
+  const selectedSubscriptionBreakdown = useMemo(
+    () =>
+      getStudentFeeBreakdown({
+        planAmount: selectedSubscriptionPlan?.amount ?? 0,
+        paidAmount: invoiceAmount,
+        discountType: subscriptionDiscountType,
+        discountValue: subscriptionDiscountValue
+      }),
+    [invoiceAmount, selectedSubscriptionPlan, subscriptionDiscountType, subscriptionDiscountValue]
+  );
+  const resolvedClientInvoiceAmount = invoiceAmount;
   const clientValidationErrors = useMemo(() => {
     const errors: Record<string, string> = {};
     const normalizedName = clientFullName.trim();
@@ -1389,6 +1437,12 @@ export default function DashboardPage() {
       errors.invoiceAmount = 'Enter valid amount (up to 2 decimals).';
     } else if (normalizedInvoiceAmount && Number(normalizedInvoiceAmount) <= 0) {
       errors.invoiceAmount = 'Amount must be greater than 0.';
+    } else if (
+      selectedSubscriptionPlan &&
+      normalizedInvoiceAmount &&
+      Number(normalizedInvoiceAmount) > selectedSubscriptionBreakdown.payableAmount
+    ) {
+      errors.invoiceAmount = 'Amount cannot exceed payable amount after discount.';
     }
     if (subscriptionStartDate && subscriptionEndDate && subscriptionEndDate < subscriptionStartDate) {
       errors.subscriptionEndDate = 'Subscription end date cannot be before start date.';
@@ -1401,6 +1455,8 @@ export default function DashboardPage() {
       clientGender,
       clientMobile,
       resolvedClientInvoiceAmount,
+      selectedSubscriptionBreakdown.payableAmount,
+      selectedSubscriptionPlan,
       subscriptionEndDate,
       subscriptionStartDate
     ]);
@@ -2625,10 +2681,8 @@ export default function DashboardPage() {
       .filter((student) => student.status === 'active')
       .reduce((sum, student) => {
         const meta = clientMetaByStudentId[student._id];
-        const linkedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
-        if (linkedPlan) return sum + linkedPlan.amount;
-        const invoiceAmount = Number(meta?.invoiceAmount || 0);
-        return sum + (Number.isFinite(invoiceAmount) ? invoiceAmount : 0);
+        const feeBreakdown = getMetaFeeBreakdown(meta);
+        return sum + feeBreakdown.payableAmount;
       }, 0);
 
     const pendingAmount = pendingFees.reduce((sum, row) => sum + Math.max(0, row.summary.overallPending), 0);
@@ -2707,8 +2761,13 @@ export default function DashboardPage() {
     const plan = feePlans.find((item) => item._id === planId);
     return plan ? `${plan.name} - ${formatCurrency(plan.amount)}` : fallback;
   };
-  const selectedSubscriptionPlan = feePlans.find((item) => item._id === subscriptionPlanId) || null;
-  const resolvedClientInvoiceAmount = selectedSubscriptionPlan ? String(selectedSubscriptionPlan.amount) : invoiceAmount;
+  const getMetaFeeBreakdown = (meta?: ClientMeta) =>
+    getStudentFeeBreakdown({
+      planAmount: feePlans.find((plan) => plan._id === meta?.subscriptionPlanId)?.amount ?? 0,
+      paidAmount: meta?.invoiceAmount,
+      discountType: meta?.subscriptionDiscountType,
+      discountValue: meta?.subscriptionDiscountValue
+    });
   const getClassSelectLabel = (classId: string) => {
     if (organizationType === 'SCHOOL') {
       const schoolClass = schoolClasses.find((item) => item._id === classId);
@@ -4389,6 +4448,9 @@ const getNameInitials = (value: string) =>
     setSubscriptionType('subscription');
     setSubscriptionPlanId('');
     setSubscriptionClassId('');
+    setSubscriptionDiscountType('NONE');
+    setSubscriptionDiscountValue('');
+    setSubscriptionDiscountScope('ONE_TIME');
     setSubscriptionStartDate(new Date().toISOString().slice(0, 10));
     setSubscriptionEndDate('');
     setSubscriptionAutoRenew(false);
@@ -4439,6 +4501,9 @@ const getNameInitials = (value: string) =>
     setSubscriptionType(meta.subscriptionType || 'subscription');
     setSubscriptionPlanId(meta.subscriptionPlanId || feePlans[0]?._id || '');
     setSubscriptionClassId(meta.subscriptionClassId || resolvedStudentClassId || '');
+    setSubscriptionDiscountType(meta.subscriptionDiscountType || 'NONE');
+    setSubscriptionDiscountValue(meta.subscriptionDiscountValue || '');
+    setSubscriptionDiscountScope(meta.subscriptionDiscountScope || 'ONE_TIME');
     setSubscriptionStartDate(meta.subscriptionStartDate || new Date().toISOString().slice(0, 10));
     setSubscriptionEndDate(meta.subscriptionEndDate || '');
     setSubscriptionAutoRenew(Boolean(meta.subscriptionAutoRenew));
@@ -4487,6 +4552,9 @@ const getNameInitials = (value: string) =>
       const studentResult = await (async () => {
         const derivedAge = getAgeFromDob(clientDob);
           const resolvedInvoiceAmountNumber = Number(resolvedClientInvoiceAmount || '0');
+          const hasReceivableBalance = selectedSubscriptionPlan
+            ? selectedSubscriptionBreakdown.remainingAmount > 0
+            : resolvedInvoiceAmountNumber > 0;
           const studentPayload = {
             name: clientFullName.trim(),
             age: derivedAge || 12,
@@ -4503,7 +4571,7 @@ const getNameInitials = (value: string) =>
             : {
                 batchId: subscriptionClassId || null
               }),
-            feeStatus: resolvedInvoiceAmountNumber > 0 ? 'pending' : 'paid'
+            feeStatus: hasReceivableBalance ? 'pending' : 'paid'
           };
 
         const studentResult = clientEditingId
@@ -4512,17 +4580,32 @@ const getNameInitials = (value: string) =>
 
         const studentId = clientEditingId || studentResult._id;
 
-        const shouldAssignFeePlan = Boolean(subscriptionPlanId && studentId && !clientEditingId);
-        if (shouldAssignFeePlan) {
-          await apiPostWithAuth(
-            '/fees/student-fees/assign',
-            {
-              studentId,
+        const feeAssignmentPayload = subscriptionPlanId
+          ? {
               feePlanId: subscriptionPlanId,
-              startDate: `${subscriptionStartDate || invoiceDate}T00:00:00.000Z`
-            },
-            token
-          );
+              startDate: `${subscriptionStartDate || invoiceDate}T00:00:00.000Z`,
+              discountType: subscriptionDiscountType,
+              discountScope: subscriptionDiscountScope,
+              ...(subscriptionDiscountType !== 'NONE' && subscriptionDiscountValue.trim()
+                ? { discountValue: Number(subscriptionDiscountValue) }
+                : {})
+            }
+          : null;
+        if (studentId && feeAssignmentPayload) {
+          if (clientEditingId) {
+            try {
+              await apiPatchWithAuth(`/fees/student-fees/student/${studentId}`, feeAssignmentPayload, token);
+            } catch (feeUpdateError) {
+              const message = feeUpdateError instanceof Error ? feeUpdateError.message : '';
+              if (/not found/i.test(message)) {
+                await apiPostWithAuth('/fees/student-fees/assign', { studentId, ...feeAssignmentPayload }, token);
+              } else {
+                throw feeUpdateError;
+              }
+            }
+          } else {
+            await apiPostWithAuth('/fees/student-fees/assign', { studentId, ...feeAssignmentPayload }, token);
+          }
         }
 
         const nextMeta: Record<string, ClientMeta> = {
@@ -4540,6 +4623,9 @@ const getNameInitials = (value: string) =>
             subscriptionType,
             subscriptionPlanId,
             subscriptionClassId,
+            subscriptionDiscountType,
+            subscriptionDiscountValue,
+            subscriptionDiscountScope,
             subscriptionStartDate,
             subscriptionEndDate,
             subscriptionAutoRenew
@@ -4777,11 +4863,8 @@ const getNameInitials = (value: string) =>
       const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
       const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
       const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
-        const invoiceAmountNumber = Number(selectedPlan?.amount ?? meta?.invoiceAmount ?? 0);
-        const receivable = Math.max(
-          0,
-          invoiceAmountNumber - (student.feeStatus === 'paid' ? invoiceAmountNumber : 0)
-      );
+      const feeBreakdown = getMetaFeeBreakdown(meta);
+      const receivable = feeBreakdown.remainingAmount;
 
       return [
         student.name,
@@ -4801,7 +4884,7 @@ const getNameInitials = (value: string) =>
         receivable,
         meta?.invoiceDate || '',
         meta?.invoiceNumber || '',
-          String(selectedPlan?.amount ?? meta?.invoiceAmount ?? ''),
+        String(meta?.invoiceAmount ?? ''),
         meta?.invoiceRemarks || '',
         meta?.subscriptionType || '',
         meta?.subscriptionStartDate || '',
@@ -6868,15 +6951,11 @@ const getNameInitials = (value: string) =>
                                         setInvoiceAmount(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))
                                       }
                                       placeholder="Amount"
-                                      readOnly={Boolean(selectedSubscriptionPlan)}
-                                      className={`w-full rounded-2xl border py-3 pl-9 pr-4 font-normal ${clientSubmitAttempted && clientValidationErrors.invoiceAmount ? 'border-rose-400' : 'border-slate-300'} ${selectedSubscriptionPlan ? 'bg-slate-50 text-slate-700' : ''}`}
+                                      className={`w-full rounded-2xl border py-3 pl-9 pr-4 font-normal ${clientSubmitAttempted && clientValidationErrors.invoiceAmount ? 'border-rose-400' : 'border-slate-300'}`}
                                     />
                                   </div>
                                   {clientSubmitAttempted && clientValidationErrors.invoiceAmount ? (
                                     <span className="text-xs font-medium text-rose-600">{clientValidationErrors.invoiceAmount}</span>
-                                  ) : null}
-                                  {selectedSubscriptionPlan ? (
-                                    <span className="text-xs font-medium text-slate-500">Amount is auto-filled from selected fee structure.</span>
                                   ) : null}
                                 </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -6975,6 +7054,39 @@ const getNameInitials = (value: string) =>
                                 ) : null}
                               </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Discount type
+                                <select
+                                  value={subscriptionDiscountType}
+                                  onChange={(e) => setSubscriptionDiscountType(e.target.value as 'NONE' | 'PERCENT' | 'AMOUNT')}
+                                  className={composerLongSelectClassName}
+                                >
+                                  <option value="NONE">No discount</option>
+                                  <option value="PERCENT">Percent (%)</option>
+                                  <option value="AMOUNT">Fixed amount (₹)</option>
+                                </select>
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Discount value
+                                <input
+                                  value={subscriptionDiscountValue}
+                                  onChange={(e) => setSubscriptionDiscountValue(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
+                                  placeholder={subscriptionDiscountType === 'PERCENT' ? 'e.g. 10' : 'e.g. 100'}
+                                  disabled={subscriptionDiscountType === 'NONE'}
+                                  className="rounded-2xl border border-slate-300 px-4 py-3 font-normal disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
+                                Discount apply
+                                <select
+                                  value={subscriptionDiscountScope}
+                                  onChange={(e) => setSubscriptionDiscountScope(e.target.value as 'ONE_TIME' | 'EVERY_CYCLE')}
+                                  className={composerLongSelectClassName}
+                                >
+                                  <option value="ONE_TIME">One time</option>
+                                  <option value="EVERY_CYCLE">Every time</option>
+                                </select>
+                              </label>
+                              <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Start date
                                 <input
                                   type="date"
@@ -6997,6 +7109,31 @@ const getNameInitials = (value: string) =>
                                 ) : null}
                               </label>
                             </div>
+                            {selectedSubscriptionPlan ? (
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Fee Structure</p>
+                                  <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(selectedSubscriptionBreakdown.baseAmount)}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Discount</p>
+                                  <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(selectedSubscriptionBreakdown.discountAmount)}</p>
+                                  <p className="text-xs text-slate-500">{subscriptionDiscountScope === 'EVERY_CYCLE' ? 'Every cycle' : 'One time'}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Payable</p>
+                                  <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(selectedSubscriptionBreakdown.payableAmount)}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Paid</p>
+                                  <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(selectedSubscriptionBreakdown.collectedAmount)}</p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Remaining</p>
+                                  <p className={`mt-1 text-lg font-bold ${selectedSubscriptionBreakdown.remainingAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{formatCurrency(selectedSubscriptionBreakdown.remainingAmount)}</p>
+                                </div>
+                              </div>
+                            ) : null}
                               <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
                                 <input
                                   type="checkbox"
@@ -7217,8 +7354,8 @@ const getNameInitials = (value: string) =>
                               const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
                               const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
                               const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
-                                const planAmount = Number(selectedPlan?.amount ?? meta?.invoiceAmount ?? 0);
-                                const receivable = Math.max(0, planAmount - (student.feeStatus === 'paid' ? planAmount : 0));
+                              const feeBreakdown = getMetaFeeBreakdown(meta);
+                              const receivable = feeBreakdown.remainingAmount;
                               const studentInitials = getNameInitials(student.name);
                               return (
                                 <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70 dark:border-white/10 dark:hover:bg-slate-900/70">
@@ -7277,7 +7414,7 @@ const getNameInitials = (value: string) =>
                                   <td className="px-2 py-2 text-slate-700 dark:text-slate-300">{meta?.rollNo || '-'}</td>
                                   <td className="px-2 py-2 text-slate-700 dark:text-slate-300">{meta?.subscriptionLevel || '-'}</td>
                                   <td className="px-2 py-2">
-                                    <span className={`font-semibold ${receivable > 0 ? 'text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                                    <span className={`font-semibold ${receivable > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-300'}`}>
                                       {formatCurrency(receivable)}
                                     </span>
                                   </td>

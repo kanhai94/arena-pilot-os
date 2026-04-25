@@ -10,7 +10,9 @@ import {
   recordPaymentSchema,
   studentFeeStatusQuerySchema,
   updateFeePlanParamsSchema,
-  updateFeePlanSchema
+  updateFeePlanSchema,
+  updateStudentFeeParamsSchema,
+  updateStudentFeeSchema
 } from '../../validators/fee.validators.js';
 
 export const createFeeController = (feeService) => {
@@ -79,6 +81,17 @@ export const createFeeController = (feeService) => {
       try {
         const query = parseOrThrow(paymentHistoryQuerySchema, req.query);
         const data = await feeService.paymentHistory(query);
+        return apiSuccess(res, data);
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    updateStudentFee: async (req, res, next) => {
+      try {
+        const params = parseOrThrow(updateStudentFeeParamsSchema, req.params);
+        const payload = parseOrThrow(updateStudentFeeSchema, req.body);
+        const data = await feeService.updateStudentFee(params.studentId, payload);
         return apiSuccess(res, data);
       } catch (error) {
         return next(error);

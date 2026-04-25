@@ -27,6 +27,11 @@ feeRouter.post(
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
   feeController.assignFeePlan
 );
+feeRouter.patch(
+  '/student-fees/student/:studentId',
+  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),
+  feeController.updateStudentFee
+);
 feeRouter.get(
   '/student-fees/status',
   authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.STAFF, ROLES.COACH),

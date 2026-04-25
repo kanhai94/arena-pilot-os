@@ -32,7 +32,37 @@ const studentFeeSchema = new mongoose.Schema(
     totalAmount: {
       type: Number,
       required: true,
-      min: 1
+      min: 0
+    },
+    baseAmount: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    discountType: {
+      type: String,
+      enum: ['NONE', 'PERCENT', 'AMOUNT'],
+      default: 'NONE'
+    },
+    discountValue: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    discountScope: {
+      type: String,
+      enum: ['ONE_TIME', 'EVERY_CYCLE'],
+      default: 'ONE_TIME'
+    },
+    recurringDiscountAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    oneTimeDiscountAmount: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     status: {
       type: String,
