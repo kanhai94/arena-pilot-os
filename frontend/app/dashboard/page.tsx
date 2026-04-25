@@ -2593,6 +2593,7 @@ export default function DashboardPage() {
       trendPercent
     };
   }, [attendanceStudents, clientMetaByStudentId, feePlans, pendingFees]);
+  const tenantNextPaymentDateLabel = tenantSubscription?.nextPaymentDate ? fmtDate(String(tenantSubscription.nextPaymentDate)) : 'N/A';
 
   const growthPulseSeries = useMemo(() => {
     const studentSeries = trendSeries.map((value) => Math.max(20, Math.min(100, Math.round((value / Math.max(studentsTotal || 1, value)) * 100))));
@@ -8322,7 +8323,7 @@ const getNameInitials = (value: string) =>
                   }`}
                 >
                   <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-emerald-200/80' : 'text-emerald-700'}`}>Next Payment</p>
-                  <p className="mt-2 text-2xl font-bold">{tenantSubscription && tenantSubscription.nextPaymentDate ? fmtDate(tenantSubscription.nextPaymentDate) : 'N/A'}</p>
+                  <p className="mt-2 text-2xl font-bold">{tenantNextPaymentDateLabel}</p>
                   <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>
                     Billing cycle: {tenantSubscription?.billingCycle || 'monthly'}
                   </p>
