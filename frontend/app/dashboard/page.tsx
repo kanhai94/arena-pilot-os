@@ -989,6 +989,7 @@ export default function DashboardPage() {
   const [clientMobile, setClientMobile] = useState('');
   const [clientPhotoDataUrl, setClientPhotoDataUrl] = useState('');
   const [clientPhotoFileName, setClientPhotoFileName] = useState('');
+  const [clientServerError, setClientServerError] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceAmount, setInvoiceAmount] = useState('');
@@ -4095,6 +4096,7 @@ const getNameInitials = (value: string) =>
     setSubscriptionEndDate('');
     setSubscriptionAutoRenew(false);
     setClientSubmitAttempted(false);
+    setClientServerError('');
   };
 
   const openClientComposerForCreate = () => {
@@ -4144,6 +4146,7 @@ const getNameInitials = (value: string) =>
     setSubscriptionEndDate(meta.subscriptionEndDate || '');
     setSubscriptionAutoRenew(Boolean(meta.subscriptionAutoRenew));
     setClientSubmitAttempted(false);
+    setClientServerError('');
     setActiveMenu('Academy Pro');
     setActiveTab('academy-pro');
     setActiveAcademyPro('clients');
@@ -4172,6 +4175,7 @@ const getNameInitials = (value: string) =>
       return;
     }
     setClientSubmitAttempted(true);
+    setClientServerError('');
     if (!canSubmitClientForm) {
       setToast('Please fill all required student fields correctly.');
       return;
@@ -4179,8 +4183,11 @@ const getNameInitials = (value: string) =>
     const normalizedPhone = `${clientMobileCode}${clientMobile}`.trim();
     const normalizedEmail = clientEmail.trim().toLowerCase();
 
-    const ok = await runAction(
-      async () => {
+    setActionLoading(true);
+    setToast('');
+
+    try {
+      const studentResult = await (async () => {
         const derivedAge = getAgeFromDob(clientDob);
         const studentPayload = {
           name: clientFullName.trim(),
@@ -4243,12 +4250,23 @@ const getNameInitials = (value: string) =>
         persistClientMeta(nextMeta);
 
         return studentResult;
-      },
-      clientEditingId ? 'Student updated' : 'Student added'
-    );
+      })();
 
-    if (ok) {
+      setDebugOutput(JSON.stringify(studentResult, null, 2));
+      setToast(clientEditingId ? 'Student updated' : 'Student added');
+      await loadDashboardData(token);
       setShowClientComposer(false);
+    } catch (err) {
+      const message = err instanceof Error && err.message.trim()
+        ? err.message
+        : clientEditingId
+          ? 'Failed to update student.'
+          : 'Failed to add student.';
+      setClientServerError(message);
+      setToast(message);
+      setDebugOutput(JSON.stringify({ error: message }, null, 2));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -6197,10 +6215,9 @@ const getNameInitials = (value: string) =>
                             ) : null}
                             {attendanceDraftRecords.map((record) => (
                               <div key={record.studentId} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
                                   <div className="min-w-0">
-                                    <p className="font-semibold text-slate-900">{record.name}</p>
-                                    <p className="text-xs text-slate-500">{record.phone}</p>
+                                    <p className="text-lg font-semibold text-slate-900">{record.name}</p>
                                   </div>
                                   <span
                                     className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -6212,11 +6229,11 @@ const getNameInitials = (value: string) =>
                                     {record.status === 'present' ? 'Present' : 'Absent'}
                                   </span>
                                 </div>
-                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                                   <button
                                     type="button"
                                     onClick={() => setDraftAttendanceStatus(record.studentId, 'present')}
-                                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                                       record.status === 'present'
                                         ? 'bg-emerald-600 text-white shadow-sm'
                                         : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
@@ -6227,7 +6244,7 @@ const getNameInitials = (value: string) =>
                                   <button
                                     type="button"
                                     onClick={() => setDraftAttendanceStatus(record.studentId, 'absent')}
-                                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                                       record.status === 'absent'
                                         ? 'bg-rose-600 text-white shadow-sm'
                                         : 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
@@ -6566,7 +6583,13 @@ const getNameInitials = (value: string) =>
                           </section>
                         </div>
 
-                          <div className="student-action-wrap mt-5 flex flex-wrap items-center gap-3 rounded-2xl p-2 dark:border dark:border-white/40 dark:bg-black/40">
+                          <div className="student-action-wrap mt-5 rounded-2xl p-2 dark:border dark:border-white/40 dark:bg-black/40">
+                          {clientServerError ? (
+                            <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+                              {clientServerError}
+                            </div>
+                          ) : null}
+                          <div className="flex flex-wrap items-center gap-3">
                           <button
                             onClick={submitClientComposer}
                             disabled={actionLoading || !canSubmitClientForm}
@@ -6589,6 +6612,7 @@ const getNameInitials = (value: string) =>
                           >
                             Cancel
                           </button>
+                          </div>
                         </div>
                       </div>
                     </article>
