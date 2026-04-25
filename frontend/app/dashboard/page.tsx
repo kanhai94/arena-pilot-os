@@ -1284,6 +1284,11 @@ export default function DashboardPage() {
   const uiLabels = useMemo(() => getUILabels(organizationType), [organizationType]);
   const leftMenu = useMemo(() => getSidebarMenuItems(organizationType), [organizationType]);
   const isSchoolOrganization = organizationType === 'SCHOOL';
+  useEffect(() => {
+    if (selectedSubscriptionPlan) {
+      setInvoiceAmount(String(selectedSubscriptionPlan.amount));
+    }
+  }, [selectedSubscriptionPlan]);
   const accessRoleOptions = useMemo(
     () =>
       isSchoolOrganization
@@ -1366,7 +1371,7 @@ export default function DashboardPage() {
     const normalizedName = clientFullName.trim();
     const normalizedEmail = clientEmail.trim().toLowerCase();
     const normalizedMobile = clientMobile.trim();
-    const normalizedInvoiceAmount = invoiceAmount.trim();
+    const normalizedInvoiceAmount = resolvedClientInvoiceAmount.trim();
 
     if (!normalizedName) errors.fullName = 'Full name is required.';
     if (!clientGender) errors.gender = 'Gender is required.';
@@ -1391,14 +1396,14 @@ export default function DashboardPage() {
 
     return errors;
   }, [
-    clientEmail,
-    clientFullName,
-    clientGender,
-    clientMobile,
-    invoiceAmount,
-    subscriptionEndDate,
-    subscriptionStartDate
-  ]);
+      clientEmail,
+      clientFullName,
+      clientGender,
+      clientMobile,
+      resolvedClientInvoiceAmount,
+      subscriptionEndDate,
+      subscriptionStartDate
+    ]);
   const canSubmitClientForm = Object.keys(clientValidationErrors).length === 0;
   const showClientMobileError = clientSubmitAttempted || clientMobile.length > 0;
   const coachValidationErrors = useMemo(() => {
@@ -2702,6 +2707,8 @@ export default function DashboardPage() {
     const plan = feePlans.find((item) => item._id === planId);
     return plan ? `${plan.name} - ${formatCurrency(plan.amount)}` : fallback;
   };
+  const selectedSubscriptionPlan = feePlans.find((item) => item._id === subscriptionPlanId) || null;
+  const resolvedClientInvoiceAmount = selectedSubscriptionPlan ? String(selectedSubscriptionPlan.amount) : invoiceAmount;
   const getClassSelectLabel = (classId: string) => {
     if (organizationType === 'SCHOOL') {
       const schoolClass = schoolClasses.find((item) => item._id === classId);
@@ -4479,10 +4486,11 @@ const getNameInitials = (value: string) =>
     try {
       const studentResult = await (async () => {
         const derivedAge = getAgeFromDob(clientDob);
-        const studentPayload = {
-          name: clientFullName.trim(),
-          age: derivedAge || 12,
-          gender: clientGender,
+          const resolvedInvoiceAmountNumber = Number(resolvedClientInvoiceAmount || '0');
+          const studentPayload = {
+            name: clientFullName.trim(),
+            age: derivedAge || 12,
+            gender: clientGender,
           parentName: clientFullName.trim(),
           parentPhone: normalizedPhone,
           ...(normalizedEmail ? { email: normalizedEmail } : {}),
@@ -4495,8 +4503,8 @@ const getNameInitials = (value: string) =>
             : {
                 batchId: subscriptionClassId || null
               }),
-          feeStatus: Number(invoiceAmount || '0') > 0 ? 'pending' : 'paid'
-        };
+            feeStatus: resolvedInvoiceAmountNumber > 0 ? 'pending' : 'paid'
+          };
 
         const studentResult = clientEditingId
           ? await apiPutWithAuth<Student>(`/students/${clientEditingId}`, studentPayload, token)
@@ -4526,7 +4534,7 @@ const getNameInitials = (value: string) =>
             rollNo: clientRollNo || undefined,
             invoiceDate,
             invoiceNumber,
-            invoiceAmount,
+              invoiceAmount: resolvedClientInvoiceAmount,
             invoiceRemarks,
             subscriptionLevel,
             subscriptionType,
@@ -4769,10 +4777,10 @@ const getNameInitials = (value: string) =>
       const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
       const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
       const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
-      const invoiceAmountNumber = Number(meta?.invoiceAmount || 0);
-      const receivable = Math.max(
-        0,
-        invoiceAmountNumber - (student.feeStatus === 'paid' ? invoiceAmountNumber : 0)
+        const invoiceAmountNumber = Number(selectedPlan?.amount ?? meta?.invoiceAmount ?? 0);
+        const receivable = Math.max(
+          0,
+          invoiceAmountNumber - (student.feeStatus === 'paid' ? invoiceAmountNumber : 0)
       );
 
       return [
@@ -4793,7 +4801,7 @@ const getNameInitials = (value: string) =>
         receivable,
         meta?.invoiceDate || '',
         meta?.invoiceNumber || '',
-        meta?.invoiceAmount || '',
+          String(selectedPlan?.amount ?? meta?.invoiceAmount ?? ''),
         meta?.invoiceRemarks || '',
         meta?.subscriptionType || '',
         meta?.subscriptionStartDate || '',
@@ -6854,19 +6862,23 @@ const getNameInitials = (value: string) =>
                                 Amount
                                 <div className="relative">
                                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-500">₹</span>
-                                  <input
-                                    value={invoiceAmount}
-                                    onChange={(e) =>
-                                      setInvoiceAmount(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))
-                                    }
-                                    placeholder="Amount"
-                                    className={`w-full rounded-2xl border py-3 pl-9 pr-4 font-normal ${clientSubmitAttempted && clientValidationErrors.invoiceAmount ? 'border-rose-400' : 'border-slate-300'}`}
-                                  />
-                                </div>
-                                {clientSubmitAttempted && clientValidationErrors.invoiceAmount ? (
-                                  <span className="text-xs font-medium text-rose-600">{clientValidationErrors.invoiceAmount}</span>
-                                ) : null}
-                              </label>
+                                    <input
+                                      value={resolvedClientInvoiceAmount}
+                                      onChange={(e) =>
+                                        setInvoiceAmount(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))
+                                      }
+                                      placeholder="Amount"
+                                      readOnly={Boolean(selectedSubscriptionPlan)}
+                                      className={`w-full rounded-2xl border py-3 pl-9 pr-4 font-normal ${clientSubmitAttempted && clientValidationErrors.invoiceAmount ? 'border-rose-400' : 'border-slate-300'} ${selectedSubscriptionPlan ? 'bg-slate-50 text-slate-700' : ''}`}
+                                    />
+                                  </div>
+                                  {clientSubmitAttempted && clientValidationErrors.invoiceAmount ? (
+                                    <span className="text-xs font-medium text-rose-600">{clientValidationErrors.invoiceAmount}</span>
+                                  ) : null}
+                                  {selectedSubscriptionPlan ? (
+                                    <span className="text-xs font-medium text-slate-500">Amount is auto-filled from selected fee structure.</span>
+                                  ) : null}
+                                </label>
                               <label className="grid gap-1 text-sm font-semibold text-slate-700">
                                 Remarks
                                 <input
@@ -7205,7 +7217,8 @@ const getNameInitials = (value: string) =>
                               const selectedPlan = feePlans.find((plan) => plan._id === meta?.subscriptionPlanId);
                               const schoolSelectedClass = schoolClasses.find((item) => item._id === meta?.subscriptionClassId);
                               const sportsSelectedClass = academyClassRows.find((row) => row.id === meta?.subscriptionClassId);
-                              const receivable = Math.max(0, Number(meta?.invoiceAmount || 0) - (student.feeStatus === 'paid' ? Number(meta?.invoiceAmount || 0) : 0));
+                                const planAmount = Number(selectedPlan?.amount ?? meta?.invoiceAmount ?? 0);
+                                const receivable = Math.max(0, planAmount - (student.feeStatus === 'paid' ? planAmount : 0));
                               const studentInitials = getNameInitials(student.name);
                               return (
                                 <tr key={student._id} className="registry-row border-b border-slate-100 hover:bg-slate-50/70 dark:border-white/10 dark:hover:bg-slate-900/70">
