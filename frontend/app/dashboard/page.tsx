@@ -464,24 +464,30 @@ const fmtShortUiDate = (value?: string | null) => {
 const formatCurrency = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const normalizeRole = (role?: string | null) => {
   switch (String(role || '').trim()) {
-    case 'SUPER_ADMIN':
-    case 'SuperAdmin':
-      return 'SUPER_ADMIN';
-    case 'ADMIN':
-    case 'AcademyAdmin':
-      return 'ADMIN';
-    case 'COACH':
-    case 'Coach':
-      return 'COACH';
-    case 'STAFF':
-    case 'Manager':
-    case 'Accountant':
-    case 'Viewer':
-      return 'STAFF';
-    default:
-      return '';
-  }
-};
+      case 'SUPER_ADMIN':
+      case 'SuperAdmin':
+      case 'super_admin':
+        return 'SUPER_ADMIN';
+      case 'ADMIN':
+      case 'AcademyAdmin':
+      case 'Admin':
+      case 'admin':
+        return 'ADMIN';
+      case 'COACH':
+      case 'Coach':
+      case 'coach':
+        return 'COACH';
+      case 'STAFF':
+      case 'Manager':
+      case 'Accountant':
+      case 'Viewer':
+      case 'Staff':
+      case 'staff':
+        return 'STAFF';
+      default:
+        return '';
+    }
+  };
 
 const roleLabel = (role?: string | null) => {
   const normalized = normalizeRole(role);
@@ -1174,8 +1180,8 @@ export default function DashboardPage() {
   const isCoach = normalizedUserRole === 'COACH';
   const isStaff = normalizedUserRole === 'STAFF';
   const canManageStudents = isSuperAdmin || isAdmin || isStaff || isCoach;
-  const canDeleteStudents = isAdmin;
-  const canDeleteClassAndAccess = isAdmin;
+  const canDeleteStudents = isSuperAdmin || isAdmin;
+  const canDeleteClassAndAccess = isSuperAdmin || isAdmin;
   const canManagePlansAndFinance = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canManageUsers = isSuperAdmin || isAdmin || isStaff || isCoach;
   const canManageBatches = isSuperAdmin || isAdmin || isStaff || isCoach;
