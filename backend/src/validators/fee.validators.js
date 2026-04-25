@@ -41,14 +41,14 @@ export const assignFeePlanSchema = z
     discountValue: z.coerce.number().min(0).optional(),
     discountScope: discountScopeSchema.optional()
   })
+  .strict()
   .refine(
     (value) =>
       value.discountType === undefined ||
       value.discountType === 'NONE' ||
       (value.discountValue ?? 0) > 0,
     { message: 'Discount value must be greater than 0', path: ['discountValue'] }
-  )
-  .strict();
+  );
 
 export const updateStudentFeeParamsSchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid studentId')
@@ -62,6 +62,7 @@ export const updateStudentFeeSchema = z
     discountValue: z.coerce.number().min(0).optional(),
     discountScope: discountScopeSchema.optional()
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required for update'
   })
@@ -71,8 +72,7 @@ export const updateStudentFeeSchema = z
       value.discountType === 'NONE' ||
       (value.discountValue ?? 0) > 0,
     { message: 'Discount value must be greater than 0', path: ['discountValue'] }
-  )
-  .strict();
+  );
 
 export const studentFeeStatusQuerySchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid studentId'),
