@@ -2594,6 +2594,7 @@ export default function DashboardPage() {
     };
   }, [attendanceStudents, clientMetaByStudentId, feePlans, pendingFees]);
   const tenantNextPaymentDateLabel = tenantSubscription?.nextPaymentDate ? fmtDate(String(tenantSubscription.nextPaymentDate)) : 'N/A';
+  const tenantUsageLabel = tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'}` : '0 / ∞';
 
   const growthPulseSeries = useMemo(() => {
     const studentSeries = trendSeries.map((value) => Math.max(20, Math.min(100, Math.round((value / Math.max(studentsTotal || 1, value)) * 100))));
@@ -8334,9 +8335,7 @@ const getNameInitials = (value: string) =>
                   }`}
                 >
                   <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-cyan-200/80' : 'text-cyan-700'}`}>Usage</p>
-                  <p className="mt-2 text-2xl font-bold">
-                    {tenantSubscription ? `${tenantSubscription.currentStudentCount} / ${tenantSubscription.studentLimit ?? '∞'}` : '0 / ∞'}
-                  </p>
+                  <p className="mt-2 text-2xl font-bold">{tenantUsageLabel}</p>
                   <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Students used / limit</p>
                 </article>
               </section>
