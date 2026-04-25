@@ -4565,23 +4565,35 @@ const getNameInitials = (value: string) =>
       return;
     }
 
-    setFeeCollectionSubmitting(true);
-    setFeeCollectionServerError('');
-    try {
-      const firstPendingRow = selectedFeePendingRows.find((row) => row.month === feeCollectionMonth) || selectedFeePendingRows[0] || null;
-      await apiPostWithAuth(
-        '/fees/payments',
-        {
+      setFeeCollectionSubmitting(true);
+      setFeeCollectionServerError('');
+      try {
+        const firstPendingRow = selectedFeePendingRows.find((row) => row.month === feeCollectionMonth) || selectedFeePendingRows[0] || null;
+        const trimmedTransactionId = feeCollectionTransactionId.trim();
+        const paymentPayload: {
+          studentId: string;
+          amountPaid: number;
+          paymentDate: string;
+          dueDate: string;
+          month: string;
+          paymentMode: string;
+          transactionId?: string;
+        } = {
           studentId: feeCollectionSelectedStudentId,
           amountPaid: amountValue,
           paymentDate: new Date().toISOString(),
           dueDate: firstPendingRow?.dueDate || new Date().toISOString(),
           month: feeCollectionMonth,
-          paymentMode: feeCollectionMode,
-          transactionId: feeCollectionTransactionId.trim() || null
-        },
-        token
-      );
+          paymentMode: feeCollectionMode
+        };
+        if (trimmedTransactionId) {
+          paymentPayload.transactionId = trimmedTransactionId;
+        }
+        await apiPostWithAuth(
+          '/fees/payments',
+          paymentPayload,
+          token
+        );
 
       setToast('Fee collected successfully');
       await Promise.all([
