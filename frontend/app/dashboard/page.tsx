@@ -195,7 +195,7 @@ type FeeSummaryResponse = {
   totalPendingRows?: number;
 };
 
-type PaymentHistoryRow = {
+  type PaymentHistoryRow = {
   id: string;
   studentId: string;
   student?: {
@@ -217,8 +217,14 @@ type PaymentHistoryRow = {
   dueInDays?: number;
   pendingDues?: number;
   monthlyFee?: number;
-  lastPayment?: number;
-};
+    lastPayment?: number;
+  };
+
+  const getPaymentRowClassId = (row: PaymentHistoryRow) => {
+    const rawClassId = row.student?.classId;
+    if (!rawClassId) return '';
+    return typeof rawClassId === 'string' ? rawClassId : rawClassId._id || '';
+  };
 
 type PaymentHistoryResponse = {
   items: PaymentHistoryRow[];
@@ -610,9 +616,23 @@ const splitPhoneWithCode = (rawPhone?: string | null) => {
     };
   }
 
+  const normalizedDigits = value.replace(/\D/g, '');
+  const digitCodeMap: Array<{ code: '+91' | '+1' | '+44'; digits: string }> = [
+    { code: '+91', digits: '91' },
+    { code: '+1', digits: '1' },
+    { code: '+44', digits: '44' }
+  ];
+  const matchedDigitCode = digitCodeMap.find(({ digits }) => normalizedDigits.startsWith(digits) && normalizedDigits.length > digits.length);
+  if (matchedDigitCode) {
+    return {
+      code: matchedDigitCode.code,
+      phone: normalizedDigits.slice(matchedDigitCode.digits.length)
+    };
+  }
+
   return {
     code: '+91',
-    phone: value.replace(/\D/g, '')
+    phone: normalizedDigits
   };
 };
 
@@ -1754,15 +1774,6 @@ export default function DashboardPage() {
     if (!isAdmin) return;
     setFeeCollectionLoading(true);
     const params = new URLSearchParams({ page: '1', limit: '200' });
-    if (feeCollectionStatusFilter !== 'all') {
-      params.set('status', feeCollectionStatusFilter);
-    }
-    if (feeCollectionClassFilter !== 'all') {
-      params.set('classId', feeCollectionClassFilter);
-    }
-    if (feeCollectionDueInFilter !== 'all') {
-      params.set('dueInDays', feeCollectionDueInFilter);
-    }
 
     const response = await safeFetch<PaymentHistoryResponse>(
       () => apiGetWithAuth<PaymentHistoryResponse>(`/fees/payments?${params.toString()}`, accessToken),
@@ -1971,7 +1982,41 @@ export default function DashboardPage() {
     if (!token || !isAdmin) return;
     loadFeeCollectionRowsData(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, isAdmin, feeCollectionStatusFilter, feeCollectionClassFilter, feeCollectionDueInFilter]);
+  }, [token, isAdmin]);
+
+  const visibleFeeCollectionRows = useMemo(() => {
+    return feeCollectionRows.filter((row) => {
+      if (feeCollectionStatusFilter !== 'all' && row.status !== feeCollectionStatusFilter) {
+        return false;
+      }
+
+      if (feeCollectionClassFilter !== 'all' && getPaymentRowClassId(row) !== feeCollectionClassFilter) {
+        return false;
+      }
+
+      if (feeCollectionDueInFilter !== 'all') {
+        if (row.status === 'PAID') {
+          return false;
+        }
+        const dueWindow = Number(feeCollectionDueInFilter);
+        if (!Number.isFinite(dueWindow)) {
+          return true;
+        }
+        const dueInDays = Number(row.dueInDays);
+        if (!Number.isFinite(dueInDays)) {
+          return false;
+        }
+        if (dueInDays < 0) {
+          return false;
+        }
+        if (dueInDays > dueWindow) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [feeCollectionRows, feeCollectionStatusFilter, feeCollectionClassFilter, feeCollectionDueInFilter]);
 
   useEffect(() => {
     if (!token || !isAdmin || !showClientComposer || !clientEditingId) {
@@ -7975,7 +8020,7 @@ const getNameInitials = (value: string) =>
                 </article>
                 <article className={`rounded-2xl p-4 ${useDarkFinanceTheme ? 'border border-cyan-300/15 bg-cyan-400/10' : 'border border-cyan-200 bg-cyan-50'}`}>
                   <p className={`text-xs uppercase tracking-[0.14em] ${useDarkFinanceTheme ? 'text-cyan-100' : 'text-cyan-700'}`}>Visible Records</p>
-                  <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{feeCollectionRows.length}</p>
+                    <p className={`mt-2 text-3xl font-extrabold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{visibleFeeCollectionRows.length}</p>
                   <p className={`mt-1 text-xs ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-600'}`}>Rows after current filters</p>
                 </article>
               </section>
@@ -8118,13 +8163,13 @@ const getNameInitials = (value: string) =>
                           <td colSpan={8} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>Loading fee records...</td>
                         </tr>
                       ) : null}
-                      {!feeCollectionLoading && feeCollectionRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>No fee records found for current filters.</td>
-                        </tr>
-                      ) : null}
-                      {!feeCollectionLoading
-                        ? feeCollectionRows.map((row) => {
+                        {!feeCollectionLoading && visibleFeeCollectionRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className={`px-3 py-5 text-center ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>No fee records found for current filters.</td>
+                          </tr>
+                        ) : null}
+                        {!feeCollectionLoading
+                          ? visibleFeeCollectionRows.map((row) => {
                             const statusTone =
                               row.status === 'PAID'
                                 ? useDarkFinanceTheme
