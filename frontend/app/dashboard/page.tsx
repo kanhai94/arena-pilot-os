@@ -2684,6 +2684,14 @@ export default function DashboardPage() {
     };
   }, [notifications, todayIsoDate]);
 
+  const getMetaFeeBreakdown = (meta?: ClientMeta) =>
+    getStudentFeeBreakdown({
+      planAmount: feePlans.find((plan) => plan._id === meta?.subscriptionPlanId)?.amount ?? 0,
+      paidAmount: meta?.invoiceAmount,
+      discountType: meta?.subscriptionDiscountType,
+      discountValue: meta?.subscriptionDiscountValue
+    });
+
   const revenuePulse = useMemo(() => {
     const expectedRevenue = attendanceStudents
       .filter((student) => student.status === 'active')
@@ -2769,13 +2777,6 @@ export default function DashboardPage() {
     const plan = feePlans.find((item) => item._id === planId);
     return plan ? `${plan.name} - ${formatCurrency(plan.amount)}` : fallback;
   };
-  const getMetaFeeBreakdown = (meta?: ClientMeta) =>
-    getStudentFeeBreakdown({
-      planAmount: feePlans.find((plan) => plan._id === meta?.subscriptionPlanId)?.amount ?? 0,
-      paidAmount: meta?.invoiceAmount,
-      discountType: meta?.subscriptionDiscountType,
-      discountValue: meta?.subscriptionDiscountValue
-    });
   const getClassSelectLabel = (classId: string) => {
     if (organizationType === 'SCHOOL') {
       const schoolClass = schoolClasses.find((item) => item._id === classId);
