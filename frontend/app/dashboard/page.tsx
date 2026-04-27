@@ -198,7 +198,7 @@ type FeeSummaryResponse = {
   totalPendingRows?: number;
 };
 
-  type PaymentHistoryRow = {
+type PaymentHistoryRow = {
   id: string;
   studentId: string;
   student?: {
@@ -220,14 +220,17 @@ type FeeSummaryResponse = {
   dueInDays?: number;
   pendingDues?: number;
   monthlyFee?: number;
-    lastPayment?: number;
-  };
+  lastPayment?: number;
+  classRefId?: string;
+  classLabel?: string;
+};
 
-  const getPaymentRowClassId = (row: PaymentHistoryRow) => {
-    const rawClassId = row.student?.classId;
-    if (!rawClassId) return '';
-    return typeof rawClassId === 'string' ? rawClassId : rawClassId._id || '';
-  };
+const getPaymentRowClassId = (row: PaymentHistoryRow) => {
+  if (row.classRefId) return row.classRefId;
+  const rawClassId = row.student?.classId;
+  if (!rawClassId) return '';
+  return typeof rawClassId === 'string' ? rawClassId : rawClassId._id || '';
+};
 
 type PaymentHistoryResponse = {
   items: PaymentHistoryRow[];
@@ -2053,8 +2056,95 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isAdmin]);
 
+  const combinedFeeCollectionRows = useMemo(() => {
+    const unresolvedBackendRowsByStudentId = new Set(
+      feeCollectionRows.filter((row) => row.status === 'PENDING' || row.status === 'OVERDUE').map((row) => String(row.studentId))
+    );
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const synthesizedRows = attendanceStudents
+      .map((student) => {
+        const studentId = String(student._id);
+        if (unresolvedBackendRowsByStudentId.has(studentId)) {
+          return null;
+        }
+
+        const meta = clientMetaByStudentId[studentId];
+        const feeBreakdown = getMetaFeeBreakdown({
+          planAmount: feePlans.find((plan) => plan._id === meta?.subscriptionPlanId)?.amount ?? 0,
+          paidAmount: meta?.invoiceAmount,
+          discountType: meta?.subscriptionDiscountType,
+          discountValue: meta?.subscriptionDiscountValue
+        });
+        if (feeBreakdown.remainingAmount <= 0) {
+          return null;
+        }
+
+        const rawSchoolClassId = typeof student.classId === 'string' ? student.classId : student.classId?._id || '';
+        const rawBatchId = typeof student.batchId === 'string' ? student.batchId : student.batchId?._id || '';
+        const classRefId = organizationType === 'SCHOOL' ? rawSchoolClassId : rawBatchId;
+        const schoolClass = organizationType === 'SCHOOL' ? schoolClasses.find((item) => item._id === rawSchoolClassId) : null;
+        const classLabel =
+          organizationType === 'SCHOOL'
+            ? formatSchoolClassLabel(schoolClass?.name, schoolClass?.section) || schoolClass?.name || '-'
+            : sportsBatchTitleById[rawBatchId] || '-';
+
+        const dueDate = meta?.subscriptionEndDate || null;
+        const dueDateValue = dueDate ? new Date(`${dueDate}T00:00:00`) : null;
+        const dueInDays =
+          dueDateValue && !Number.isNaN(dueDateValue.getTime())
+            ? Math.ceil((dueDateValue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            : undefined;
+        const status: PaymentHistoryRow['status'] =
+          typeof dueInDays === 'number' && dueInDays < 0 ? 'OVERDUE' : 'PENDING';
+        const badge =
+          typeof dueInDays === 'number'
+            ? dueInDays < 0
+              ? 'Overdue'
+              : dueInDays === 0
+                ? 'Due today'
+                : `Due in ${dueInDays} day${dueInDays === 1 ? '' : 's'}`
+            : undefined;
+        const monthSource = meta?.subscriptionEndDate || meta?.subscriptionStartDate || '';
+        const month =
+          monthSource && !Number.isNaN(new Date(`${monthSource}T00:00:00`).getTime())
+            ? new Date(`${monthSource}T00:00:00`).toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '-')
+            : 'Outstanding';
+
+        return {
+          id: `pending-${studentId}`,
+          studentId,
+          student: {
+            _id: studentId,
+            name: student.name,
+            email: student.email || '',
+            parentPhone: student.parentPhone,
+            classId: organizationType === 'SCHOOL' ? student.classId || null : null,
+            monthlyFee: feeBreakdown.payableAmount
+          },
+          amount: feeBreakdown.remainingAmount,
+          dueDate,
+          status,
+          paymentMode: null,
+          transactionId: null,
+          month,
+          badge,
+          dueInDays,
+          pendingDues: feeBreakdown.remainingAmount,
+          monthlyFee: feeBreakdown.payableAmount,
+          lastPayment: feeBreakdown.collectedAmount,
+          classRefId,
+          classLabel
+        } satisfies PaymentHistoryRow;
+      })
+      .filter((row): row is PaymentHistoryRow => Boolean(row));
+
+    return [...feeCollectionRows, ...synthesizedRows];
+  }, [attendanceStudents, clientMetaByStudentId, feeCollectionRows, feePlans, getMetaFeeBreakdown, organizationType, schoolClasses, sportsBatchTitleById]);
+
   const visibleFeeCollectionRows = useMemo(() => {
-    return feeCollectionRows.filter((row) => {
+    return combinedFeeCollectionRows.filter((row) => {
       if (feeCollectionStatusFilter !== 'all' && row.status !== feeCollectionStatusFilter) {
         return false;
       }
@@ -2085,7 +2175,7 @@ export default function DashboardPage() {
 
       return true;
     });
-  }, [feeCollectionRows, feeCollectionStatusFilter, feeCollectionClassFilter, feeCollectionDueInFilter]);
+  }, [combinedFeeCollectionRows, feeCollectionStatusFilter, feeCollectionClassFilter, feeCollectionDueInFilter]);
 
   useEffect(() => {
     if (!token || !isAdmin || !showClientComposer || !clientEditingId) {
@@ -8347,7 +8437,7 @@ const getNameInitials = (value: string) =>
                                   <div className={`font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{row.student?.name || 'Unknown student'}</div>
                                   <div className={`text-xs ${useDarkFinanceTheme ? 'text-slate-400' : 'text-slate-500'}`}>{row.student?.email || 'No email'}</div>
                                 </td>
-                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{formatPaymentStudentClassLabel(row.student?.classId)}</td>
+                                <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>{row.classLabel || formatPaymentStudentClassLabel(row.student?.classId)}</td>
                                 <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-200' : 'text-slate-700'}`}>{row.month}</td>
                                 <td className={`px-3 py-3 font-semibold ${useDarkFinanceTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(row.amount)}</td>
                                 <td className={`px-3 py-3 ${useDarkFinanceTheme ? 'text-slate-300' : 'text-slate-700'}`}>
